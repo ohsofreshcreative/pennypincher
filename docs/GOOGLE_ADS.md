@@ -12,7 +12,7 @@ dokładny kształt odpowiedzi, limity i uprawnienia konta.
 - Ma dostęp **tylko do odczytu**: wywołuje wyłącznie `customers:listAccessibleCustomers` i `googleAds:searchStream`
   (zapytania GAQL). Nie wysyła żadnych operacji `mutate` – nie zmienia kampanii, budżetów ani ustawień.
 - Synchronizuje: kampanie (ID, nazwa, status, typ, budżet, strategia stawek, sieci, typ kierowania na lokalizacje,
-  lokalizacje), grupy reklam, słowa kluczowe (z wynikiem jakości), wyszukiwane hasła z metrykami, działania
+  lokalizacje, data i godzina rozpoczęcia/zakończenia – `start_date_time`/`end_date_time`), grupy reklam, słowa kluczowe (z wynikiem jakości), wyszukiwane hasła z metrykami, działania
   konwersji (kategoria, status, konwersja główna/dodatkowa, sposób zliczania, typ, źródło) i dzienne metryki:
   wyświetlenia, kliknięcia, koszt, konwersje, wszystkie konwersje, wartość konwersji, konwersje po obejrzeniu
   (CTR, CPC i CPA są liczone z sum).
@@ -115,7 +115,7 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 | HTTP | `Infrastructure/GoogleAds/GoogleHttp.php` | `wp_remote_request` wyłącznie do `oauth2.googleapis.com`, `googleads.googleapis.com`, `accounts.google.com` przez HTTPS; klasyfikacja błędów |
 | OAuth | `Infrastructure/GoogleAds/OAuthClient.php` | Adres zgody (PKCE S256, `access_type=offline`, `prompt=consent`), wymiana kodu, odświeżanie, unieważnienie |
 | API | `Infrastructure/GoogleAds/GoogleAdsClient.php` | `listAccessibleCustomers`, `searchStream` (scalanie partii), nagłówek `login-customer-id` |
-| Zapytania | `Infrastructure/GoogleAds/Sync/Gaql.php` | Zapytania GAQL dla każdego kroku |
+| Zapytania | `Infrastructure/GoogleAds/Sync/Gaql.php` | Zapytania GAQL dla każdego kroku; pola sprawdzane testem `GaqlSchemaTest` z listą pól v25 (`tests/Support/GaqlSchemaV25.php`), atrapa API odrzuca nieznane pola jak Google (`UNRECOGNIZED_FIELD`) |
 | Zapis | `Infrastructure/GoogleAds/Sync/ApiSyncer.php` | Upsert encji po ID Google, zastępowanie okna metryk API w transakcji, pokrycie `pp_data_coverage` |
 | Połączenie | `Services/GoogleAds/ConnectionService.php` | state, tokeny (szyfrowane), konta, wybór konta, odświeżanie, rozłączenie |
 | Kolejka | `Services/GoogleAds/SyncService.php` + `Repositories/SyncRunRepository.php` | Plan kroków, wykonywanie z limitem czasu, blokada, ponowienia, harmonogram |
@@ -202,6 +202,7 @@ ponowienia z opóźnieniem i wznowienie od kroku, limit prób, blokada równoleg
 | „Google nie zwrócił tokenu odświeżania” | Usuń dostęp aplikacji na myaccount.google.com/permissions i połącz ponownie (aplikacja wymusza `prompt=consent`). |
 | `PERMISSION_DENIED` / dostęp tylko do kont testowych | Projekt Cloud ma poziom *Test* – złóż wniosek o *Explorer*/*Basic*. |
 | `RESOURCE_EXHAUSTED` | Limit dzienny poziomu dostępu – synchronizacja ponowi się sama; przy wielu kontach rozważ wyższy poziom. |
+| `INVALID_ARGUMENT` / `queryError: UNRECOGNIZED_FIELD` | Zapytanie GAQL zawiera pole usunięte z używanej wersji API (np. `campaign.start_date`/`end_date` usunięte w v23 – zastąpione `start_date_time`/`end_date_time`). Przebieg kończy się błędem bez ponawiania i bez utraty danych; po poprawce zapytania kliknij „Ponów” (wznowienie od kroku z błędem). Lista pól v25: `tests/Support/GaqlSchemaV25.php`. |
 | `UNSUPPORTED_VERSION` / 404 na `v25` | Wersja wycofana – ustaw nowszą w `PP_GOOGLE_ADS_API_VERSION` i sprawdź zmiany w GAQL. |
 | „Wymaga ponownej autoryzacji” | Cofnięto dostęp, zmieniono hasło lub token wygasł (aplikacja w trybie *Testing*: refresh token ważny 7 dni!) – połącz ponownie. |
 | Synchronizacja stoi „w kolejce” | Nie działa cron `pp:sync:work` – sprawdź hPanel i `~/logs/pp-sync.log`. |

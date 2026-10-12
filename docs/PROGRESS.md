@@ -50,6 +50,12 @@ Stan na 12.10.2026 (etap 2 – Prompt 2; wcześniej Prompt 1 i 1.1).
 - Teraz: błąd Google z kodem i request ID zamiast „brak kont”, pominięte konta widoczne, brak cache dla pustej listy, czyszczenie cache przy autoryzacji, konta MCC na wszystkich poziomach, diagnostyka (`pp:google-ads:diagnose`, przycisk w UI), osobne komunikaty: brak kont / brak uprawnień API / błąd autoryzacji / błąd Google Ads API.
 - Testy: `GoogleAdsAccountsTest` (7), łącznie 128/128.
 
+### Poprawka 12.10.2026 – `UNRECOGNIZED_FIELD` przy pierwszej synchronizacji
+
+- Przyczyna: zapytanie kampanii (`Gaql::campaigns()`) zawierało `campaign.start_date` i `campaign.end_date`, usunięte z API w v23 (zastąpione `campaign.start_date_time` / `campaign.end_date_time`, format „yyyy-MM-dd HH:mm:ss”). Atrapa testowa przyjmowała każde pole, więc testy tego nie wykryły.
+- Poprawka: oficjalne pola `start_date_time`/`end_date_time` (zapisywane w `campaigns.settings` bez przekształceń); pozostałe pola wszystkich zapytań sprawdzone z v25 (pliki .proto v25 i różnice v23/v24/v25) – bez innych zmian.
+- Regresja: `GaqlSchemaTest` (lista pól v25 i pól usuniętych), atrapa API odrzuca nieznane pola jak Google, test ponowienia po błędzie bez utraty danych. Testy 133/133.
+
 ### Kolejne kroki
 
 1. Wymiana klucza SSH (`docs/SECURITY.md`, kroki 1–5).

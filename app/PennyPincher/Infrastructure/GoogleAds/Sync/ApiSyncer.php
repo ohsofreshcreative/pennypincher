@@ -71,8 +71,9 @@ class ApiSyncer
 				$settings = array_merge($settings, array_filter([
 					'channel_sub_type' => $campaign['advertisingChannelSubType'] ?? null,
 					'serving_status' => $campaign['servingStatus'] ?? null,
-					'start_date' => $campaign['startDate'] ?? null,
-					'end_date' => $campaign['endDate'] ?? null,
+					// v23+: pola z czasem („yyyy-MM-dd HH:mm:ss”) – zapisujemy dokładnie to, co zwraca API.
+					'start_date_time' => $campaign['startDateTime'] ?? null,
+					'end_date_time' => $campaign['endDateTime'] ?? null,
 					'networks' => [
 						'google_search' => (bool) ($network['targetGoogleSearch'] ?? false),
 						'search_partners' => (bool) ($network['targetSearchNetwork'] ?? false),

@@ -174,6 +174,46 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 		$this->assertSame('completed', $run['status']);
 	}
 
+	public function testInvalidQueryFailsWithoutDataLossAndCanBeRetried(): void
+	{
+		[$project, $connection] = $this->connected('unrecognized');
+		$sync = $this->make(SyncService::class);
+		$runs = $this->make(SyncRunRepository::class);
+
+		// Dane sprzed synchronizacji (import) – nie mogą zniknąć po błędzie ani po ponowieniu.
+		$campaignId = $this->db->insert('campaigns', ['project_id' => $project->id, 'natural_key' => sha1('import|Szukaj | Marka'), 'name' => 'Szukaj | Marka', 'created_at' => $this->db->now(), 'updated_at' => $this->db->now()]);
+		$this->db->insert('campaign_metrics', ['project_id' => $project->id, 'campaign_id' => $campaignId, 'granularity' => 'period', 'date_from' => '2024-01-01', 'date_to' => '2024-01-31', 'source' => 'import', 'cost_micros' => 123_000_000, 'impressions' => 1, 'clicks' => 1, 'created_at' => $this->db->now(), 'updated_at' => $this->db->now()]);
+
+		// Odtworzenie błędu produkcyjnego: zapytanie kampanii ze starymi polami → 400 UNRECOGNIZED_FIELD (atrapa jak API v25).
+		$this->mock->on('campaign', fn ($request) => [400, [['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'Request contains an invalid argument.', 'details' => [['errors' => [['errorCode' => ['queryError' => 'UNRECOGNIZED_FIELD'], 'message' => "Unrecognized fields in the query: 'campaign.start_date', 'campaign.end_date'."]]]]]]]]);
+
+		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
+		$this->assertSame('failed', $run['status'], 'Błąd zapytania nie jest ponawiany w nieskończoność.');
+		$this->assertSame(0, (int) $run['step_index']);
+		$this->assertSame(1, (int) $run['attempts']);
+		$this->assertTrue(str_contains($run['last_error'], 'UNRECOGNIZED_FIELD'));
+		$this->assertSame('active', $this->make(GoogleAdsConnectionRepository::class)->find((int) $connection['id'])['status'], 'Błąd zapytania nie wymaga ponownej autoryzacji.');
+		$this->assertSame(123_000_000, $this->sum('campaign_metrics', 'cost_micros', $project->id), 'Dane importu nienaruszone.');
+
+		// Po poprawce zapytania: „Ponów” wznawia ten sam przebieg od kroku 0 i kończy go.
+		$this->mock->withDefaultAccount();
+		$sync->retry($run);
+		$run = $sync->process($runs->find((int) $run['id']), time() + 300);
+
+		$this->assertSame('completed', $run['status'], (string) $run['last_error']);
+		$this->assertSame(1, $this->count('campaigns', $project->id), 'Kampania z importu połączona z kampanią z API (bez duplikatu).');
+		$this->assertSame('111', $this->db->scalar('SELECT external_id FROM ' . $this->db->table('campaigns') . ' WHERE id = ?', [$campaignId]));
+		$this->assertSame(1, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('campaign_metrics') . " WHERE project_id = ? AND source = 'import'", [$project->id]), 'Import zachowany w historii.');
+
+		$settings = json_decode((string) $this->db->scalar('SELECT settings FROM ' . $this->db->table('campaigns') . ' WHERE id = ?', [$campaignId]), true);
+		$this->assertSame('2026-01-15 00:00:00', $settings['start_date_time']);
+		$this->assertFalse(isset($settings['start_date']));
+
+		foreach (array_filter($this->mock->requests, fn ($r) => $r['gaql'] !== null) as $request) {
+			$this->assertSame([], GoogleAdsMock::unrecognizedFields($request['gaql']), 'Wszystkie zapytania synchronizacji zgodne ze schematem v25.');
+		}
+	}
+
 	public function testRetryLimitAndBackoffSchedule(): void
 	{
 		$this->assertSame(60, SyncService::backoffSeconds(1));

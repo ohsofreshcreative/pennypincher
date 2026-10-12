@@ -5,13 +5,17 @@ namespace App\PennyPincher\Infrastructure\GoogleAds\Sync;
 /**
  * Zapytania GAQL (Google Ads API v25). Tylko odczyt.
  * Daty w zapytaniach pochodzą z planu synchronizacji (format Y-m-d), nie od użytkownika.
+ *
+ * Pola są sprawdzane testem `GaqlSchemaTest` względem listy pól v25 (tests/Support/GaqlSchemaV25.php).
+ * Uwaga: od v23 `campaign.start_date`/`campaign.end_date` nie istnieją – zastąpiły je
+ * `campaign.start_date_time`/`campaign.end_date_time` (format „yyyy-MM-dd HH:mm:ss”).
  */
 final class Gaql
 {
 	public static function campaigns(): string
 	{
 		return 'SELECT campaign.id, campaign.name, campaign.status, campaign.serving_status, campaign.advertising_channel_type,
-			campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.start_date, campaign.end_date,
+			campaign.advertising_channel_sub_type, campaign.bidding_strategy_type, campaign.start_date_time, campaign.end_date_time,
 			campaign.network_settings.target_google_search, campaign.network_settings.target_search_network,
 			campaign.network_settings.target_content_network, campaign.network_settings.target_partner_search_network,
 			campaign.geo_target_type_setting.positive_geo_target_type, campaign.geo_target_type_setting.negative_geo_target_type,

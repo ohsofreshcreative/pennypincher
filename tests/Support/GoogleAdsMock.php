@@ -2,6 +2,8 @@
 
 namespace Tests\Support;
 
+require_once __DIR__ . '/GaqlSchemaV25.php';
+
 /**
  * Atrapa endpointów Google (OAuth i Google Ads API) przez filtr `pre_http_request`.
  *
@@ -68,6 +70,7 @@ final class GoogleAdsMock
 			->on('campaign', [200, self::stream([[
 				'campaign' => [
 					'id' => '111', 'name' => 'Szukaj | Marka', 'status' => 'ENABLED', 'advertisingChannelType' => 'SEARCH', 'biddingStrategyType' => 'MAXIMIZE_CONVERSIONS',
+					'startDateTime' => '2026-01-15 00:00:00', 'endDateTime' => '2037-12-30 23:59:59',
 					'networkSettings' => ['targetGoogleSearch' => true, 'targetSearchNetwork' => true, 'targetContentNetwork' => true],
 					'geoTargetTypeSetting' => ['positiveGeoTargetType' => 'PRESENCE_OR_INTEREST'],
 				],
@@ -116,6 +119,15 @@ final class GoogleAdsMock
 		$request = ['url' => $url, 'method' => (string) ($args['method'] ?? 'GET'), 'headers' => (array) ($args['headers'] ?? []), 'body' => $body, 'gaql' => $gaql, 'key' => $key];
 		$this->requests[] = $request;
 
+		// Jak prawdziwe API: pola spoza schematu v25 → 400 INVALID_ARGUMENT / queryError UNRECOGNIZED_FIELD.
+		if ($gaql !== null && ($unknown = self::unrecognizedFields($gaql)) !== []) {
+			return self::response(400, [['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'Request contains an invalid argument.', 'details' => [[
+				'@type' => 'type.googleapis.com/google.ads.googleads.v25.errors.GoogleAdsFailure',
+				'errors' => [['errorCode' => ['queryError' => 'UNRECOGNIZED_FIELD'], 'message' => "Unrecognized fields in the query: '" . implode("', '", $unknown) . "'."]],
+				'requestId' => 'mock-gaql',
+			]]]]]);
+		}
+
 		$handler = $this->handlers[$key] ?? null;
 
 		if ($handler === null) {
@@ -123,15 +135,30 @@ final class GoogleAdsMock
 		}
 
 		$result = is_callable($handler) ? $handler($request) : $handler;
-		[$status, $responseBody] = $result;
 
+		return self::response($result[0], $result[1], $result[2] ?? []);
+	}
+
+	private static function response(int $status, mixed $body, array $headers = []): array
+	{
 		return [
-			'headers' => $result[2] ?? [],
-			'body' => is_string($responseBody) ? $responseBody : wp_json_encode($responseBody),
+			'headers' => $headers,
+			'body' => is_string($body) ? $body : wp_json_encode($body),
 			'response' => ['code' => $status, 'message' => ''],
 			'cookies' => [],
 			'filename' => null,
 		];
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public static function unrecognizedFields(string $gaql): array
+	{
+		[$resource, $fields] = GaqlSchemaV25::parse($gaql);
+		$allowed = GaqlSchemaV25::FIELDS[$resource] ?? [];
+
+		return array_values(array_filter($fields, fn ($field) => ! in_array($field, $allowed, true)));
 	}
 
 	private static function keyFor(string $url, ?string $gaql): string
