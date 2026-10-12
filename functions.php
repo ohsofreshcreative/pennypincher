@@ -34,7 +34,12 @@ require $composer;
 Application::configure()
 	->withProviders([
 		App\Providers\ThemeServiceProvider::class,
+		App\PennyPincher\Providers\PennyPincherServiceProvider::class,
 	])
+	->withRouting(using: function () {
+		/*--- PENNY PINCHER: aplikacja pod /app/ ---*/
+		require __DIR__ . '/routes/app.php';
+	})
 	->boot();
 
 /*

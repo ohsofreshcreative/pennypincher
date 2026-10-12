@@ -13,6 +13,36 @@ Gdy zadanie zaczyna się od linku do frame'a w Figmie, obowiązuje skill `figma-
 
 ⸻
 
+Aplikacja Penny Pincher (`/app/`)
+
+Motyw zawiera aplikację SaaS do audytu kampanii Google Ads. Jej zasady są inne niż zasady bloków ACF
+opisane niżej (anatomia bloku, `-smt`, zakaz mikro-typografii itd. **nie dotyczą** widoków aplikacji).
+Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac: `docs/PROGRESS.md`.
+
+- Kod: `app/PennyPincher/` (Controllers → Services → Repositories/Domain; Infrastructure, Jobs, Console),
+  trasy: `routes/app.php` (Acorn, rejestrowane w `functions.php` przez `withRouting`),
+  widoki: `resources/views/app/**`, komponenty: `resources/views/components/pp/*` (`<x-pp.*>`),
+  assety: osobny entry Vite `resources/css/pp-app.css` + `resources/js/pp-app.js`.
+- Baza: tabele `{prefix}pp_*`, dostęp wyłącznie przez `Infrastructure\Database\Db` (`$wpdb`, placeholdery `?`,
+  transakcje z SAVEPOINT). Nowe tabele/kolumny tylko jako nowa migracja w `Migrator::migrations()` + `Schema`;
+  nigdy nie modyfikuj istniejącej migracji i nie usuwaj danych.
+- Kwoty zawsze w mikrojednostkach (`BIGINT`, `Domain\Metrics\Money`), brak danych = `NULL` (w UI „—”), nie 0.
+- Każde zapytanie o dane musi być zawężone do projektu; projekty i organizacje pobieraj tylko przez
+  `Services\AccessService` (404 dla cudzych zasobów, 403 dla zbyt niskiej roli). Każdy POST ma `<x-pp.nonce />`.
+- Metryki sumuj tylko przez `MetricsRepository` + `Domain\Metrics\PeriodResolver` (bez dzielenia okresów na dni,
+  bez nakładających się danych, bez łączenia kosztów z różnych typów raportów).
+- Nowy typ raportu: definicja w `Domain/Import/Reports`, rejestracja w `ReportRegistry`, writer w
+  `Infrastructure/Import/Writers`, przypadek w `Jobs\ProcessImport::writer()`, plik w `tests/fixtures` i test.
+- UI: Tailwind w Blade + klasy komponentów `pp-*` z `pp-app.css`; tokeny kolorów `paper`, `ink`, `mint`, `copper`,
+  `line` itd. (bez hexów w Blade). Teksty interfejsu po polsku. Niedziałających modułów nie pokazujemy jako gotowych.
+- Testy: `wp eval-file tests/run.php` (wszystkie; integracyjne w wycofywanej transakcji) albo
+  `php tests/run.php unit` (bez WordPressa). Komendy: `wp acorn pp:migrate`, `pp:organization:create`,
+  `pp:import`, `pp:imports:prune`.
+- Dla zadań dotyczących aplikacji `/app/` wolno uruchamiać `yarn build` i sprawdzać widoki w przeglądarce
+  (wymaga tego definicja ukończenia etapów Penny Pincher). Commit nadal wykonuje użytkownik.
+
+⸻
+
 Project overview
 
 This repository contains a custom WordPress project built with Roots Sage 11.
@@ -46,6 +76,9 @@ Theme root: `wp-content/themes/h2otwock` (Sage 11 + Acorn 5, PHP >= 8.2, namespa
 | `resources/css/blocks/*.scss` | styl per blok, importowany w `app.css` |
 | `resources/js/blocks/*.js` | JS per blok, ładowany warunkowo z `app.js` |
 | `public/build/**` | **artefakty builda są w gicie** (patrz „Build i assety”) |
+| `app/PennyPincher/**`, `routes/app.php` | aplikacja Penny Pincher pod `/app/` (patrz sekcja wyżej) |
+| `resources/views/app/**`, `resources/views/components/pp/**` | widoki i komponenty aplikacji |
+| `tests/**`, `docs/**` | testy aplikacji i dokumentacja produktu/architektury |
 
 Zanim dodasz nową abstrakcję, sprawdź `app/Support/SectionClasses.php` i `resources/css/variables.scss` —
 większość rzeczy tam już jest.

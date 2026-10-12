@@ -5,6 +5,12 @@
 @source "../../app/**/*.php";
 @source "../js/**/*.{js,ts,jsx,tsx}";
 
+/* Aplikacja Penny Pincher (/app/) ma własny entry: resources/css/pp-app.css */
+@source not "../views/app";
+@source not "../views/components/pp";
+@source not "../js/pp-app.js";
+@source not "../../app/PennyPincher";
+
 /* Twoje “źródłowe” zmienne RGB */
 :root {
   /* base */

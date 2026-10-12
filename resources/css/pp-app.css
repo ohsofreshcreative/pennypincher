@@ -1,0 +1,268 @@
+/*
+ * Penny Pincher – style aplikacji /app/.
+ * Osobny entry Vite: nie dziedziczy design systemu strony (variables.scss) i skanuje tylko widoki aplikacji.
+ */
+@import 'tailwindcss' source(none);
+
+@source '../views/app';
+@source '../views/components/pp';
+@source '../js/pp-app.js';
+@source '../../app/PennyPincher';
+
+@font-face {
+  font-family: 'PolySans Bulky Wide';
+  src: url('../fonts/PolySans Bulky Wide.ttf') format('truetype');
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'PolySans Bulky Wide', ui-sans-serif, system-ui, sans-serif;
+
+  /* Papier księgowy, atrament i miedź grosza */
+  --color-paper: #f2f4f1;
+  --color-surface: #ffffff;
+  --color-ink: #13221c;
+  --color-ink-soft: #46564f;
+  --color-ink-mute: #6f7d76;
+  --color-line: #dbe1dc;
+  --color-line-strong: #c3ccc6;
+  --color-mint: #1d6b52;
+  --color-mint-dark: #155440;
+  --color-mint-soft: #e3f0ea;
+  --color-copper: #a5531f;
+  --color-copper-soft: #f6e9df;
+  --color-danger: #b0281f;
+  --color-danger-soft: #fbe9e7;
+  --color-warn: #8a5d00;
+  --color-warn-soft: #fbf1d9;
+  --color-info: #2a5d8a;
+  --color-info-soft: #e5eef6;
+  --color-sidebar: #13221c;
+  --color-sidebar-line: #26372f;
+  --color-sidebar-text: #c9d4ce;
+
+  --radius-card: 10px;
+  --radius-control: 7px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper font-sans text-[15px] leading-6 text-ink antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-mint);
+    outline-offset: 2px;
+  }
+
+  [x-cloak] {
+    display: none !important;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .pp-num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pp-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  .pp-card {
+    @apply rounded-[var(--radius-card)] border border-line bg-surface;
+  }
+
+  .pp-card-header {
+    @apply flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-3.5;
+  }
+
+  .pp-card-title {
+    @apply text-[15px] font-semibold text-ink;
+  }
+
+  .pp-muted {
+    @apply text-ink-mute;
+  }
+
+  /* Przyciski */
+  .pp-btn {
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-[var(--radius-control)] border px-4 text-sm font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .pp-btn-primary {
+    @apply border-mint bg-mint text-white hover:border-mint-dark hover:bg-mint-dark;
+  }
+
+  .pp-btn-secondary {
+    @apply border-line-strong bg-surface text-ink hover:border-ink-mute;
+  }
+
+  .pp-btn-ghost {
+    @apply border-transparent bg-transparent text-ink-soft hover:bg-ink/5 hover:text-ink;
+  }
+
+  .pp-btn-danger {
+    @apply border-danger bg-surface text-danger hover:bg-danger-soft;
+  }
+
+  .pp-btn-sm {
+    @apply min-h-8 px-3 text-[13px];
+  }
+
+  /* Formularze */
+  .pp-label {
+    @apply mb-1.5 block text-sm font-semibold text-ink;
+  }
+
+  .pp-help {
+    @apply mt-1.5 text-[13px] leading-5 text-ink-mute;
+  }
+
+  .pp-error {
+    @apply mt-1.5 text-[13px] leading-5 font-medium text-danger;
+  }
+
+  .pp-input {
+    @apply block min-h-10 w-full rounded-[var(--radius-control)] border border-line-strong bg-surface px-3 py-2 text-[15px] text-ink placeholder:text-ink-mute/70 focus:border-mint focus:outline-none focus:ring-2 focus:ring-mint/25;
+  }
+
+  .pp-input[aria-invalid='true'] {
+    @apply border-danger focus:ring-danger/20;
+  }
+
+  select.pp-input {
+    @apply appearance-none bg-no-repeat pr-9;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%2346564f' stroke-width='1.6' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5'/%3E%3C/svg%3E");
+    background-position: right 0.75rem center;
+  }
+
+  .pp-input-sm {
+    @apply min-h-9 py-1.5 text-sm;
+  }
+
+  /* Tabele */
+  .pp-table-wrap {
+    @apply relative overflow-x-auto;
+  }
+
+  .pp-table {
+    @apply w-full border-collapse text-sm;
+  }
+
+  .pp-table th {
+    @apply border-b border-line bg-paper/60 px-4 py-2.5 text-left text-[12.5px] font-semibold whitespace-nowrap text-ink-soft;
+  }
+
+  .pp-table td {
+    @apply border-b border-line px-4 py-3 align-top;
+  }
+
+  .pp-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .pp-table tbody tr:hover td {
+    @apply bg-paper/50;
+  }
+
+  .pp-table .pp-col-num {
+    @apply text-right whitespace-nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .pp-table .pp-col-sticky {
+    @apply sticky left-0 z-[1] bg-surface;
+  }
+
+  .pp-table thead .pp-col-sticky {
+    @apply bg-[#f7f8f6];
+  }
+
+  /* Plakietki */
+  .pp-badge {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] leading-5 font-semibold whitespace-nowrap;
+  }
+
+  .pp-badge::before {
+    content: '';
+    @apply size-1.5 rounded-full bg-current;
+  }
+
+  .pp-badge-ok {
+    @apply bg-mint-soft text-mint-dark;
+  }
+
+  .pp-badge-warn {
+    @apply bg-warn-soft text-warn;
+  }
+
+  .pp-badge-danger {
+    @apply bg-danger-soft text-danger;
+  }
+
+  .pp-badge-info {
+    @apply bg-info-soft text-info;
+  }
+
+  .pp-badge-neutral {
+    @apply bg-ink/5 text-ink-soft;
+  }
+
+  .pp-badge-demo {
+    @apply rounded-[4px] bg-copper text-white;
+  }
+
+  .pp-badge-demo::before {
+    display: none;
+  }
+
+  /* Nawigacja boczna */
+  .pp-nav-link {
+    @apply flex min-h-10 items-center gap-3 rounded-[var(--radius-control)] px-3 text-[14.5px] font-medium text-sidebar-text transition-colors hover:bg-white/5 hover:text-white;
+  }
+
+  .pp-nav-link[aria-current='page'] {
+    @apply bg-white/10 text-white;
+    box-shadow: inset 3px 0 0 var(--color-copper);
+  }
+
+  /* Miernik budżetu */
+  .pp-meter {
+    @apply relative h-3 overflow-hidden rounded-full bg-ink/8;
+  }
+
+  .pp-meter-fill {
+    @apply absolute inset-y-0 left-0 rounded-full bg-copper;
+  }
+
+  .pp-meter-over {
+    @apply bg-danger;
+  }
+
+  /* Wykresy */
+  .pp-chart-hit:hover + .pp-chart-dot,
+  .pp-chart-hit:focus + .pp-chart-dot {
+    opacity: 1;
+  }
+
+  .pp-chart-dot {
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+}
