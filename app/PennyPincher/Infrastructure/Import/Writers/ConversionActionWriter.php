@@ -33,6 +33,7 @@ final class ConversionActionWriter extends ReportWriter
 			$key = "{$actionId}|{$campaignScope}|{$from}|{$to}";
 			$metrics = [
 				'conversions' => $row['conversions'] ?? null,
+				'view_through_conversions' => $row['view_through_conversions'] ?? null,
 				'all_conversions' => $row['all_conversions'] ?? null,
 				'conversions_value_micros' => $row['conversions_value'] ?? null,
 				'all_conversions_value_micros' => $row['all_conversions_value'] ?? null,
@@ -67,7 +68,7 @@ final class ConversionActionWriter extends ReportWriter
 		}
 
 		$this->db->insertMany('conversion_metrics', $records, 400, 'ON DUPLICATE KEY UPDATE '
-			. 'conversions = VALUES(conversions), all_conversions = VALUES(all_conversions), '
+			. 'conversions = VALUES(conversions), view_through_conversions = VALUES(view_through_conversions), all_conversions = VALUES(all_conversions), '
 			. 'conversions_value_micros = VALUES(conversions_value_micros), all_conversions_value_micros = VALUES(all_conversions_value_micros), '
 			. 'currency = VALUES(currency), import_id = VALUES(import_id), updated_at = VALUES(updated_at)');
 

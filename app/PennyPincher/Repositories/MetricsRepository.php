@@ -42,6 +42,7 @@ class MetricsRepository
 		'campaign_metrics' => 'campaign_id',
 		'search_term_metrics' => 'search_term_id',
 		'keyword_metrics' => 'keyword_id',
+		'conversion_metrics' => 'conversion_action_id',
 	];
 
 	public function __construct(private Db $db)
@@ -340,6 +341,48 @@ class MetricsRepository
 			),
 			[$projectId, $campaignId]
 		);
+	}
+
+	/**
+	 * Działania powodujące konwersję w zakresie. Dane dla całego konta (campaign_scope = 0) mają pierwszeństwo
+	 * przed sumą danych per kampania z tego samego działania – inaczej te same konwersje liczylibyśmy dwa razy.
+	 * Konwersje po obejrzeniu są zwracane osobno i nie są dodawane do konwersji.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function conversionActions(int $projectId, ResolvedPeriods $resolved): array
+	{
+		[$condition, $params] = $this->condition($resolved, 'm');
+
+		$rows = $this->db->select(
+			sprintf(
+				'SELECT ca.id, ca.name, ca.category, ca.source, ca.status, ca.status_raw, ca.include_in_conversions,
+					(m.campaign_scope = 0) AS account_level,
+					SUM(m.conversions) AS conversions, SUM(m.view_through_conversions) AS view_through_conversions,
+					SUM(m.all_conversions) AS all_conversions, SUM(m.conversions_value_micros) AS conversions_value_micros
+				FROM %s m INNER JOIN %s ca ON ca.id = m.conversion_action_id AND ca.project_id = m.project_id
+				WHERE m.project_id = ? AND (%s)
+				GROUP BY ca.id, ca.name, ca.category, ca.source, ca.status, ca.status_raw, ca.include_in_conversions, (m.campaign_scope = 0)',
+				$this->db->table('conversion_metrics'),
+				$this->db->table('conversion_actions'),
+				$condition
+			),
+			[$projectId, ...$params]
+		);
+
+		$actions = [];
+
+		foreach ($rows as $row) {
+			$id = (int) $row['id'];
+
+			if (! isset($actions[$id]) || (int) $row['account_level'] === 1) {
+				$actions[$id] = $row;
+			}
+		}
+
+		usort($actions, fn ($a, $b) => ((float) $b['conversions'] <=> (float) $a['conversions']) ?: strcmp($a['name'], $b['name']));
+
+		return $actions;
 	}
 
 	public function hasAnyData(int $projectId): bool

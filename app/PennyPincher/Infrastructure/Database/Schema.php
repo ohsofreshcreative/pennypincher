@@ -286,4 +286,26 @@ class Schema
 
 		return $statements;
 	}
+
+	/**
+	 * Konwersje po obejrzeniu (view-through) jako osobna kolumna – nie są sumowane z konwersjami.
+	 * Kolumny dodajemy tylko, jeśli ich jeszcze nie ma (MySQL nie obsługuje ADD COLUMN IF NOT EXISTS).
+	 */
+	public static function viewThroughConversions(Db $db, string $charset): array
+	{
+		$statements = [];
+
+		foreach (['campaign_metrics', 'keyword_metrics', 'search_term_metrics', 'conversion_metrics'] as $table) {
+			$exists = $db->scalar(
+				'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+				[$db->table($table), 'view_through_conversions']
+			);
+
+			if ($exists === null) {
+				$statements[] = "ALTER TABLE {$db->table($table)} ADD COLUMN view_through_conversions DECIMAL(18,4) NULL AFTER conversions";
+			}
+		}
+
+		return $statements;
+	}
 }

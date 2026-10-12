@@ -32,7 +32,7 @@ final class KeywordReport extends ReportDefinition
 	public function fields(): array
 	{
 		return [
-			new FieldDefinition('keyword', 'Słowo kluczowe', FieldKind::Text, ['Keyword', 'Słowo kluczowe', 'Search keyword', 'Słowo kluczowe w sieci wyszukiwania'], true),
+			new FieldDefinition('keyword', 'Słowo kluczowe', FieldKind::Text, CommonFields::keywordAliases(), true),
 			new FieldDefinition('keyword_id', 'Identyfikator słowa kluczowego', FieldKind::Id, ['Keyword ID', 'Identyfikator słowa kluczowego', 'ID słowa kluczowego']),
 			CommonFields::campaign(),
 			CommonFields::campaignId(),
@@ -40,8 +40,8 @@ final class KeywordReport extends ReportDefinition
 			CommonFields::adGroupId(),
 			new FieldDefinition('match_type', 'Typ dopasowania', FieldKind::MatchType, ['Match type', 'Typ dopasowania', 'Keyword match type', 'Search keyword match type', 'Typ dopasowania słowa kluczowego']),
 			new FieldDefinition('status', 'Stan', FieldKind::Status, ['Keyword state', 'Stan słowa kluczowego', 'Status', 'Stan', 'Keyword status']),
-			new FieldDefinition('quality_score', 'Wynik jakości', FieldKind::Integer, ['Quality Score', 'Wynik jakości', 'Quality score']),
-			new FieldDefinition('max_cpc', 'Maks. CPC', FieldKind::Money, ['Max. CPC', 'Maks. CPC', 'Max CPC', 'Default max. CPC']),
+			new FieldDefinition('quality_score', 'Wynik jakości', FieldKind::Integer, ['Quality Score', 'Wynik jakości', 'Qual. Score']),
+			new FieldDefinition('max_cpc', 'Maks. CPC', FieldKind::Money, ['Max. CPC', 'Maks. CPC', 'Max CPC', 'Default max. CPC', 'Domyślny maks. CPC']),
 			CommonFields::date(),
 			...CommonFields::performance(),
 			CommonFields::currency(),
@@ -55,6 +55,6 @@ final class KeywordReport extends ReportDefinition
 
 	protected function foreignHeaders(): array
 	{
-		return ['Search term', 'Wyszukiwane hasło', 'Search query'];
+		return [...CommonFields::searchTermAliases(), ...CommonFields::conversionActionAliases()];
 	}
 }

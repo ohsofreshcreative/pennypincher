@@ -36,9 +36,9 @@ final class CampaignReport extends ReportDefinition
 			CommonFields::campaignId(),
 			CommonFields::date(),
 			new FieldDefinition('status', 'Stan kampanii', FieldKind::Status, ['Campaign state', 'Stan kampanii', 'Campaign status', 'Status kampanii', 'Status', 'Stan']),
-			new FieldDefinition('campaign_type', 'Typ kampanii', FieldKind::Text, ['Campaign type', 'Typ kampanii', 'Advertising channel type', 'Channel type']),
+			new FieldDefinition('campaign_type', 'Typ kampanii', FieldKind::Text, ['Campaign type', 'Typ kampanii', 'Advertising channel type', 'Channel type', 'Typ kanału reklamowego']),
 			new FieldDefinition('budget', 'Budżet', FieldKind::Money, ['Budget', 'Budżet', 'Campaign budget', 'Budżet kampanii']),
-			new FieldDefinition('budget_period', 'Typ budżetu', FieldKind::Text, ['Budget type', 'Typ budżetu', 'Budget period', 'Okres budżetu', 'Budget name']),
+			new FieldDefinition('budget_period', 'Typ budżetu', FieldKind::Text, ['Budget type', 'Typ budżetu', 'Budget period', 'Okres budżetu']),
 			new FieldDefinition('bidding_strategy', 'Strategia ustalania stawek', FieldKind::Text, ['Bid strategy type', 'Typ strategii ustalania stawek', 'Bid strategy', 'Strategia ustalania stawek', 'Bidding strategy type']),
 			...CommonFields::performance(),
 			CommonFields::currency(),
@@ -53,9 +53,9 @@ final class CampaignReport extends ReportDefinition
 	protected function foreignHeaders(): array
 	{
 		return [
-			'Search term', 'Wyszukiwane hasło', 'Search query',
-			'Conversion action', 'Działanie powodujące konwersję',
-			'Keyword', 'Słowo kluczowe', 'Search keyword', 'Słowo kluczowe w sieci wyszukiwania',
+			...CommonFields::searchTermAliases(),
+			...CommonFields::conversionActionAliases(),
+			...CommonFields::keywordAliases(),
 		];
 	}
 }

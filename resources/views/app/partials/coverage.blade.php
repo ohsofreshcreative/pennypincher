@@ -34,7 +34,7 @@
   </p>
 
   @if (! $resolved->isComplete())
-    <x-pp.alert type="info">Dane pokrywają tylko część wybranego zakresu. Sumy dotyczą wyłącznie dni z danymi, a budżet jest liczony dla całego zakresu, więc jego wykorzystanie może być zaniżone.</x-pp.alert>
+    <x-pp.alert type="info">Dane pokrywają tylko część wybranego zakresu. Sumy dotyczą wyłącznie dni z danymi, a wykorzystanie budżetu liczymy względem budżetu dla tych samych dni. Brakujących dni nie traktujemy jak zera.</x-pp.alert>
   @endif
 
   @if ($resolved->excludedPeriods !== [] || $resolved->excludedDays > 0)

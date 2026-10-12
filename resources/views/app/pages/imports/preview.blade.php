@@ -11,6 +11,7 @@
   $periodTo = $old['date_to'] ?? ($period[1] ?? '');
   $fieldErrors = array_filter($errors, fn ($key) => str_starts_with($key, 'mapping.'), ARRAY_FILTER_USE_KEY);
   $missing = array_values(array_filter($errors, fn ($key) => str_starts_with($key, 'missing.'), ARRAY_FILTER_USE_KEY));
+  $unmapped = array_values(array_filter($headers, fn ($header, $index) => $header !== null && $header !== '' && ! isset($mappedColumns[$index]), ARRAY_FILTER_USE_BOTH));
 @endphp
 
 @section('content')
@@ -94,6 +95,9 @@
           <h2 id="pp-mapping" class="pp-card-title">Mapowanie kolumn</h2>
           <p class="text-[13px] text-ink-mute">Kolumny bez przypisania są pomijane. Metryk pochodnych (CTR, CPC) nie importujemy – liczymy je sami.</p>
         </div>
+        @if ($unmapped !== [])
+          <p class="px-5 pt-4 text-sm text-ink-soft">Kolumny pliku, które nie zostaną zaimportowane: {{ implode(', ', $unmapped) }}.</p>
+        @endif
         <div class="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
           @foreach ($definition->fields() as $field)
             @php

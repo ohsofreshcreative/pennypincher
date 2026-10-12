@@ -1,6 +1,16 @@
 # Penny Pincher – postęp prac
 
-Stan na 12.10.2026 (etap 1 – Prompt 1).
+Stan na 12.10.2026 (etap 1 – Prompt 1 + poprawki Prompt 1.1).
+
+## Prompt 1.1 – poprawki
+
+- **Import „Konwersje.csv” z Edytora raportów** – przyczyna: (1) brak aliasu „Działania powodujące konwersję” (liczba mnoga), (2) nieznana kolumna „Konw. po obejrzeniu”, (3) wykrywanie wiersza nagłówków wymagało ≥ 2 rozpoznanych kolumn, więc 3-kolumnowy raport z jedną znaną kolumną był odrzucany. Naprawione: nowa heurystyka wiersza nagłówków (≥ 2 komórki i ≥ 2 znane nagłówki albo nagłówek identyfikujący typ raportu), porównywanie nagłówków bez polskich znaków i interpunkcji, rozszerzone aliasy PL/EN dla wszystkich czterech typów raportów, daty i statusy bez polskich znaków.
+- **Konwersje po obejrzeniu** – nowe pole i kolumna `view_through_conversions` (migracja `…000002`), nigdy nie sumowane z konwersjami.
+- **Dashboard** – sekcja „Działania powodujące konwersję”; „Wszystkie dane” obejmuje wszystkie typy raportów; wykorzystanie budżetu przy niepełnych danych liczone względem budżetu dla dni z danymi.
+- **Import** – podsumowanie pokazuje zakres z nagłówka eksportu i ostrzega o rozbieżnościach; podgląd wymienia kolumny, które nie zostaną zaimportowane.
+- **Bezpieczeństwo** – limit prób logowania (okno 15 min, bez blokady na stałe), strona 500 bez szczegółów, odrzucanie XML z DOCTYPE w XLSX, projekt demo tylko dla osób mogących zakładać organizacje. Pełny opis i plan dla klucza SSH: `docs/SECURITY.md`.
+- **Dokumentacja** – AGENTS.md bez odniesień do h2otwock (ścieżki, liczba bloków, WP-CLI), nowe `docs/SECURITY.md`.
+
 
 ## Zrobione
 
@@ -13,7 +23,7 @@ Stan na 12.10.2026 (etap 1 – Prompt 1).
 - Dashboard (KPI, budżet proporcjonalny do zakresu, wykresy dzienne SVG, kampanie, hasła, importy, informacja o źródle i pokryciu dat), Kampanie (filtry, sortowanie, paginacja, szczegóły ze źródłami danych), Wyszukiwane hasła (wyszukiwarka, filtry kampanii i konwersji, sortowanie, paginacja), Ustawienia projektu.
 - Projekt demonstracyjny w osobnej organizacji „Demo” (dane przechodzą przez prawdziwy importer).
 - Komendy: `wp acorn pp:migrate`, `pp:organization:create`, `pp:import`, `pp:imports:prune`.
-- 53 testy automatyczne (`tests/run.php`) + pliki przykładowe w `tests/fixtures`.
+- 71 testów automatycznych (`tests/run.php`) + pliki przykładowe w `tests/fixtures` (w tym dokładna struktura `Konwersje.csv` i jej warianty: UTF-16/tab, XLSX, średniki i puste wiersze, wersja angielska, nagłówki bez polskich znaków).
 - Dokumentacja: `AGENTS.md` (= `CLAUDE.md`), `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, ten plik.
 
 ## Weryfikacja
@@ -22,22 +32,36 @@ Wykonane w kopii środowiska (WordPress 7.1.3 i wtyczki z LocalWP, motyw z `vend
 
 - `php -l` dla wszystkich plików aplikacji – bez błędów,
 - `yarn build` – przechodzi (ostrzeżenie o `::first-child` w istniejącym CSS strony, niezwiązane),
-- testy: 53/53 (jednostkowe: parsowanie liczb i dat, kwoty, metryki, budżet, rozstrzyganie okresów, czytniki CSV/XLSX, normalizacja; integracyjne: izolacja organizacji, role, importy wszystkich typów, idempotencja, błędne pliki, waluta, dashboard, filtry i paginacja, projekt demo, migracje),
+- testy: 71/71 na bazie po aktualizacji (migracja 2) i na pustej bazie (jednostkowe: parsowanie liczb i dat, kwoty, metryki, budżet, rozstrzyganie okresów, czytniki CSV/XLSX, normalizacja; integracyjne: izolacja organizacji, role, importy wszystkich typów, idempotencja, błędne pliki, waluta, dashboard, filtry i paginacja, projekt demo, migracje),
 - migracje na pustej bazie: 15 tabel, 30 kluczy obcych, testy bez pozostawiania danych,
-- test HTTP end-to-end (60/60): logowanie, 302/403/404/419, skróty URL, tworzenie organizacji i projektu, ustawienia, upload i zatwierdzenie CSV i XLSX, ponowny import, błędne pliki, anulowanie, zmiana typu raportu, izolacja i role drugiego użytkownika, wylogowanie,
+- test HTTP end-to-end (70/70, Prompt 1.1): m.in. import `Konwersje.csv` przez interfejs, sekcja konwersji na dashboardzie, limit logowania (HTTP 429), brak tworzenia demo przez członka; wcześniejszy zakres: logowanie, 302/403/404/419, skróty URL, tworzenie organizacji i projektu, ustawienia, upload i zatwierdzenie CSV i XLSX, ponowny import, błędne pliki, anulowanie, zmiana typu raportu, izolacja i role drugiego użytkownika, wylogowanie,
 - przegląd w przeglądarce (Chromium, 1440 px i 390 px): dashboard, kampanie, hasła, importy, podgląd importu, ustawienia, projekty – bez poziomego przewijania strony,
 - komendy `pp:*` uruchomione przez kernel konsoli Acorn.
 
 ## Niezweryfikowane / znane problemy
 
-- Nie udało się otworzyć `http://pennypincher.local/app/` w przeglądarce na komputerze (żądanie nie doszło do skutku – prawdopodobnie strona w LocalWP była zatrzymana), więc pierwsze uruchomienie migracji na bazie LocalWP i test na MySQL z LocalWP trzeba wykonać ręcznie (patrz niżej).
+- **LocalWP nie został przetestowany**: przeglądarka w aplikacji Claude dwukrotnie nie załadowała `http://pennypincher.local/app/` (12.10.2026, Prompt 1 i 1.1) – prawdopodobnie strona w Local była zatrzymana. Wszystkie testy wykonano w wiernej kopii środowiska. Do wykonania ręcznie: lista „Testy manualne w LocalWP” niżej.
 - Testy działały na MariaDB 10.11; LocalWP zwykle używa MySQL 8 – `VALUES()` w `ON DUPLICATE KEY UPDATE` generuje tam tylko ostrzeżenie o przestarzałej składni.
 - Komendy uruchamiane były przez kernel Acorn, nie przez binarkę `wp` (brak WP-CLI w środowisku testowym).
 - Czytnik XLSX jest własny (Packagist był niedostępny); obsługuje pierwszy arkusz pliku.
-- Brak limitu prób logowania (jak w czystym WordPressie) – warto dodać wtyczkę bezpieczeństwa lub limit w etapie produkcyjnym.
 - Import działa synchronicznie (limit 100 000 wierszy i rozmiaru pliku); kolejka będzie potrzebna przy synchronizacji z API.
 - Istniejące, niezwiązane problemy motywu: ostrzeżenie PHP w JSON-LD w `layouts/app.blade.php` (`@context` interpretowane przez Blade), pozostałe z listy „Znane niespójności” w AGENTS.md; sekcja „Repository map” w AGENTS.md nadal opisuje motyw h2otwock.
-- W repozytorium jest śledzony prywatny klucz SSH (`key`) – należy go usunąć z historii i unieważnić.
+- W repozytorium (także na `origin/main`) jest śledzony prywatny klucz SSH `key` – plan wymiany i usunięcia: `docs/SECURITY.md`. Nie wykonano automatycznie.
+- `PRZENOSINY.md` to Twoja instrukcja przenoszenia warsztatu Figma → blok z projektu h2otwock; nie dotyczy aplikacji, zostawiona bez zmian.
+- Raporty z segmentem „Tydzień”/„Miesiąc” (zamiast „Dzień”) są zapisywane jako suma za cały zakres raportu – poprawne sumy, ale bez podziału w czasie.
+
+## Testy manualne w LocalWP
+
+1. Uruchom stronę w Local, wejdź na `http://pennypincher.local/app/` – przekierowanie do `/app/login/`, logowanie kontem administratora.
+2. Pierwsze wejście uruchamia migracje: w bazie powinny być tabele `wp_pp_*` (15) i opcja `pp_schema_version = 2026_10_12_000002_view_through_conversions`.
+3. Projekty: utwórz organizację i projekt, odśwież stronę projektu (F5) – brak 404.
+4. Ustawienia: zmień budżet, zapisz, sprawdź komunikat i wartość na dashboardzie.
+5. Importy: prześlij `Konwersje.csv` – podgląd ma rozpoznać „Działania powodujące konwersję”, „Konwersje”, „Konwersje po obejrzeniu” i zakres 01.01.2026 – 29.06.2026; zatwierdź; sekcja konwersji na Przeglądzie (zakres „Wszystkie dane”).
+6. Prześlij ponownie ten sam plik – ostrzeżenie o duplikacie, po zatwierdzeniu sumy bez zmian.
+7. Zaimportuj raport kampanii (CSV i XLSX, najlepiej z „Dzień”) oraz wyszukiwanych haseł; sprawdź Przegląd, Kampanie (filtry, sortowanie, szczegóły) i Wyszukiwane hasła.
+8. Zakresy dat: „Ten miesiąc”, „Własny zakres”, „Wszystkie dane” – komunikaty o pokryciu i braku danych zamiast zer.
+9. Bezpieczeństwo: 6 razy złe hasło → komunikat „Zbyt wiele nieudanych prób…”; drugi użytkownik bez organizacji → 403; członek innej organizacji nie otworzy cudzego `/app/projects/{id}/` (404).
+10. Strona publiczna (`/`) działa jak wcześniej.
 
 ## Ręczna konfiguracja
 
@@ -49,6 +73,8 @@ Wykonane w kopii środowiska (WordPress 7.1.3 i wtyczki z LocalWP, motyw z `vend
 6. Produkcja: systemowy cron `wp acorn pp:imports:prune` raz dziennie; opcjonalnie filtr `pennypincher/import/max_bytes`.
 
 ## Następne kroki (Prompt 2)
+
+- Wykonać testy manualne w LocalWP (wyżej) i plan wymiany klucza SSH (`docs/SECURITY.md`).
 
 - Silnik audytowy na zaimportowanych danych (reguły, priorytety, wyniki per projekt i zakres dat).
 - Wykorzystanie opisu biznesu, klienta docelowego i wartości projektów z ustawień w regułach.

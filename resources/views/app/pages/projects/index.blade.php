@@ -12,11 +12,11 @@
   <div class="flex flex-wrap items-center gap-3">
     @if ($canCreateOrganization)
       <x-pp.button variant="secondary" icon="plus" type="button" x-data x-on:click="$dispatch('open-modal', 'pp-new-organization')">Nowa organizacja</x-pp.button>
+      <form method="post" action="{{ AppUrl::to('projects/demo') }}" data-confirm="Utworzyć projekt demonstracyjny z fikcyjnymi danymi? Powstanie w osobnej organizacji „Demo”." data-busy>
+        <x-pp.nonce />
+        <x-pp.button variant="ghost" data-busy-label="Tworzenie projektu demo…">Utwórz projekt demo</x-pp.button>
+      </form>
     @endif
-    <form method="post" action="{{ AppUrl::to('projects/demo') }}" data-confirm="Utworzyć projekt demonstracyjny z fikcyjnymi danymi? Powstanie w osobnej organizacji „Demo”." data-busy>
-      <x-pp.nonce />
-      <x-pp.button variant="ghost" data-busy-label="Tworzenie projektu demo…">Utwórz projekt demo</x-pp.button>
-    </form>
   </div>
 
   @forelse ($groups as $group)

@@ -50,9 +50,16 @@ class DateRangeRequest
 
 	private function allData(Project $project): DateRange
 	{
-		$extent = $this->metrics->dataExtent($project->id, 'campaign_metrics')
-			?? $this->metrics->dataExtent($project->id, 'search_term_metrics')
-			?? $this->metrics->dataExtent($project->id, 'keyword_metrics');
+		// „Wszystkie dane” = od najwcześniejszej do najpóźniejszej daty we wszystkich zaimportowanych raportach.
+		$extent = null;
+
+		foreach (['campaign_metrics', 'search_term_metrics', 'keyword_metrics', 'conversion_metrics'] as $table) {
+			$tableExtent = $this->metrics->dataExtent($project->id, $table);
+
+			if ($tableExtent !== null) {
+				$extent = $extent === null ? $tableExtent : [min($extent[0], $tableExtent[0]), max($extent[1], $tableExtent[1])];
+			}
+		}
 
 		if ($extent === null) {
 			$fallback = DateRange::fromPreset('last_30', $project->timezone());

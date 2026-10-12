@@ -29,6 +29,11 @@ class DashboardService
 
 		$budgetForRange = BudgetCalculator::budgetForRange($project->monthlyBudgetMicros, $range);
 
+		// Przy niepełnym pokryciu porównujemy wydatki z budżetem tylko dla dni, za które mamy dane.
+		$budgetCompared = $resolved->isComplete()
+			? $budgetForRange
+			: BudgetCalculator::budgetForCoverage($project->monthlyBudgetMicros, $resolved);
+
 		$kpis = [
 			'spend' => $totals['cost_micros'],
 			'clicks' => $totals['clicks'],
@@ -39,10 +44,13 @@ class DashboardService
 			'cpa' => MetricCalculator::costPerConversion($totals['cost_micros'], $totals['conversions']),
 			'monthly_budget' => $project->monthlyBudgetMicros,
 			'budget_for_range' => $budgetForRange,
-			'budget_used' => $resolved->isEmpty() ? null : MetricCalculator::share($totals['cost_micros'], $budgetForRange),
+			'budget_compared' => $budgetCompared,
+			'budget_partial' => ! $resolved->isComplete(),
+			'budget_used' => $resolved->isEmpty() ? null : MetricCalculator::share($totals['cost_micros'], $budgetCompared),
 		];
 
 		$searchResolved = $this->metrics->resolve('search_term_metrics', $project->id, $range);
+		$conversionResolved = $this->metrics->resolve('conversion_metrics', $project->id, $range);
 
 		return [
 			'kpis' => $kpis,
@@ -51,6 +59,8 @@ class DashboardService
 			'campaigns' => $this->metrics->campaigns($project->id, $resolved, [], 'spend', 'desc', 1, 8),
 			'searchTerms' => $this->metrics->searchTerms($project->id, $searchResolved, [], 'spend', 'desc', 1, 8),
 			'searchResolved' => $searchResolved,
+			'conversionActions' => $this->metrics->conversionActions($project->id, $conversionResolved),
+			'conversionResolved' => $conversionResolved,
 			'imports' => $this->imports->latest($project->id, 5),
 			'hasAnyData' => $this->metrics->hasAnyData($project->id),
 			'campaignPeriods' => $this->metrics->availablePeriods($project->id, 'campaign_metrics'),

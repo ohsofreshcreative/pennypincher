@@ -3,6 +3,7 @@
 namespace App\PennyPincher\Http\Controllers;
 
 use App\PennyPincher\Http\Responses;
+use App\PennyPincher\Services\LoginThrottle;
 use App\PennyPincher\Support\AppUrl;
 use Illuminate\Http\Request;
 
@@ -37,7 +38,10 @@ class AuthController
 		], is_ssl());
 
 		if (is_wp_error($user)) {
-			return $this->form($request, 'Nieprawidłowy login lub hasło.', 422);
+			// Komunikat nie zdradza, czy istnieje konto o tym loginie.
+			return $user->get_error_code() === LoginThrottle::ERROR_CODE
+				? $this->form($request, $user->get_error_message(), 429)
+				: $this->form($request, 'Nieprawidłowy login lub hasło.', 422);
 		}
 
 		wp_set_current_user($user->ID);

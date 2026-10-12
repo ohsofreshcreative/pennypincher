@@ -13,8 +13,11 @@ use App\PennyPincher\Http\Responses;
 use App\PennyPincher\Infrastructure\Database\Db;
 use App\PennyPincher\Repositories\OrganizationRepository;
 use App\PennyPincher\Services\ImportMaintenance;
+use App\PennyPincher\Services\LoginThrottle;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\ServiceProvider;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Throwable;
 
 /**
  * Rejestracja modułu aplikacji Penny Pincher (/app/).
@@ -26,11 +29,14 @@ class PennyPincherServiceProvider extends ServiceProvider
 		// Jeden obiekt Db na żądanie – licznik zagnieżdżonych transakcji musi być wspólny.
 		$this->app->singleton(Db::class, fn () => new Db);
 		$this->app->singleton(ReportRegistry::class);
+		$this->app->singleton(LoginThrottle::class);
 	}
 
 	public function boot(): void
 	{
 		$this->registerExceptionRendering();
+
+		$this->app->make(LoginThrottle::class)->register();
 
 		add_action('deleted_user', function (int $userId) {
 			$this->app->make(OrganizationRepository::class)->removeUserEverywhere($userId);
@@ -72,5 +78,15 @@ class PennyPincherServiceProvider extends ServiceProvider
 
 		$handler->renderable(fn (NotFound $e) => Responses::error(404, 'Nie znaleziono', $e->getMessage()));
 		$handler->renderable(fn (AccessDenied $e) => Responses::error(403, 'Brak uprawnień', $e->getMessage()));
+
+		// Pozostałe błędy w /app/ (gdy debug jest wyłączony): własna strona 500 bez szczegółów technicznych.
+		// Szczegóły trafiają do logu przez standardowe raportowanie wyjątków.
+		$handler->renderable(function (Throwable $e, $request) {
+			if (config('app.debug') || ! str_starts_with((string) $request->path(), 'app') || $e instanceof HttpExceptionInterface) {
+				return null;
+			}
+
+			return Responses::error(500, 'Wystąpił błąd', 'Nie udało się wykonać operacji. Spróbuj ponownie, a jeśli błąd się powtarza, skontaktuj się z administratorem.');
+		});
 	}
 }

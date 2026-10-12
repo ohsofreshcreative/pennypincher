@@ -216,6 +216,7 @@ abstract class ReportWriter
 			'clicks' => $row['clicks'] ?? null,
 			'cost_micros' => $row['cost'] ?? null,
 			'conversions' => $row['conversions'] ?? null,
+			'view_through_conversions' => $row['view_through_conversions'] ?? null,
 			'conversions_value_micros' => $row['conversions_value'] ?? null,
 			'all_conversions' => $row['all_conversions'] ?? null,
 		];

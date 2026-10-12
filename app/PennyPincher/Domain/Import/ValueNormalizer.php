@@ -10,17 +10,17 @@ final class ValueNormalizer
 {
 	public static function status(?string $raw): ?string
 	{
-		$value = mb_strtolower(trim((string) $raw));
+		$value = self::fold(mb_strtolower(trim((string) $raw)));
 
 		if ($value === '' || $value === '--') {
 			return null;
 		}
 
 		return match (true) {
-			(bool) preg_match('/^(enabled|eligible|active|włączon|aktywn|kwalifikuj|ograniczon|limited|learning|uczenie)/u', $value) => 'enabled',
+			(bool) preg_match('/^(enabled|eligible|active|wlaczon|aktywn|kwalifikuj|ograniczon|limited|learning|uczenie)/u', $value) => 'enabled',
 			(bool) preg_match('/^(paused|wstrzyman)/u', $value) => 'paused',
-			(bool) preg_match('/^(removed|usunięt|deleted)/u', $value) => 'removed',
-			(bool) preg_match('/^(ended|zakończon)/u', $value) => 'ended',
+			(bool) preg_match('/^(removed|usuniet|deleted)/u', $value) => 'removed',
+			(bool) preg_match('/^(ended|zakonczon)/u', $value) => 'ended',
 			(bool) preg_match('/^(pending|oczekuj)/u', $value) => 'pending',
 			default => 'other',
 		};
@@ -28,7 +28,7 @@ final class ValueNormalizer
 
 	public static function matchType(?string $raw): ?string
 	{
-		$value = mb_strtolower(trim((string) $raw));
+		$value = self::fold(mb_strtolower(trim((string) $raw)));
 
 		if ($value === '' || $value === '--') {
 			return null;
@@ -37,9 +37,9 @@ final class ValueNormalizer
 		$closeVariant = (bool) preg_match('/(close variant|bliska odmiana|odmiana bliska|bliski wariant)/u', $value);
 
 		$type = match (true) {
-			str_contains($value, 'exact') || str_contains($value, 'ścisł') => 'exact',
-			str_contains($value, 'phrase') || str_contains($value, 'wyrażeni') => 'phrase',
-			str_contains($value, 'broad') || str_contains($value, 'przybliżon') || str_contains($value, 'szerok') => 'broad',
+			str_contains($value, 'exact') || str_contains($value, 'scisl') => 'exact',
+			str_contains($value, 'phrase') || str_contains($value, 'wyrazeni') => 'phrase',
+			str_contains($value, 'broad') || str_contains($value, 'przyblizon') || str_contains($value, 'szerok') => 'broad',
 			default => 'other',
 		};
 
@@ -68,11 +68,11 @@ final class ValueNormalizer
 
 	public static function boolean(?string $raw): ?bool
 	{
-		$value = mb_strtolower(trim((string) $raw));
+		$value = self::fold(mb_strtolower(trim((string) $raw)));
 
 		return match (true) {
-			in_array($value, ['yes', 'tak', 'true', '1', 'included', 'uwzględnione'], true) => true,
-			in_array($value, ['no', 'nie', 'false', '0', 'excluded', 'nieuwzględnione'], true) => false,
+			in_array($value, ['yes', 'tak', 'true', '1', 'included', 'uwzglednione'], true) => true,
+			in_array($value, ['no', 'nie', 'false', '0', 'excluded', 'nieuwzglednione'], true) => false,
 			default => null,
 		};
 	}
@@ -108,5 +108,10 @@ final class ValueNormalizer
 			'other' => 'Inny',
 			default => 'Brak danych',
 		};
+	}
+
+	private static function fold(string $value): string
+	{
+		return strtr($value, ['ą' => 'a', 'ć' => 'c', 'ę' => 'e', 'ł' => 'l', 'ń' => 'n', 'ó' => 'o', 'ś' => 's', 'ź' => 'z', 'ż' => 'z']);
 	}
 }

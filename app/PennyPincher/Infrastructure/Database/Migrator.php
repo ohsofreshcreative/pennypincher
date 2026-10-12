@@ -27,6 +27,7 @@ class Migrator
 	{
 		return [
 			'2026_10_12_000001_initial_schema' => [Schema::class, 'initial'],
+			'2026_10_12_000002_view_through_conversions' => [Schema::class, 'viewThroughConversions'],
 		];
 	}
 

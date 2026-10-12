@@ -57,12 +57,14 @@ Do not introduce a new architectural pattern when an established pattern already
 
 Repository map
 
-Theme root: `wp-content/themes/h2otwock` (Sage 11 + Acorn 5, PHP >= 8.2, namespace `App\` → `app/`).
+Theme root: `wp-content/themes/pennypincher` (Sage 11 + Acorn 5, PHP >= 8.2, namespace `App\` → `app/`).
+Strona lokalna: LocalWP, `http://pennypincher.local`, katalog `/Users/Arek/Websites/pennypincher/app/public`.
+Motyw powstał na bazie wcześniejszego motywu OhSoFresh – bloki ACF poniżej są odziedziczone z tej bazy.
 
 | Ścieżka | Zawartość |
 |---|---|
-| `app/Blocks/*.php` | 39 bloków ACF Composer (`Log1x\AcfComposer\Block`) |
-| `app/Options/*.php` | strony opcji ACF (`OCta` → klasa `Octa`, `OLogos`, `OReviews` → klasa `Oreviews`, `OAbout`, `OEveryone`, `OGastro`) |
+| `app/Blocks/*.php` | 55 bloków ACF Composer (`Log1x\AcfComposer\Block`) |
+| `app/Options/*.php` | strony opcji ACF (`OCta` → klasa `Octa`, `OLogos`, `OReviews` → klasa `Oreviews`, `OAbout`, `OEveryone`, `OGastro`, `OPrices`) |
 | `app/Fields/*.php` | grupy pól (`ThemeSettings`, `OfferFields`, `PostCategory`) |
 | `app/Support/SectionClasses.php` | budowanie klas sekcji (jedna metoda: `fromMap()`) |
 | `app/Support/SectionBackgrounds.php` | wspólna lista teł bloków (`choices()`) |
@@ -96,7 +98,7 @@ Menedżer pakietów: **yarn** (`.yarnrc.yml`, `nodeLinker: node-modules`). W rep
 pnpm i nie aktualizuj tych plików.
 
 ```bash
-yarn dev      # Vite dev server: h2otwock.local:6011 (strictPort, HMR przez ws)
+yarn dev      # Vite dev server: pennypincher.local:6011 (strictPort, HMR przez ws)
 yarn build    # produkcyjny build do public/build
 ```
 
@@ -119,10 +121,12 @@ WP-CLI (odczyt treści, import mediów, wstawianie bloków) możesz uruchamiać 
 na Local i wymaga podania socketu MySQL:
 
 ```bash
-php -d "mysqli.default_socket=$HOME/Library/Application Support/Local/run/CacTG7LQO/mysql/mysqld.sock" \
-  /opt/homebrew/bin/wp --path=/Users/Arek/Websites/h2otwock/app/public <komenda>
+php -d "mysqli.default_socket=$HOME/Library/Application Support/Local/run/<ID-strony>/mysql/mysqld.sock" \
+  $(which wp) --path=/Users/Arek/Websites/pennypincher/app/public <komenda>
 ```
 
+`<ID-strony>` to identyfikator strony pennypincher w Local – sprawdź go poleceniem
+`ls ~/Library/Application\ Support/Local/run/` przy uruchomionej stronie (dla każdej strony jest inny).
 Local musi mieć uruchomioną stronę, inaczej socketu nie ma. `wp db query` nie zadziała (brak binarki
 `mysql`) — używaj `wp eval` / `wp eval-file`.
 
@@ -136,7 +140,7 @@ Anatomia bloku ACF (najczęstsze zadanie w tym repo)
 
 Nazwa bloku jest zawsze jednowyrazowa, lowercase, bez myślników i podkreśleń — ta sama forma
 w klasie PHP (`About`, `Whyus`, `Values`), `$slug` (`about`, `whyus`, `values`), pliku blade
-(`about.blade.php`) i klasie CSS sekcji (`b-about`). Tak jest we wszystkich 39 istniejących blokach.
+(`about.blade.php`) i klasie CSS sekcji (`b-about`). Tak jest we wszystkich 55 istniejących blokach.
 
 Nazwy bloku nie wymyślaj samodzielnie — gdy zadanie dotyczy nowego bloku (zwłaszcza na podstawie
 screena/designu), użyj nazwy podanej przez użytkownika w prompcie. Jeśli nazwa nie została podana,
@@ -819,7 +823,7 @@ WordPress / WooCommerce — stan faktyczny
 - FSE wyłączone (`remove_theme_support('block-templates')`), domyślne wzorce też
   (`remove_theme_support('core-block-patterns')`).
 - Opcje globalne: strona `theme-settings` (rejestrowana w `ThemeServiceProvider`) + strony opcji
-  `Octa`, `OLogos`, `Oreviews`, `OAbout`, `OEveryone`, `OGastro`. Dane globalne (logo, logo stopki, kontakt
+  `Octa`, `OLogos`, `Oreviews`, `OAbout`, `OEveryone`, `OGastro`, `OPrices`. Dane globalne (logo, logo stopki, kontakt
   w stopce) są
   wstrzykiwane do wszystkich widoków przez `App\View\Composers\App` — nie wołaj
   `get_field(..., 'option')` w Blade, jeśli dane już tam są.
@@ -831,6 +835,8 @@ WordPress / WooCommerce — stan faktyczny
 ⸻
 
 Znane niespójności — nie „naprawiaj” ich mimochodem, ale nie kopiuj wzorca
+
+(Odziedziczone z motywu bazowego; każdy punkt zweryfikowany w tym repozytorium 12.10.2026.)
 
 Zgłoś je, jeśli wejdą w drogę; samodzielna naprawa tylko wtedy, gdy blokuje zadanie:
 
@@ -854,6 +860,8 @@ Zgłoś je, jeśli wejdą w drogę; samodzielna naprawa tylko wtedy, gdy blokuje
 - `resources/css/blocks/category-posts.scss` i `resources/js/blocks/category-posts.js` istnieją,
   ale nie ma bloku o tym slugu.
 - W repo są trzy lockfile'e (yarn / npm / pnpm) plus `pnpm-workspace.yaml` — aktualny jest `yarn.lock`.
+- `resources/views/layouts/app.blade.php`: w tablicy JSON-LD klucz `'@context'` (w bloku `<?php`) Blade kompiluje
+  jako dyrektywę `@context` – ostrzeżenie PHP i zepsuty JSON-LD na stronie. Poprawka: `'@@context'`.
 
 ⸻
 
@@ -892,7 +900,7 @@ Do not print secrets into logs or responses.
 Treat existing secrets found in the repository as sensitive.
 
 W repozytorium są śledzone przez git pliki `key` i `key.pub` — `key` to prywatny klucz OpenSSH
-(prawdopodobnie klucz deploymentu). Nie odczytuj jego zawartości, nie wypisuj jej w odpowiedziach,
+(prawdopodobnie klucz deploymentu). Plan usunięcia i wymiany klucza: `docs/SECURITY.md`. Nie odczytuj jego zawartości, nie wypisuj jej w odpowiedziach,
 nie kopiuj do innych plików i nie wysyłaj nigdzie. Jeśli zadanie dotyczy deploymentu — zgłoś to
 użytkownikowi zamiast korzystać z klucza.
 

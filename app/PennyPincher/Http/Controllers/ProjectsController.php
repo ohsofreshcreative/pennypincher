@@ -73,6 +73,11 @@ class ProjectsController extends Controller
 
 	public function demo(DemoProjectService $demo)
 	{
+		// Projekt demo powstaje w nowej organizacji, więc wymaga tego samego uprawnienia co jej zakładanie.
+		if (! $this->access->canCreateOrganizations($this->access->userId())) {
+			throw new \App\PennyPincher\Domain\Access\AccessDenied('Nie możesz tworzyć organizacji, więc nie możesz też utworzyć projektu demonstracyjnego.');
+		}
+
 		$projectId = $demo->create($this->access->userId());
 
 		return $this->redirect(AppUrl::project($projectId), 'Utworzono projekt demonstracyjny z fikcyjnymi danymi.');

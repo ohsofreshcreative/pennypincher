@@ -58,6 +58,28 @@ final class ReportRegistry
 	}
 
 	/**
+	 * Aliasy pól wymaganych (identyfikujących typ raportu), np. „Kampania”, „Wyszukiwane hasło”.
+	 *
+	 * @return array<string, true>
+	 */
+	public function primaryHeaders(): array
+	{
+		$primary = [];
+
+		foreach ($this->definitions as $definition) {
+			foreach ($definition->fields() as $field) {
+				if ($field->required) {
+					foreach ($field->aliases as $alias) {
+						$primary[$alias] = true;
+					}
+				}
+			}
+		}
+
+		return $primary;
+	}
+
+	/**
 	 * Wszystkie znane aliasy nagłówków (do wykrywania wiersza nagłówka).
 	 *
 	 * @return array<string, true>

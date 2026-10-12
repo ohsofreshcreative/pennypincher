@@ -43,12 +43,63 @@ final class CommonFields
 	public static function performance(): array
 	{
 		return [
-			new FieldDefinition('impressions', 'Wyświetlenia', FieldKind::Integer, ['Impr.', 'Impressions', 'Wyśw.', 'Wyświetlenia']),
+			new FieldDefinition('impressions', 'Wyświetlenia', FieldKind::Integer, ['Impr.', 'Impressions', 'Wyśw.', 'Wyświetlenia', 'Impr']),
 			new FieldDefinition('clicks', 'Kliknięcia', FieldKind::Integer, ['Clicks', 'Kliknięcia']),
 			new FieldDefinition('cost', 'Koszt', FieldKind::Money, ['Cost', 'Koszt']),
-			new FieldDefinition('conversions', 'Konwersje', FieldKind::Decimal, ['Conversions', 'Konwersje', 'Conv.', 'Konw.']),
+			self::conversions(),
+			self::viewThroughConversions(),
 			new FieldDefinition('conversions_value', 'Wartość konwersji', FieldKind::Money, ['Conv. value', 'Wartość konw.', 'Conversion value', 'Wartość konwersji', 'Total conv. value', 'Łączna wartość konw.']),
-			new FieldDefinition('all_conversions', 'Wszystkie konwersje', FieldKind::Decimal, ['All conv.', 'Wszystkie konw.', 'All conversions', 'Wszystkie konwersje']),
+			self::allConversions(),
 		];
+	}
+
+	public static function conversions(): FieldDefinition
+	{
+		return new FieldDefinition('conversions', 'Konwersje', FieldKind::Decimal, ['Conversions', 'Konwersje', 'Conv.', 'Konw.']);
+	}
+
+	/**
+	 * Konwersje po obejrzeniu (view-through) to osobna metryka – nigdy nie dodajemy jej do „Konwersji”.
+	 */
+	public static function viewThroughConversions(): FieldDefinition
+	{
+		return new FieldDefinition('view_through_conversions', 'Konwersje po obejrzeniu', FieldKind::Decimal, [
+			'View-through conv.', 'View-through conversions', 'View-through conv', 'Konw. po obejrzeniu', 'Konwersje po obejrzeniu',
+		]);
+	}
+
+	public static function allConversions(): FieldDefinition
+	{
+		return new FieldDefinition('all_conversions', 'Wszystkie konwersje', FieldKind::Decimal, ['All conv.', 'Wszystkie konw.', 'All conversions', 'Wszystkie konwersje']);
+	}
+
+	/**
+	 * Nazwy kolumny „Działanie powodujące konwersję” (liczba pojedyncza i mnoga – Edytor raportów używa mnogiej).
+	 *
+	 * @return array<int, string>
+	 */
+	public static function conversionActionAliases(): array
+	{
+		return [
+			'Conversion action', 'Conversion actions', 'Conversion action name',
+			'Działanie powodujące konwersję', 'Działania powodujące konwersję', 'Nazwa działania powodującego konwersję',
+			'Conversion name', 'Nazwa konwersji',
+		];
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public static function searchTermAliases(): array
+	{
+		return ['Search term', 'Search terms', 'Search query', 'Wyszukiwane hasło', 'Wyszukiwane hasła', 'Zapytanie'];
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public static function keywordAliases(): array
+	{
+		return ['Keyword', 'Słowo kluczowe', 'Search keyword', 'Słowo kluczowe w sieci wyszukiwania', 'Keyword text'];
 	}
 }

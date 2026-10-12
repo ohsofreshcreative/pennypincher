@@ -31,25 +31,26 @@ final class ConversionActionReport extends ReportDefinition
 
 	public function requiresOneOf(): array
 	{
-		return ['conversions', 'all_conversions', 'conversions_value', 'all_conversions_value'];
+		return ['conversions', 'view_through_conversions', 'all_conversions', 'conversions_value', 'all_conversions_value'];
 	}
 
 	public function fields(): array
 	{
 		return [
-			new FieldDefinition('conversion_action', 'Działanie powodujące konwersję', FieldKind::Text, ['Conversion action', 'Działanie powodujące konwersję', 'Conversion name', 'Nazwa konwersji', 'Konwersja'], true),
+			new FieldDefinition('conversion_action', 'Działanie powodujące konwersję', FieldKind::Text, CommonFields::conversionActionAliases(), true),
 			new FieldDefinition('conversion_action_id', 'Identyfikator działania', FieldKind::Id, ['Conversion action ID', 'Identyfikator działania powodującego konwersję']),
-			new FieldDefinition('category', 'Kategoria / cel', FieldKind::Text, ['Conversion category', 'Kategoria konwersji', 'Action optimization', 'Category', 'Kategoria', 'Goal', 'Cel', 'Conversion goal']),
+			new FieldDefinition('category', 'Kategoria / cel', FieldKind::Text, ['Conversion category', 'Conversion action category', 'Kategoria konwersji', 'Kategoria działania powodującego konwersję', 'Action optimization', 'Category', 'Kategoria', 'Goal', 'Cel', 'Conversion goal', 'Cel konwersji']),
 			new FieldDefinition('source', 'Źródło', FieldKind::Text, ['Conversion source', 'Źródło konwersji', 'Source', 'Źródło']),
 			new FieldDefinition('status', 'Stan', FieldKind::Status, ['Status', 'Stan', 'Tracking status', 'Stan śledzenia']),
 			new FieldDefinition('include_in_conversions', 'Uwzględniane w „Konwersjach”', FieldKind::Boolean, ['Include in "Conversions"', 'Include in conversions', 'Uwzględnij w „Konwersjach”', 'Uwzględnij w konwersjach', 'Primary action', 'Działanie główne']),
 			CommonFields::campaign(false),
 			CommonFields::campaignId(),
 			CommonFields::date(),
-			new FieldDefinition('conversions', 'Konwersje', FieldKind::Decimal, ['Conversions', 'Konwersje', 'Conv.', 'Konw.']),
-			new FieldDefinition('all_conversions', 'Wszystkie konwersje', FieldKind::Decimal, ['All conv.', 'Wszystkie konw.', 'All conversions', 'Wszystkie konwersje']),
+			CommonFields::conversions(),
+			CommonFields::viewThroughConversions(),
+			CommonFields::allConversions(),
 			new FieldDefinition('conversions_value', 'Wartość konwersji', FieldKind::Money, ['Conv. value', 'Wartość konw.', 'Conversion value', 'Wartość konwersji']),
-			new FieldDefinition('all_conversions_value', 'Wartość wszystkich konwersji', FieldKind::Money, ['All conv. value', 'Wartość wszystkich konw.', 'All conversions value']),
+			new FieldDefinition('all_conversions_value', 'Wartość wszystkich konwersji', FieldKind::Money, ['All conv. value', 'Wartość wszystkich konw.', 'All conversions value', 'Wartość wszystkich konwersji']),
 			CommonFields::currency(),
 		];
 	}
@@ -61,6 +62,6 @@ final class ConversionActionReport extends ReportDefinition
 
 	protected function foreignHeaders(): array
 	{
-		return ['Search term', 'Wyszukiwane hasło', 'Search query'];
+		return CommonFields::searchTermAliases();
 	}
 }

@@ -44,6 +44,8 @@ final class XlsxReader
 				throw new InvalidValue('W pliku XLSX nie znaleziono arkusza z danymi.');
 			}
 
+			$this->guardAgainstDoctype($xml);
+
 			$rows = $this->rows($xml, $sharedStrings, $dateStyles, $maxRows);
 		} finally {
 			$zip->close();
@@ -72,6 +74,16 @@ final class XlsxReader
 
 		if ($zip->locateName('xl/workbook.xml') === false) {
 			throw new InvalidValue('To nie jest arkusz Excela (brak xl/workbook.xml).');
+		}
+	}
+
+	/**
+	 * Arkusze Excela nie zawierają deklaracji DOCTYPE – jej obecność oznacza próbę ataku XXE / „billion laughs”.
+	 */
+	private function guardAgainstDoctype(string $xml): void
+	{
+		if (stripos(substr($xml, 0, 2048), '<!DOCTYPE') !== false || stripos($xml, '<!ENTITY') !== false) {
+			throw new InvalidValue('Plik XLSX ma nieprawidłową strukturę.');
 		}
 	}
 
@@ -110,6 +122,8 @@ final class XlsxReader
 		if ($xml === false) {
 			return [];
 		}
+
+		$this->guardAgainstDoctype($xml);
 
 		$reader = new XMLReader;
 		$reader->XML($xml, null, LIBXML_NONET | LIBXML_COMPACT);
@@ -345,6 +359,8 @@ final class XlsxReader
 		if ($xml === false) {
 			throw new InvalidValue('Plik XLSX ma nieprawidłową strukturę.');
 		}
+
+		$this->guardAgainstDoctype($xml);
 
 		$previous = libxml_use_internal_errors(true);
 		$element = simplexml_load_string($xml, \SimpleXMLElement::class, LIBXML_NONET);

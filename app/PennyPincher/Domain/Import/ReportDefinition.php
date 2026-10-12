@@ -62,7 +62,7 @@ abstract class ReportDefinition
 	 */
 	public function conflictsWith(array $normalizedHeaders): bool
 	{
-		$foreign = array_map([HeaderNormalizer::class, 'normalize'], $this->foreignHeaders());
+		$foreign = array_map([HeaderNormalizer::class, 'key'], $this->foreignHeaders());
 
 		return array_intersect($foreign, $normalizedHeaders) !== [];
 	}
@@ -91,7 +91,7 @@ abstract class ReportDefinition
 	 */
 	public function guessMapping(array $headers): array
 	{
-		$normalized = array_map([HeaderNormalizer::class, 'normalize'], $headers);
+		$normalized = array_map([HeaderNormalizer::class, 'key'], $headers);
 		$mapping = [];
 		$used = [];
 
@@ -143,7 +143,7 @@ abstract class ReportDefinition
 	public function score(array $headers, array $preambleRows = []): int
 	{
 		$mapping = $this->guessMapping($headers);
-		$normalized = array_map([HeaderNormalizer::class, 'normalize'], $headers);
+		$normalized = array_map([HeaderNormalizer::class, 'key'], $headers);
 
 		if ($this->missingRequirements($mapping) !== [] || $this->conflictsWith($normalized)) {
 			return 0;

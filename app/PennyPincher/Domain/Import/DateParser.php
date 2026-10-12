@@ -79,18 +79,18 @@ final class DateParser
 			return $dayFirst ? self::build($year, $b, $a, $raw) : self::build($year, $a, $b, $raw);
 		}
 
-		$lower = mb_strtolower($value);
+		$lower = self::fold(mb_strtolower($value));
 		$lower = preg_replace('/^(pon|wt|śr|czw|pt|sob|niedz?|mon|tue|wed|thu|fri|sat|sun)[a-ząćęłńóśźż]*\.?,?\s+/u', '', $lower);
 		$lower = rtrim(str_replace([' r.', 'r.'], '', $lower));
 
 		// 1 września 2026, 1 wrz 2026, 1 Sep 2026
-		if (preg_match('/^(\d{1,2})\.?\s+([a-ząćęłńóśźż]+)\.?,?\s+(\d{4})$/u', $lower, $m) && isset(self::MONTHS[$m[2]])) {
-			return self::build((int) $m[3], self::MONTHS[$m[2]], (int) $m[1], $raw);
+		if (preg_match('/^(\d{1,2})\.?\s+([a-ząćęłńóśźż]+)\.?,?\s+(\d{4})$/u', $lower, $m) && ($month = self::month($m[2])) !== null) {
+			return self::build((int) $m[3], $month, (int) $m[1], $raw);
 		}
 
 		// Sep 1, 2026 / September 1, 2026
-		if (preg_match('/^([a-ząćęłńóśźż]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/u', $lower, $m) && isset(self::MONTHS[$m[1]])) {
-			return self::build((int) $m[3], self::MONTHS[$m[1]], (int) $m[2], $raw);
+		if (preg_match('/^([a-ząćęłńóśźż]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/u', $lower, $m) && ($month = self::month($m[1])) !== null) {
+			return self::build((int) $m[3], $month, (int) $m[2], $raw);
 		}
 
 		throw new InvalidValue("„{$raw}” nie jest rozpoznawalną datą.");
@@ -122,6 +122,29 @@ final class DateParser
 		}
 
 		return $from <= $to ? [$from, $to] : [$to, $from];
+	}
+
+	/**
+	 * Nazwa miesiąca bez względu na polskie znaki („wrzesnia” = „września”).
+	 */
+	private static function month(string $name): ?int
+	{
+		static $folded = null;
+
+		if ($folded === null) {
+			$folded = [];
+
+			foreach (self::MONTHS as $key => $number) {
+				$folded[self::fold($key)] = $number;
+			}
+		}
+
+		return $folded[self::fold($name)] ?? null;
+	}
+
+	private static function fold(string $value): string
+	{
+		return strtr($value, ['ą' => 'a', 'ć' => 'c', 'ę' => 'e', 'ł' => 'l', 'ń' => 'n', 'ó' => 'o', 'ś' => 's', 'ź' => 'z', 'ż' => 'z']);
 	}
 
 	public static function fromExcelSerial(int $serial): string

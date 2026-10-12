@@ -32,14 +32,14 @@ final class SearchTermReport extends ReportDefinition
 	public function fields(): array
 	{
 		return [
-			new FieldDefinition('search_term', 'Wyszukiwane hasło', FieldKind::Text, ['Search term', 'Wyszukiwane hasło', 'Search query', 'Zapytanie'], true),
+			new FieldDefinition('search_term', 'Wyszukiwane hasło', FieldKind::Text, CommonFields::searchTermAliases(), true),
 			CommonFields::campaign(),
 			CommonFields::campaignId(),
 			CommonFields::adGroup(),
 			CommonFields::adGroupId(),
 			new FieldDefinition('match_type', 'Typ dopasowania', FieldKind::MatchType, ['Match type', 'Typ dopasowania', 'Search term match type', 'Typ dopasowania wyszukiwanego hasła']),
-			new FieldDefinition('keyword', 'Słowo kluczowe', FieldKind::Text, ['Keyword', 'Słowo kluczowe', 'Search keyword', 'Słowo kluczowe w sieci wyszukiwania']),
-			new FieldDefinition('added_excluded', 'Dodane / wykluczone', FieldKind::Text, ['Added/Excluded', 'Added / Excluded', 'Dodane/wykluczone', 'Dodane / wykluczone']),
+			new FieldDefinition('keyword', 'Słowo kluczowe', FieldKind::Text, CommonFields::keywordAliases()),
+			new FieldDefinition('added_excluded', 'Dodane / wykluczone', FieldKind::Text, ['Added/Excluded', 'Added / Excluded', 'Dodane/wykluczone', 'Dodane / wykluczone', 'Status wyszukiwanego hasła', 'Search term status']),
 			CommonFields::date(),
 			...CommonFields::performance(),
 			CommonFields::currency(),
@@ -53,6 +53,6 @@ final class SearchTermReport extends ReportDefinition
 
 	protected function foreignHeaders(): array
 	{
-		return ['Conversion action', 'Działanie powodujące konwersję'];
+		return CommonFields::conversionActionAliases();
 	}
 }

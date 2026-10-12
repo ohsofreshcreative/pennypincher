@@ -31,4 +31,27 @@ final class BudgetCalculator
 
 		return (int) round($total);
 	}
+
+	/**
+	 * Budżet tylko dla dni, za które są dane (dni z danych dziennych + pełne okresy raportów).
+	 * Dzięki temu wykorzystanie budżetu nie jest zaniżane, gdy dane pokrywają część zakresu.
+	 */
+	public static function budgetForCoverage(?int $monthlyBudgetMicros, ResolvedPeriods $resolved): ?int
+	{
+		if ($monthlyBudgetMicros === null) {
+			return null;
+		}
+
+		$total = 0;
+
+		foreach ($resolved->days as $day) {
+			$total += self::budgetForRange($monthlyBudgetMicros, new DateRange($day, $day));
+		}
+
+		foreach ($resolved->periods as [$from, $to]) {
+			$total += self::budgetForRange($monthlyBudgetMicros, new DateRange($from, $to));
+		}
+
+		return $total;
+	}
 }

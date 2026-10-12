@@ -60,4 +60,17 @@ class MoneyAndMetricsTest extends TestCase
 		$this->assertSame($expected, BudgetCalculator::budgetForRange($monthly, new DateRange('2026-09-15', '2026-10-15')));
 		$this->assertNull(BudgetCalculator::budgetForRange(null, new DateRange('2026-09-01', '2026-09-30')));
 	}
+
+	public function testBudgetForCoverageCountsOnlyDaysWithData(): void
+	{
+		$monthly = 3000 * Money::MICROS;
+		$resolved = \App\PennyPincher\Domain\Metrics\PeriodResolver::resolve([
+			['granularity' => 'day', 'date_from' => '2026-09-01', 'date_to' => '2026-09-01'],
+			['granularity' => 'day', 'date_from' => '2026-09-02', 'date_to' => '2026-09-02'],
+			['granularity' => 'period', 'date_from' => '2026-10-01', 'date_to' => '2026-10-31'],
+		], new DateRange('2026-01-01', '2026-12-31'));
+
+		$this->assertSame(2 * 100 * Money::MICROS + $monthly, BudgetCalculator::budgetForCoverage($monthly, $resolved));
+		$this->assertNull(BudgetCalculator::budgetForCoverage(null, $resolved));
+	}
 }

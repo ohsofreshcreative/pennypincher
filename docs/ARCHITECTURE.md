@@ -63,7 +63,7 @@ Wymaga „ładnych” bezpośrednich odnośników (Ustawienia → Bezpośrednie 
 
 ## Bezpieczeństwo
 
-- **Uwierzytelnianie**: standardowe konta i ciasteczka WordPressa (`wp_signon`), własny formularz.
+- **Uwierzytelnianie**: standardowe konta i ciasteczka WordPressa (`wp_signon`), własny formularz; limit prób logowania `LoginThrottle` (szczegóły i plan dla klucza SSH: `docs/SECURITY.md`).
 - **Autoryzacja w backendzie**: każdy projekt/organizacja jest pobierany przez `AccessService`, a zapytanie łączy go z `organization_users` dla bieżącego użytkownika. Brak członkostwa = 404 (nie ujawniamy istnienia cudzych danych), niewystarczająca rola = 403. Administrator WordPressa nie ma automatycznego dostępu do danych organizacji – może jedynie zakładać organizacje (filtr `pennypincher/can_create_organization`).
 - **Role**: członek – podgląd i import; administrator – + projekty, ustawienia, członkowie; właściciel – + rola właściciela. Organizacja musi mieć co najmniej jednego właściciela.
 - **Izolacja danych**: wszystkie tabele danych mają `project_id`; repozytoria zawsze filtrują po projekcie, także przy filtrach z parametrów (np. kampania z innego projektu jest ignorowana).
@@ -95,6 +95,8 @@ Tabele `{$wpdb->prefix}pp_*`, InnoDB, klucze obce (30), migracje w `Infrastructu
 | `pp_conversion_metrics` | metryki konwersji per działanie (i opcjonalnie kampania – `campaign_scope`, 0 = całe konto) |
 | `pp_schema_migrations` | zastosowane migracje |
 
+Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje).
+
 Zasady:
 
 - **Kwoty**: `BIGINT` w mikrojednostkach (1 zł = 1 000 000), jak `cost_micros` w Google Ads API. Parsowanie i sumy bez floatów. Konwersje: `DECIMAL(18,4)` (bywają ułamkowe).
@@ -115,6 +117,10 @@ Zasady:
 3. **Zatwierdzenie** (`ImportService::confirm` → `Jobs\ProcessImport`): walidacja mapowania i zakresu; `RowNormalizer` typuje każdy wiersz (pomija puste i podsumowania „Total/Łącznie”); jakikolwiek błąd wartości = nic nie jest zapisywane, import czeka na poprawki; zgodność waluty z projektem; zapis encji i metryk przez `Writers` w jednej transakcji; usunięcie surowych wierszy; status `completed`.
 4. **Podsumowanie**: okres, ziarnistość, liczba wierszy zaimportowanych/pominiętych, rekordy metryk, zsumowane duplikaty kluczy.
 
+Rozpoznawanie struktury eksportu (`TableAnalyzer::headerIndex`): wiersz nagłówków to wiersz w pierwszych 30, który ma co najmniej 2 niepuste komórki (tytuł raportu i zakres dat to zwykle jedna komórka) oraz co najmniej 2 znane nagłówki albo 1 nagłówek identyfikujący typ raportu (np. „Działania powodujące konwersję”). Wygrywa wiersz z największą liczbą znanych nagłówków. Nagłówki są porównywane po kluczu `HeaderNormalizer::key` – bez wielkości liter, polskich znaków, kropek, cudzysłowów, myślników i dopisków w nawiasach („Koszt (PLN)” = „koszt”), a aliasy obejmują polskie i angielskie nazwy z interfejsu Google Ads i Edytora raportów (liczba pojedyncza i mnoga).
+
+Konwersje po obejrzeniu (`view_through_conversions`) są osobną kolumną we wszystkich tabelach metryk i nigdy nie są dodawane do konwersji.
+
 Obsługiwane formaty: CSV (UTF-8 z/bez BOM, UTF-16LE/BE „Excel CSV”, Windows-1250; separator `,` `;` tab `|`), XLSX (pierwszy arkusz; własny strumieniowy czytnik na `ZipArchive` + `XMLReader`). Liczby: `1 234,56`, `1,234.56`, `1.234,56`, waluty, procenty, `(12,50)`, `--`. Daty: ISO, `01.09.2026`, `1 września 2026`, `Sep 1, 2026`, daty seryjne Excela.
 
 Zadanie `ProcessImport` przyjmuje tylko identyfikatory, więc może działać synchronicznie (obecnie), z CLI (`wp acorn pp:import`) albo z kolejki w przyszłości. Porzucone podglądy sprząta `wp acorn pp:imports:prune` (zalecany systemowy cron) – WP-Cron uruchamia to samo zadanie raz dziennie tylko jako wygodę.
@@ -129,7 +135,7 @@ Zadanie `ProcessImport` przyjmuje tylko identyfikatory, więc może działać sy
 
 Interfejs pokazuje źródło, pokrycie zakresu (np. 30 z 31 dni), pominięte nakładające się dane i okresy niemieszczące się w zakresie.
 
-Dashboard: KPI i wykresy wyłącznie z raportu kampanii; sekcja haseł z raportu wyszukiwanych haseł z osobnym rozstrzygnięciem okresów. Wykresy tylko z danych dziennych. Budżet zakresu = Σ budżet miesięczny × (dni zakresu w miesiącu / dni miesiąca).
+Dashboard: KPI i wykresy wyłącznie z raportu kampanii; sekcja haseł z raportu wyszukiwanych haseł i sekcja działań powodujących konwersję z raportu konwersji – każda z osobnym rozstrzygnięciem okresów. Przy niepełnym pokryciu zakresu wykorzystanie budżetu jest liczone względem budżetu dla dni z danymi (`BudgetCalculator::budgetForCoverage`). „Wszystkie dane” to zakres od najwcześniejszej do najpóźniejszej daty we wszystkich zaimportowanych raportach. W raporcie konwersji dane dla całego konta mają pierwszeństwo przed sumą danych per kampania tego samego działania. Wykresy tylko z danych dziennych. Budżet zakresu = Σ budżet miesięczny × (dni zakresu w miesiącu / dni miesiąca).
 
 ## Interfejs
 
