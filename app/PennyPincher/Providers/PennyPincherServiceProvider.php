@@ -6,6 +6,7 @@ use App\PennyPincher\Console\AuditCommand;
 use App\PennyPincher\Console\CreateOrganizationCommand;
 use App\PennyPincher\Console\GenerateKeyCommand;
 use App\PennyPincher\Console\GoogleAdsCheckCommand;
+use App\PennyPincher\Console\GoogleAdsDiagnoseCommand;
 use App\PennyPincher\Console\ImportFileCommand;
 use App\PennyPincher\Console\MigrateCommand;
 use App\PennyPincher\Console\PruneStagedImportsCommand;
@@ -73,6 +74,7 @@ class PennyPincherServiceProvider extends ServiceProvider
 				AuditCommand::class,
 				GenerateKeyCommand::class,
 				GoogleAdsCheckCommand::class,
+				GoogleAdsDiagnoseCommand::class,
 			]);
 		}
 	}

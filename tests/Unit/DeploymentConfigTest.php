@@ -89,7 +89,7 @@ class DeploymentConfigTest extends TestCase
 
 	public function testWpCronIsNotTheOnlySchedulerAndCommandsExist(): void
 	{
-		foreach (['SyncWorkCommand', 'SyncProjectCommand', 'AuditCommand', 'GenerateKeyCommand', 'GoogleAdsCheckCommand'] as $command) {
+		foreach (['SyncWorkCommand', 'SyncProjectCommand', 'AuditCommand', 'GenerateKeyCommand', 'GoogleAdsCheckCommand', 'GoogleAdsDiagnoseCommand'] as $command) {
 			$this->assertTrue(file_exists($this->root() . "/app/PennyPincher/Console/{$command}.php"), $command);
 		}
 

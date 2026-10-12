@@ -121,6 +121,13 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 | Kolejka | `Services/GoogleAds/SyncService.php` + `Repositories/SyncRunRepository.php` | Plan kroków, wykonywanie z limitem czasu, blokada, ponowienia, harmonogram |
 | UI | `Http/Controllers/GoogleAdsController.php`, `resources/views/app/pages/google-ads.blade.php` | Status, wybór konta, historia, ponowienie |
 
+### Lista kont po autoryzacji
+
+1. `GET /v25/customers:listAccessibleCustomers` – bez `login-customer-id` i bez developer tokenu; parsowane `resourceNames` (`customers/{id}`).
+2. Dla każdego konta `searchStream` z `FROM customer` w kontekście tego konta (`login-customer-id` = to konto).
+3. Dla konta menedżera `FROM customer_client` (wszystkie poziomy, bez menedżerów, tylko `ENABLED`); wybrane konto zapisuje MCC jako `login_customer_id`.
+4. Błąd odczytu pojedynczego konta nie przerywa listy (konto trafia do „Pominięte konta”), ale gdy **żadnego** konta nie da się odczytać, pokazywany jest błąd Google (najistotniejszy: poziom dostępu projektu > uprawnienia > inne), a nie „brak kont”. Lista jest zapamiętywana 10 minut tylko, gdy nie jest pusta; ponowna autoryzacja ją czyści.
+
 ### Przepływ OAuth i bezpieczeństwo
 
 - **state**: 256 bitów losowości, jednorazowy (usuwany przy pierwszym użyciu), ważny 10 minut, zapisany
@@ -169,6 +176,7 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 | Komenda | Działanie |
 |---|---|
 | `wp acorn pp:google-ads:check` | Stan konfiguracji (bez sekretów, bez łączenia z Google) i redirect URI |
+| `wp acorn pp:google-ads:diagnose {projekt}` | Diagnostyka połączenia projektu: odświeżenie tokenu, `listAccessibleCustomers`, odczyt każdego konta i kont pod MCC – endpoint, status HTTP, kod błędu Google, komunikat, liczba kont (bez tokenów). To samo: przycisk „Diagnostyka połączenia” na stronie Google Ads |
 | `wp acorn pp:key:generate` | Nowy `PP_ENCRYPTION_KEY` (wypisuje linię do `wp-config.php`) |
 | `wp acorn pp:sync:work --time=240` | Zadanie crona: planowanie + przetwarzanie kolejki |
 | `wp acorn pp:sync {projekt} [--backfill]` | Ręczna synchronizacja projektu |
@@ -187,6 +195,9 @@ ponowienia z opóźnieniem i wznowienie od kroku, limit prób, blokada równoleg
 | Objaw | Przyczyna / rozwiązanie |
 |---|---|
 | `redirect_uri_mismatch` w Google | Redirect URI w kliencie OAuth musi być identyczny (HTTPS, ukośnik na końcu) – skopiuj z `pp:google-ads:check`. |
+| „Brak uprawnień do Google Ads API” z kodem `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION` | `listAccessibleCustomers` działa, ale odczyt konta odrzuca projekt Cloud z poziomem *Test*. Poziom Explorer/Basic musi być przyznany **temu samemu projektowi**, w którym jest klient OAuth (Cloud Console → Google Ads API → przegląd). Po zmianie: „Połącz ponownie”. |
+| `USER_PERMISSION_DENIED` | Konto Google nie ma uprawnień do konta reklamowego albo dostęp idzie przez MCC – zaloguj się adresem z dostępem lub wybierz konto spod MCC. |
+| „Brak kont reklamowych” | Google zwrócił pustą listę dla tego konta Google (`listAccessibleCustomers` = 0) – zalogowano się innym adresem niż ten z dostępem w Google Ads. |
 | `access_denied` / brak konta na liście | Konto Google nie ma dostępu do konta reklamowego albo aplikacja w trybie *Testing* i użytkownik nie jest na liście *Test users*. |
 | „Google nie zwrócił tokenu odświeżania” | Usuń dostęp aplikacji na myaccount.google.com/permissions i połącz ponownie (aplikacja wymusza `prompt=consent`). |
 | `PERMISSION_DENIED` / dostęp tylko do kont testowych | Projekt Cloud ma poziom *Test* – złóż wniosek o *Explorer*/*Basic*. |

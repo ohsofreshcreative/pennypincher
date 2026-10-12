@@ -44,6 +44,12 @@ Stan na 12.10.2026 (etap 2 – Prompt 2; wcześniej Prompt 1 i 1.1).
 - LocalWP (`pennypincher.local`) i produkcja – testy w kopii środowiska.
 - Skrypt wdrożenia na serwerze (część po `--check` i sama kontrola serwera).
 
+### Poprawka 12.10.2026 – „brak kont reklamowych” po autoryzacji
+
+- Przyczyna w kodzie: błędy odczytu szczegółów konta (np. 403 `CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION`, `USER_PERMISSION_DENIED`) były pomijane, więc pusta lista wyglądała jak „konto Google nie ma dostępu do żadnego konta”; pusta lista była też zapamiętywana na 10 minut i przeżywała ponowną autoryzację.
+- Teraz: błąd Google z kodem i request ID zamiast „brak kont”, pominięte konta widoczne, brak cache dla pustej listy, czyszczenie cache przy autoryzacji, konta MCC na wszystkich poziomach, diagnostyka (`pp:google-ads:diagnose`, przycisk w UI), osobne komunikaty: brak kont / brak uprawnień API / błąd autoryzacji / błąd Google Ads API.
+- Testy: `GoogleAdsAccountsTest` (7), łącznie 128/128.
+
 ### Kolejne kroki
 
 1. Wymiana klucza SSH (`docs/SECURITY.md`, kroki 1–5).

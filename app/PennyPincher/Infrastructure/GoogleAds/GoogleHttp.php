@@ -79,13 +79,14 @@ class GoogleHttp
 
 			$description = is_array($body) ? (string) ($body['error_description'] ?? '') : '';
 
-			return new GoogleAdsApiException(trim("{$context}: {$error}. {$description}"), $kind, $status, $requestId);
+			return new GoogleAdsApiException(trim("{$context}: {$error}. {$description}"), $kind, $status, $requestId, null, $error);
 		}
 
 		$apiStatus = is_array($error) ? (string) ($error['status'] ?? '') : '';
 		$message = is_array($error) ? (string) ($error['message'] ?? '') : '';
 		$details = [];
 		$retryAfter = null;
+		$googleCode = null;
 
 		foreach ((array) ($error['details'] ?? []) as $detail) {
 			if (! empty($detail['requestId'])) {
@@ -95,6 +96,10 @@ class GoogleHttp
 			foreach ((array) ($detail['errors'] ?? []) as $item) {
 				$code = is_array($item['errorCode'] ?? null) ? implode('.', array_map(fn ($k, $v) => "{$k}:{$v}", array_keys($item['errorCode']), $item['errorCode'])) : '';
 				$details[] = trim($code . ' ' . ($item['message'] ?? ''));
+
+				if ($googleCode === null && is_array($item['errorCode'] ?? null) && $item['errorCode'] !== []) {
+					$googleCode = (string) array_values($item['errorCode'])[0];
+				}
 
 				if (isset($item['details']['quotaErrorDetails']['retryDelay'])) {
 					$retryAfter = (int) rtrim((string) $item['details']['quotaErrorDetails']['retryDelay'], 's');
@@ -107,6 +112,7 @@ class GoogleHttp
 		}
 
 		$kind = match (true) {
+			in_array($googleCode, GoogleAdsApiException::PERMISSION_CODES, true) => GoogleAdsApiException::PERMISSION,
 			$status === 401 || $apiStatus === 'UNAUTHENTICATED' => GoogleAdsApiException::AUTH,
 			$status === 429 || $apiStatus === 'RESOURCE_EXHAUSTED' => GoogleAdsApiException::QUOTA,
 			$status === 403 || $apiStatus === 'PERMISSION_DENIED' => GoogleAdsApiException::PERMISSION,
@@ -120,6 +126,6 @@ class GoogleHttp
 			$text .= ' (' . implode('; ', array_slice($details, 0, 3)) . ')';
 		}
 
-		return new GoogleAdsApiException($text, $kind, $status, $requestId, $retryAfter);
+		return new GoogleAdsApiException($text, $kind, $status, $requestId, $retryAfter, $googleCode);
 	}
 }

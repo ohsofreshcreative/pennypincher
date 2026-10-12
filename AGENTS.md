@@ -51,7 +51,7 @@ Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac
 - Testy: `wp eval-file tests/run.php` (wszystkie; integracyjne w wycofywanej transakcji) albo
   `php tests/run.php unit` (bez WordPressa); filtr: `tests/run.php all GoogleAds`. Komendy: `wp acorn pp:migrate`,
   `pp:organization:create`, `pp:import`, `pp:imports:prune`, `pp:sync:work`, `pp:sync {projekt}`, `pp:audit {projekt}`,
-  `pp:key:generate`, `pp:google-ads:check`.
+  `pp:key:generate`, `pp:google-ads:check`, `pp:google-ads:diagnose`.
 - Dla zadań dotyczących aplikacji `/app/` wolno uruchamiać `yarn build` i sprawdzać widoki w przeglądarce
   (wymaga tego definicja ukończenia etapów Penny Pincher). Commit nadal wykonuje użytkownik.
 

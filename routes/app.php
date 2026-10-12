@@ -62,6 +62,7 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('google-ads/sync', [GoogleAdsController::class, 'syncNow']);
 			Route::post('google-ads/sync/{run}/retry', [GoogleAdsController::class, 'retry'])->whereNumber('run');
 			Route::post('google-ads/disconnect', [GoogleAdsController::class, 'disconnect']);
+			Route::post('google-ads/diagnose', [GoogleAdsController::class, 'diagnose']);
 			Route::get('audits', [AuditsController::class, 'index'])->name('pp.audits');
 			Route::post('audits', [AuditsController::class, 'store']);
 			Route::get('audits/{run}', [AuditsController::class, 'show'])->whereNumber('run');

@@ -77,6 +77,10 @@ class ConnectionService
 		$tokens = $this->oauth->exchangeCode($code, $verifier);
 		$current = $this->connections->currentForProject($project->id);
 
+		if ($current !== null) {
+			delete_transient(self::accountsCacheKey((int) $current['id']));
+		}
+
 		if ($tokens['refresh_token'] === null) {
 			throw new GoogleAdsApiException('Google nie zwrócił tokenu odświeżania. Usuń dostęp aplikacji na koncie Google (myaccount.google.com/permissions) i połącz ponownie.', GoogleAdsApiException::AUTH);
 		}
@@ -112,29 +116,53 @@ class ConnectionService
 	/**
 	 * Konta reklamowe dostępne dla połączonego konta Google (bezpośrednio i przez konta menedżera).
 	 *
+	 * Gdy Google zwraca identyfikatory kont, ale żadnego nie da się odczytać, rzucamy błąd z Google
+	 * (np. brak poziomu dostępu projektu Cloud) – nie udajemy, że kont nie ma.
+	 *
 	 * @return array<int, array{customer_id: string, name: string, currency: ?string, time_zone: ?string, login_customer_id: ?string, test: bool}>
 	 */
 	public function accessibleAccounts(array $connection, bool $refresh = false): array
 	{
-		$cacheKey = 'pp_gads_accounts_' . (int) $connection['id'];
+		$result = $this->discoverAccounts($connection, $refresh);
+
+		if ($result['accounts'] === [] && $result['errors'] !== []) {
+			throw self::mostRelevantError(array_column($result['errors'], 'exception'));
+		}
+
+		return $result['accounts'];
+	}
+
+	/**
+	 * Pełny wynik wyszukiwania kont: konta, identyfikatory z listAccessibleCustomers i błędy poszczególnych kont.
+	 * Pusta lista kont nie jest zapisywana w pamięci podręcznej.
+	 *
+	 * @return array{accounts: array<int, array>, accessible_ids: array<int, string>, errors: array<int, array{customer_id: string, step: string, exception: GoogleAdsApiException}>}
+	 */
+	public function discoverAccounts(array $connection, bool $refresh = false): array
+	{
+		$cacheKey = self::accountsCacheKey((int) $connection['id']);
 		$cached = $refresh ? false : get_transient($cacheKey);
 
-		if (is_array($cached)) {
-			return $cached;
+		if (is_array($cached) && ($cached['accounts'] ?? []) !== []) {
+			return ['accounts' => $cached['accounts'], 'accessible_ids' => $cached['accessible_ids'] ?? [], 'errors' => []];
 		}
 
 		$token = $this->accessToken($connection);
+		$accessibleIds = $this->client->listAccessibleCustomers($token);
 		$accounts = [];
+		$errors = [];
 
-		foreach ($this->client->listAccessibleCustomers($token) as $customerId) {
+		foreach ($accessibleIds as $customerId) {
 			try {
-				$rows = $this->client->search($token, $customerId, 'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account FROM customer', $customerId);
+				// login-customer-id = to samo konto: dostęp bezpośredni (pomija ewentualne domyślne konto menedżera z konfiguracji).
+				$rows = $this->client->search($token, $customerId, self::CUSTOMER_QUERY, $customerId);
 			} catch (GoogleAdsApiException $e) {
 				if ($e->kind === GoogleAdsApiException::AUTH) {
 					throw $e;
 				}
 
-				continue; // np. konto zawieszone lub bez uprawnień – pomijamy
+				$errors[] = ['customer_id' => $customerId, 'step' => 'customer', 'exception' => $e];
+				continue;
 			}
 
 			$customer = $rows[0]['customer'] ?? null;
@@ -144,21 +172,22 @@ class ConnectionService
 			}
 
 			if (! empty($customer['manager'])) {
-				// Konto menedżera: pokazujemy konta klientów (bez dalszych menedżerów).
+				// Konto menedżera: konta klientów na wszystkich poziomach hierarchii (bez kolejnych menedżerów).
 				try {
-					$clients = $this->client->search($token, $customerId, 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.status FROM customer_client WHERE customer_client.level <= 1 AND customer_client.manager = FALSE', $customerId);
+					$clients = $this->client->search($token, $customerId, self::CLIENTS_QUERY, $customerId);
 				} catch (GoogleAdsApiException $e) {
 					if ($e->kind === GoogleAdsApiException::AUTH) {
 						throw $e;
 					}
 
+					$errors[] = ['customer_id' => $customerId, 'step' => 'customer_client', 'exception' => $e];
 					continue;
 				}
 
 				foreach ($clients as $row) {
 					$client = $row['customerClient'] ?? [];
 
-					if (($client['status'] ?? 'ENABLED') !== 'ENABLED' || empty($client['id'])) {
+					if (($client['status'] ?? 'ENABLED') !== 'ENABLED' || empty($client['id']) || ! empty($client['manager'])) {
 						continue;
 					}
 
@@ -167,7 +196,7 @@ class ConnectionService
 						'name' => (string) ($client['descriptiveName'] ?? 'Konto ' . $client['id']),
 						'currency' => $client['currencyCode'] ?? null,
 						'time_zone' => $client['timeZone'] ?? null,
-						'login_customer_id' => $customerId,
+						'login_customer_id' => (string) $customerId,
 						'test' => ! empty($client['testAccount']),
 					];
 				}
@@ -187,9 +216,105 @@ class ConnectionService
 
 		$accounts = array_values($accounts);
 		usort($accounts, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
-		set_transient($cacheKey, $accounts, 10 * MINUTE_IN_SECONDS);
 
-		return $accounts;
+		if ($accounts !== []) {
+			set_transient($cacheKey, ['accounts' => $accounts, 'accessible_ids' => $accessibleIds], 10 * MINUTE_IN_SECONDS);
+		} else {
+			delete_transient($cacheKey);
+		}
+
+		return ['accounts' => $accounts, 'accessible_ids' => $accessibleIds, 'errors' => $errors];
+	}
+
+	/**
+	 * Diagnostyka połączenia: kolejne zapytania i ich wyniki, bez tokenów i sekretów.
+	 *
+	 * @return array<int, array{endpoint: string, status: ?int, code: ?string, message: ?string, count: ?int}>
+	 */
+	public function diagnose(array $connection): array
+	{
+		$version = $this->client->apiVersion();
+		$rows = [];
+
+		try {
+			$token = $this->accessToken($connection);
+			$rows[] = ['endpoint' => 'POST oauth2.googleapis.com/token (odświeżenie)', 'status' => 200, 'code' => null, 'message' => 'token dostępu ważny', 'count' => null];
+		} catch (GoogleAdsApiException $e) {
+			return [self::diagnosticRow('POST oauth2.googleapis.com/token (odświeżenie)', $e)];
+		}
+
+		$endpoint = "GET /{$version}/customers:listAccessibleCustomers";
+
+		try {
+			$ids = $this->client->listAccessibleCustomers($token);
+			$rows[] = ['endpoint' => $endpoint, 'status' => 200, 'code' => null, 'message' => $ids === [] ? 'Google nie zwrócił żadnych kont dla tego konta Google' : 'konta: ' . implode(', ', $ids), 'count' => count($ids)];
+		} catch (GoogleAdsApiException $e) {
+			$rows[] = self::diagnosticRow($endpoint, $e);
+
+			return $rows;
+		}
+
+		foreach ($ids as $customerId) {
+			$endpoint = "POST /{$version}/customers/{$customerId}/googleAds:searchStream (customer)";
+
+			try {
+				$customer = $this->client->search($token, $customerId, self::CUSTOMER_QUERY, $customerId)[0]['customer'] ?? [];
+				$rows[] = ['endpoint' => $endpoint, 'status' => 200, 'code' => null, 'message' => sprintf('%s, %s%s%s', $customer['descriptiveName'] ?? 'bez nazwy', $customer['currencyCode'] ?? '—', ! empty($customer['manager']) ? ', konto menedżera' : '', ! empty($customer['testAccount']) ? ', konto testowe' : ''), 'count' => 1];
+			} catch (GoogleAdsApiException $e) {
+				$rows[] = self::diagnosticRow($endpoint, $e);
+				continue;
+			}
+
+			if (! empty($customer['manager'])) {
+				$endpoint = "POST /{$version}/customers/{$customerId}/googleAds:searchStream (customer_client)";
+
+				try {
+					$clients = array_filter($this->client->search($token, $customerId, self::CLIENTS_QUERY, $customerId), fn ($row) => empty($row['customerClient']['manager']));
+					$rows[] = ['endpoint' => $endpoint, 'status' => 200, 'code' => null, 'message' => 'konta klientów pod MCC', 'count' => count($clients)];
+				} catch (GoogleAdsApiException $e) {
+					$rows[] = self::diagnosticRow($endpoint, $e);
+				}
+			}
+		}
+
+		return $rows;
+	}
+
+	public const CUSTOMER_QUERY = 'SELECT customer.id, customer.descriptive_name, customer.currency_code, customer.time_zone, customer.manager, customer.test_account FROM customer';
+
+	public const CLIENTS_QUERY = 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.time_zone, customer_client.manager, customer_client.test_account, customer_client.status, customer_client.level FROM customer_client WHERE customer_client.manager = FALSE';
+
+	public static function accountsCacheKey(int $connectionId): string
+	{
+		return 'pp_gads_accounts_' . $connectionId;
+	}
+
+	/**
+	 * Najbardziej przydatny błąd do pokazania: uprawnienia projektu/użytkownika > inne > nieaktywne konto.
+	 *
+	 * @param array<int, GoogleAdsApiException> $errors
+	 */
+	public static function mostRelevantError(array $errors): GoogleAdsApiException
+	{
+		usort($errors, fn (GoogleAdsApiException $a, GoogleAdsApiException $b) => self::errorWeight($b) <=> self::errorWeight($a));
+
+		return $errors[0];
+	}
+
+	private static function errorWeight(GoogleAdsApiException $e): int
+	{
+		return match (true) {
+			in_array($e->googleCode, ['CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', 'ACTION_NOT_PERMITTED'], true) => 5,
+			$e->googleCode !== null && str_starts_with($e->googleCode, 'DEVELOPER_TOKEN') => 4,
+			$e->kind === GoogleAdsApiException::PERMISSION && $e->googleCode !== 'CUSTOMER_NOT_ENABLED' => 3,
+			$e->googleCode === 'CUSTOMER_NOT_ENABLED' => 1,
+			default => 2,
+		};
+	}
+
+	private static function diagnosticRow(string $endpoint, GoogleAdsApiException $e): array
+	{
+		return ['endpoint' => $endpoint, 'status' => $e->httpStatus, 'code' => $e->googleCode ?? strtoupper($e->kind), 'message' => mb_substr($e->getMessage(), 0, 400), 'count' => null];
 	}
 
 	/**
@@ -289,7 +414,7 @@ class ConnectionService
 			'disconnected_at' => gmdate('Y-m-d H:i:s'),
 		]);
 
-		delete_transient('pp_gads_accounts_' . (int) $connection['id']);
+		delete_transient(self::accountsCacheKey((int) $connection['id']));
 	}
 
 	private function stateKey(string $state): string

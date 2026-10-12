@@ -80,9 +80,19 @@
             <div>
               <h3 class="text-sm font-semibold text-ink">Wybierz konto reklamowe</h3>
               @if ($accountsError)
-                <x-pp.alert type="error" class="mt-3">{{ $accountsError }}</x-pp.alert>
+                <x-pp.alert type="error" class="mt-3" :title="$accountsError['title']">
+                  {{ $accountsError['message'] }}
+                  @if ($accountsError['kind'] === 'auth')
+                    Użyj przycisku „Połącz ponownie” poniżej.
+                  @else
+                    Szczegóły zapytań pokaże „Diagnostyka połączenia”.
+                  @endif
+                </x-pp.alert>
               @elseif ($accounts === [])
-                <p class="mt-2 text-sm text-ink-soft">To konto Google nie ma dostępu do żadnego konta reklamowego. Połącz inne konto Google albo poproś o dostęp w Google Ads.</p>
+                <x-pp.alert type="warning" class="mt-3" title="Brak kont reklamowych">
+                  Google nie zwrócił żadnego konta reklamowego dla konta {{ $connection['google_email'] ?: 'Google' }}.
+                  Sprawdź, czy ten adres ma dostęp w Google Ads (Administracja → Dostęp i bezpieczeństwo) – bezpośrednio albo przez konto menedżera – albo połącz inne konto Google.
+                </x-pp.alert>
               @else
                 <form method="post" action="{{ $base }}account" class="mt-3 space-y-3" data-busy>
                   <x-pp.nonce />
@@ -100,6 +110,16 @@
                   </fieldset>
                   <x-pp.button data-busy-label="Zapisywanie…">Wybierz i pobierz dane</x-pp.button>
                 </form>
+              @endif
+              @if ($skippedAccounts !== [] && ! $accountsError)
+                <details class="mt-3 text-[13px] text-ink-mute">
+                  <summary class="cursor-pointer">Pominięte konta ({{ count($skippedAccounts) }})</summary>
+                  <ul class="mt-2 space-y-1">
+                    @foreach ($skippedAccounts as $skipped)
+                      <li><span class="pp-num">{{ $skipped['customer_id'] }}</span>: {{ $skipped['message'] }}</li>
+                    @endforeach
+                  </ul>
+                </details>
               @endif
             </div>
           @endif
@@ -119,6 +139,13 @@
               </form>
             @endif
 
+            @if ($connection && $status !== 'disconnected')
+              <form method="post" action="{{ $base }}diagnose" data-busy>
+                <x-pp.nonce />
+                <x-pp.button variant="secondary" data-busy-label="Sprawdzanie…">Diagnostyka połączenia</x-pp.button>
+              </form>
+            @endif
+
             @if ($connection)
               <details class="group">
                 <summary class="pp-btn pp-btn-ghost list-none">Rozłącz</summary>
@@ -134,6 +161,29 @@
           <p class="text-sm text-ink-mute">Połączenie może skonfigurować właściciel lub administrator organizacji.</p>
         @endif
       </div>
+
+      @if ($diagnostics && $canManage)
+        <div id="pp-diagnostics" class="border-t border-line p-5">
+          <h3 class="text-sm font-semibold text-ink">Diagnostyka połączenia <span class="pp-num font-normal text-ink-mute">{{ Format::datetime($diagnostics['at']) }}</span></h3>
+          <p class="mt-1 text-[12.5px] text-ink-mute">Tylko odczyt. Bez tokenów i sekretów.</p>
+          <div class="pp-table-wrap mt-3">
+            <table class="pp-table text-[13px]">
+              <thead><tr><th>Zapytanie</th><th>HTTP</th><th>Kod Google</th><th>Wynik</th><th class="pp-col-num">Konta</th></tr></thead>
+              <tbody>
+                @foreach ($diagnostics['rows'] as $row)
+                  <tr>
+                    <td class="pp-num break-all">{{ $row['endpoint'] }}</td>
+                    <td class="pp-num">{{ $row['status'] ?? '—' }}</td>
+                    <td class="pp-num {{ $row['code'] ? 'text-danger' : '' }}">{{ $row['code'] ?? '—' }}</td>
+                    <td class="min-w-[220px]">{{ $row['message'] ?? '—' }}</td>
+                    <td class="pp-col-num">{{ $row['count'] ?? '—' }}</td>
+                  </tr>
+                @endforeach
+              </tbody>
+            </table>
+          </div>
+        </div>
+      @endif
 
       <div class="border-t border-line p-5 text-[13px] leading-6 text-ink-mute">
         <p>Zakres danych: kampanie (status, typ, budżet, strategia stawek, sieci, lokalizacje), grupy reklam, słowa kluczowe, wyszukiwane hasła, działania konwersji (kategoria, konwersja główna/dodatkowa, sposób zliczania) oraz dzienne metryki z ostatnich 12 miesięcy.</p>

@@ -12,6 +12,11 @@ class GoogleAdsClient
 	{
 	}
 
+	public function apiVersion(): string
+	{
+		return $this->config->apiVersion();
+	}
+
 	/**
 	 * @return array<int, string> identyfikatory kont dostępnych dla zalogowanego użytkownika Google
 	 */

@@ -34,6 +34,7 @@ class GoogleAdsApiException extends RuntimeException
 		public readonly ?int $httpStatus = null,
 		public readonly ?string $requestId = null,
 		public readonly ?int $retryAfterSeconds = null,
+		public readonly ?string $googleCode = null,
 	) {
 		parent::__construct($message);
 	}
@@ -44,17 +45,35 @@ class GoogleAdsApiException extends RuntimeException
 	}
 
 	/**
+	 * Kody błędów Google Ads, które oznaczają problem z uprawnieniami, niezależnie od statusu HTTP.
+	 */
+	public const PERMISSION_CODES = [
+		'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION',
+		'USER_PERMISSION_DENIED',
+		'CUSTOMER_NOT_ENABLED',
+		'DEVELOPER_TOKEN_NOT_APPROVED',
+		'DEVELOPER_TOKEN_PROHIBITED',
+		'PROJECT_DISABLED',
+		'ACTION_NOT_PERMITTED',
+		'NOT_ALLOWLISTED',
+	];
+
+	/**
 	 * Komunikat dla użytkownika: co zrobić + skrócony opis błędu z Google (bez tokenów, bez śladu stosu).
 	 */
 	public function userMessage(): string
 	{
-		$hint = match ($this->kind) {
-			self::AUTH => 'Autoryzacja Google wygasła lub została cofnięta – połącz konto ponownie.',
-			self::PERMISSION => 'Brak dostępu do konta lub niewystarczający poziom dostępu do Google Ads API.',
-			self::QUOTA => 'Przekroczono limit zapytań Google Ads API – spróbuj później.',
-			self::TRANSIENT => 'Chwilowy problem z połączeniem z Google – spróbuj ponownie za kilka minut.',
-			self::CONFIG => 'Integracja nie jest poprawnie skonfigurowana na serwerze.',
-			default => 'Google Ads API odrzuciło zapytanie.',
+		$hint = match (true) {
+			$this->googleCode === 'CLOUD_PROJECT_NOT_APPROVED_FOR_PRODUCTION', $this->googleCode === 'ACTION_NOT_PERMITTED' => 'Projekt Google Cloud ma dostęp tylko do kont testowych (poziom „Test”). W Google Cloud Console → Google Ads API sprawdź, czy poziom Explorer/Basic jest przyznany temu samemu projektowi, w którym utworzono klienta OAuth.',
+			$this->googleCode === 'USER_PERMISSION_DENIED' => 'Konto Google nie ma uprawnień do tego konta reklamowego (albo dostęp idzie przez konto menedżera, którego nie wybrano).',
+			$this->googleCode === 'CUSTOMER_NOT_ENABLED' => 'Konto reklamowe jest nieaktywne, zawieszone albo anulowane.',
+			$this->googleCode !== null && str_starts_with($this->googleCode, 'DEVELOPER_TOKEN') => 'Google odrzucił developer token – usuń stałą PP_GOOGLE_ADS_DEVELOPER_TOKEN (nie jest już potrzebna).',
+			$this->kind === self::AUTH => 'Błąd autoryzacji Google – autoryzacja wygasła lub została cofnięta. Połącz konto ponownie.',
+			$this->kind === self::PERMISSION => 'Brak uprawnień do Google Ads API dla tego konta lub projektu Google Cloud.',
+			$this->kind === self::QUOTA => 'Przekroczono limit zapytań Google Ads API – spróbuj później.',
+			$this->kind === self::TRANSIENT => 'Chwilowy problem z połączeniem z Google – spróbuj ponownie za kilka minut.',
+			$this->kind === self::CONFIG => 'Integracja nie jest poprawnie skonfigurowana na serwerze.',
+			default => 'Błąd Google Ads API – zapytanie zostało odrzucone.',
 		};
 
 		$detail = trim(mb_substr($this->getMessage(), 0, 300));

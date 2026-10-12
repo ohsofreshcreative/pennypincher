@@ -45,12 +45,22 @@ class GoogleAdsController extends Controller
 		$connection = $this->connections->currentForProject($project->id);
 		$accounts = [];
 		$accountsError = null;
+		$skippedAccounts = [];
 
 		if ($connection !== null && $connection['status'] === GoogleAdsConnectionRepository::STATUS_PENDING && $this->canManage($project)) {
 			try {
-				$accounts = $this->service->accessibleAccounts($connection);
+				$discovery = $this->service->discoverAccounts($connection);
+				$accounts = $discovery['accounts'];
+
+				if ($accounts === [] && $discovery['errors'] !== []) {
+					$accountsError = self::accountsError(ConnectionService::mostRelevantError(array_column($discovery['errors'], 'exception')));
+				}
+
+				foreach ($discovery['errors'] as $error) {
+					$skippedAccounts[] = ['customer_id' => $error['customer_id'], 'message' => $error['exception']->userMessage()];
+				}
 			} catch (GoogleAdsApiException $e) {
-				$accountsError = $e->userMessage();
+				$accountsError = self::accountsError($e);
 			}
 		}
 
@@ -59,6 +69,8 @@ class GoogleAdsController extends Controller
 			'connection' => $connection,
 			'accounts' => $accounts,
 			'accountsError' => $accountsError,
+			'skippedAccounts' => $skippedAccounts,
+			'diagnostics' => $this->canManage($project) ? get_transient(self::diagnosticsKey($project->id)) : false,
 			'runs' => $this->runs->recentForProject($project->id, 15),
 			'lastSync' => $connection ? $this->runs->lastCompleted((int) $connection['id']) : null,
 			'missingConfig' => $this->config->missing(),
@@ -69,6 +81,24 @@ class GoogleAdsController extends Controller
 			'pageTitle' => 'Google Ads',
 			'section' => 'google-ads',
 		]);
+	}
+
+	/**
+	 * Diagnostyka połączenia (tylko odczyt, bez tokenów) – wynik pokazywany na stronie przez 10 minut.
+	 */
+	public function diagnose(int $project)
+	{
+		$project = $this->access->project($project, Ability::UpdateProject);
+		$connection = $this->connections->currentForProject($project->id);
+		$back = AppUrl::project($project->id, 'google-ads');
+
+		if ($connection === null) {
+			return $this->redirect($back, 'Najpierw połącz konto Google.', 'error');
+		}
+
+		set_transient(self::diagnosticsKey($project->id), ['at' => gmdate('Y-m-d H:i:s'), 'rows' => $this->service->diagnose($connection)], 10 * MINUTE_IN_SECONDS);
+
+		return $this->redirect($back . '#pp-diagnostics', 'Diagnostyka zakończona – wyniki poniżej.');
 	}
 
 	public function connect(int $project)
@@ -192,6 +222,26 @@ class GoogleAdsController extends Controller
 		}
 
 		return $this->redirect(AppUrl::project($project->id, 'google-ads'), 'Rozłączono konto Google Ads. Zsynchronizowane dane pozostały w projekcie.');
+	}
+
+	/**
+	 * @return array{title: string, message: string, kind: string}
+	 */
+	private static function accountsError(GoogleAdsApiException $e): array
+	{
+		$title = match (true) {
+			$e->kind === GoogleAdsApiException::AUTH => 'Błąd autoryzacji Google',
+			$e->kind === GoogleAdsApiException::PERMISSION => 'Brak uprawnień do Google Ads API',
+			$e->kind === GoogleAdsApiException::CONFIG => 'Błąd konfiguracji integracji',
+			default => 'Błąd Google Ads API',
+		};
+
+		return ['title' => $title, 'message' => $e->userMessage(), 'kind' => $e->kind];
+	}
+
+	private static function diagnosticsKey(int $projectId): string
+	{
+		return 'pp_gads_diag_' . $projectId . '_' . get_current_user_id();
 	}
 
 	private function canManage(Project $project): bool
