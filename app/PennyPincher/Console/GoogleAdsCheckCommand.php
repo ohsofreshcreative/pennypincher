@@ -24,6 +24,8 @@ class GoogleAdsCheckCommand extends Command
 			['PP_GOOGLE_ADS_DEVELOPER_TOKEN', $config->developerToken() ? 'ustawione (opcjonalne)' : 'nie ustawiono (opcjonalne)'],
 			['PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID', $config->defaultLoginCustomerId() ?? 'nie ustawiono (opcjonalne)'],
 			['Wersja API', $config->apiVersion()],
+			['PP_GOOGLE_ADS_WRITE_MODE (Change Center)', $config->writeMode()->value . ' – ' . $config->writeMode()->label()],
+			['PP_GOOGLE_ADS_API_VALIDATION', $config->apiValidationEnabled() ? 'włączone (validateOnly, bez zapisu)' : 'wyłączone'],
 			['Redirect URI (dodaj w Google Cloud)', $config->redirectUri()],
 		];
 
@@ -31,6 +33,10 @@ class GoogleAdsCheckCommand extends Command
 
 		if (! str_starts_with($config->redirectUri(), 'https://')) {
 			$this->warn('Redirect URI nie używa HTTPS – Google zaakceptuje go tylko dla localhost.');
+		}
+
+		if ($config->writeMode()->canWrite()) {
+			$this->warn('Zapis do Google Ads jest dozwolony na tym serwerze (write_enabled). Na produkcji przed świadomą decyzją używaj prepare_only.');
 		}
 
 		$ok = $config->isConfigured() && SecretBox::isConfigured();
