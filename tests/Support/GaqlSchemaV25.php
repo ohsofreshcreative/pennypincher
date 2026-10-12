@@ -18,6 +18,9 @@ final class GaqlSchemaV25
 		'campaign.video_brand_safety_suitability' => 'v24: usunięte',
 	];
 
+	/** Metryki niedozwolone razem z segments.conversion_action (Google odrzuca takie zapytanie). */
+	public const NOT_WITH_CONVERSION_ACTION = ['metrics.impressions', 'metrics.clicks', 'metrics.cost_micros', 'metrics.view_through_conversions'];
+
 	/** Dozwolone pola według zasobu FROM (z polami zasobów powiązanych, segmentami i metrykami). */
 	public const FIELDS = [
 		'campaign' => [
@@ -31,10 +34,17 @@ final class GaqlSchemaV25
 			'campaign_budget.amount_micros', 'campaign_budget.period', 'campaign_budget.explicitly_shared',
 			'segments.date', 'metrics.impressions', 'metrics.clicks', 'metrics.cost_micros', 'metrics.conversions',
 			'metrics.conversions_value', 'metrics.all_conversions', 'metrics.view_through_conversions',
+			// Segment conversion_action (konwersje per kampania i działanie): tylko z metrykami konwersji.
+			'segments.conversion_action',
 		],
 		'campaign_criterion' => [
 			'campaign.id', 'campaign.status', 'campaign_criterion.criterion_id', 'campaign_criterion.type', 'campaign_criterion.negative',
 			'campaign_criterion.location.geo_target_constant', 'campaign_criterion.proximity.radius', 'campaign_criterion.proximity.radius_units',
+			'campaign_criterion.keyword.text', 'campaign_criterion.keyword.match_type',
+		],
+		'shared_criterion' => [
+			'shared_set.id', 'shared_set.name', 'shared_set.type', 'shared_set.status',
+			'shared_criterion.criterion_id', 'shared_criterion.keyword.text', 'shared_criterion.keyword.match_type',
 		],
 		'geo_target_constant' => [
 			'geo_target_constant.resource_name', 'geo_target_constant.name', 'geo_target_constant.canonical_name', 'geo_target_constant.target_type',

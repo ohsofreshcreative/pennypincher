@@ -100,6 +100,13 @@ final class GoogleAdsMock
 				['campaign' => ['id' => '111'], 'adGroup' => ['id' => '222'], 'searchTermView' => ['searchTerm' => 'meble za darmo', 'status' => 'NONE'], 'segments' => ['date' => $date, 'searchTermMatchType' => 'BROAD', 'keyword' => ['info' => ['text' => 'sklep meble']]], 'metrics' => ['impressions' => '30', 'clicks' => '2', 'costMicros' => '4000000']],
 				['campaign' => ['id' => '111'], 'adGroup' => ['id' => '222'], 'searchTermView' => ['searchTerm' => 'meble za darmo', 'status' => 'NONE'], 'segments' => ['date' => $date, 'searchTermMatchType' => 'BROAD', 'keyword' => ['info' => ['text' => 'sklep meble']]], 'metrics' => ['impressions' => '20', 'clicks' => '1', 'costMicros' => '2000000']],
 			], self::dates($request['gaql']))))])
+			->on('campaign_negatives', [200, self::stream([['campaign' => ['id' => '111'], 'campaignCriterion' => ['criterionId' => '501', 'negative' => true, 'keyword' => ['text' => 'darmowe', 'matchType' => 'PHRASE']]]])])
+			->on('ad_group_negatives', [200, self::stream([['campaign' => ['id' => '111'], 'adGroup' => ['id' => '222'], 'adGroupCriterion' => ['criterionId' => '502', 'keyword' => ['text' => 'praca', 'matchType' => 'BROAD']]]])])
+			->on('shared_criterion', [200, self::stream([['sharedSet' => ['id' => '77', 'name' => 'Wykluczenia ogólne', 'type' => 'NEGATIVE_KEYWORDS'], 'sharedCriterion' => ['criterionId' => '503', 'keyword' => ['text' => 'kurs', 'matchType' => 'PHRASE']]]])])
+			->on('campaign_conversion_metrics', fn ($request) => [200, self::stream(array_merge(...array_map(fn ($date) => [
+				['campaign' => ['id' => '111'], 'segments' => ['date' => $date, 'conversionAction' => 'customers/' . self::CUSTOMER . '/conversionActions/901'], 'metrics' => ['conversions' => 1.0, 'allConversions' => 1.0, 'conversionsValue' => 0]],
+				['campaign' => ['id' => '111'], 'segments' => ['date' => $date, 'conversionAction' => 'customers/' . self::CUSTOMER . '/conversionActions/902'], 'metrics' => ['conversions' => 0, 'allConversions' => 0.5, 'conversionsValue' => 0]],
+			], self::dates($request['gaql']))))])
 			->on('conversion_metrics', fn ($request) => [200, self::stream(array_map(fn ($date) => [
 				'segments' => ['date' => $date, 'conversionAction' => 'customers/' . self::CUSTOMER . '/conversionActions/901'],
 				'metrics' => ['conversions' => 1.0, 'allConversions' => 1.0, 'conversionsValue' => 0],
@@ -184,7 +191,10 @@ final class GoogleAdsMock
 
 		return match (true) {
 			$from === 'customer' && str_contains($gaql, 'segments.conversion_action') => 'conversion_metrics',
+			$from === 'campaign' && str_contains($gaql, 'segments.conversion_action') => 'campaign_conversion_metrics',
 			$from === 'campaign' && str_contains($gaql, 'segments.date') => 'campaign_metrics',
+			$from === 'campaign_criterion' && str_contains($gaql, "'KEYWORD'") => 'campaign_negatives',
+			$from === 'ad_group_criterion' && str_contains($gaql, 'negative = TRUE') => 'ad_group_negatives',
 			default => $from,
 		};
 	}

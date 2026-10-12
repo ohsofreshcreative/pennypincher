@@ -16,6 +16,13 @@ dokładny kształt odpowiedzi, limity i uprawnienia konta.
   konwersji (kategoria, status, konwersja główna/dodatkowa, sposób zliczania, typ, źródło) i dzienne metryki:
   wyświetlenia, kliknięcia, koszt, konwersje, wszystkie konwersje, wartość konwersji, konwersje po obejrzeniu
   (CTR, CPC i CPA są liczone z sum).
+- Od Prompt 3 dodatkowo: słowa wykluczające (kampania, grupa reklam, listy wspólne – `pp_negative_keywords`, pełna
+  wymiana przy każdej synchronizacji) i konwersje per kampania i działanie (`segments.conversion_action` w zasobie
+  `campaign`, zapis w `pp_conversion_metrics` z `campaign_scope` = id kampanii, zbiór pokrycia `conversions_by_campaign`).
+  Oba kroki są **opcjonalne**: pola są sprawdzone ze schematem v25, ale zapytania nie były uruchomione na prawdziwym
+  koncie – błąd zapytania (INVALID) jest zapisywany w dzienniku kroków jako pominięty i nie zatrzymuje synchronizacji.
+  Dla istniejących połączeń dane historyczne pojawią się po przycisku **Pobierz historię ponownie** (POST
+  `google-ads/backfill/`) albo stopniowo przez codzienną synchronizację (30 dni).
 - Historia: 12 miesięcy przy pierwszej synchronizacji, potem codziennie ostatnie 30 dni (korekty konwersji
   z opóźnieniem nadpisują się).
 
@@ -145,9 +152,10 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 
 - **Przebieg** (`pp_sync_runs`): typ `backfill` (12 miesięcy) albo `incremental` (30 dni do wczoraj w strefie
   czasowej konta). Pierwsza synchronizacja połączenia jest zawsze backfillem.
-- **Kroki**: najpierw struktura (`campaigns`, `locations`, `ad_groups`, `keywords`, `conversion_actions`),
-  potem metryki w oknach kalendarzowych miesięcy od najnowszego (`campaign_metrics`, `keyword_metrics`,
-  `search_term_metrics`, `conversion_metrics`). Postęp = `step_index / steps_total`.
+- **Kroki**: najpierw struktura (`campaigns`, `locations`, `ad_groups`, `keywords`, `conversion_actions`,
+  `negative_keywords`), potem metryki w oknach kalendarzowych miesięcy od najnowszego (`campaign_metrics`,
+  `keyword_metrics`, `search_term_metrics`, `conversion_metrics`, `campaign_conversion_metrics`). Kroki z
+  `ApiSyncer::OPTIONAL_STEPS` przy błędzie zapytania są pomijane (wpis `skipped` w dzienniku). Postęp = `step_index / steps_total`.
 - **Wznawianie**: każdy krok jest zapisywany po zakończeniu; przerwany przebieg (limit czasu, restart, błąd)
   kontynuuje od pierwszego niewykonanego kroku. Przebieg „w toku” bez zmian przez 30 minut wraca do kolejki.
 - **Idempotencja**: krok metryk usuwa wiersze `source='api'` z okna i wstawia nowe w jednej transakcji;
@@ -159,7 +167,8 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 - **Blokada**: `GET_LOCK` MySQL na połączenie – dwa procesy (cron i przycisk) nie przetwarzają tego samego konta naraz;
   otwarty przebieg blokuje dodanie kolejnego.
 - **Waluta**: gdy waluta konta różni się od waluty projektu, synchronizacja zatrzymuje się z komunikatem.
-- Po zakończonym przebiegu uruchamia się audyt projektu (`trigger_type = sync`).
+- Po zakończonym przebiegu uruchamia się analiza projektu dla ostatnich 30 dni: audyt, Budget Leaks, słowa
+  kluczowe i rekomendacje (`trigger_type = sync`).
 
 ### Dane z API a importy CSV/XLSX
 
@@ -181,6 +190,7 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 | `wp acorn pp:sync:work --time=240` | Zadanie crona: planowanie + przetwarzanie kolejki |
 | `wp acorn pp:sync {projekt} [--backfill]` | Ręczna synchronizacja projektu |
 | `wp acorn pp:audit {projekt}` | Audyt projektu |
+| `wp acorn pp:analyze {projekt} --period=last_90` | Pełna analiza okresu (audyt, Budget Leaks, słowa kluczowe, rekomendacje; `--from= --to=` dla własnego zakresu) |
 
 ## Testy
 

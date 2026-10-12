@@ -27,6 +27,14 @@
     'reviewed' => ['ok', 'Przejrzany'],
     'dismissed' => ['neutral', 'Pominięty'],
     'partial' => ['warn', 'Częściowy'],
+    'to_review' => ['warn', 'Do sprawdzenia'],
+    'accepted' => ['ok', 'Zaakceptowana'],
+    'rejected' => ['neutral', 'Odrzucona'],
+    'done' => ['ok', 'Wykonana'],
+    'high' => ['danger', 'Wysoki'],
+    'medium' => ['warn', 'Średni'],
+    'low' => ['neutral', 'Niski'],
+    'obsolete' => ['neutral', 'Nieaktualna'],
   ];
   [$tone, $default] = $map[$status] ?? ['neutral', 'Brak danych'];
 @endphp

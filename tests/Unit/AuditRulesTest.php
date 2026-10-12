@@ -33,7 +33,7 @@ class AuditRulesTest extends TestCase
 		}
 
 		$this->assertSame(count($ids), count(array_unique($ids)));
-		$this->assertSame(22, count($ids));
+		$this->assertSame(23, count($ids));
 	}
 
 	public function testHealthyAccountHasNoFindingsAndFullScore(): void

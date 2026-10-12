@@ -18,22 +18,31 @@
 @section('content')
   @if (! $run)
     <section class="pp-card">
-      <x-pp.empty-state title="Nie wykonano jeszcze audytu" icon="audit">
-        Audyt sprawdza {{ count(RuleRegistry::RULES) }} deterministycznych reguł: pomiar konwersji, ustawienia kampanii, tempo wydawania budżetu, jakość danych i zmiany skuteczności z ostatnich 30 dni.
+      <x-pp.empty-state title="Brak audytu dla okresu {{ $period->range->label() }}" icon="audit">
+        Audyt sprawdza {{ count(RuleRegistry::RULES) }} deterministycznych reguł: pomiar konwersji, ustawienia kampanii, tempo wydawania budżetu, jakość danych i zmiany skuteczności w wybranym okresie (porównanie z poprzednim okresem tej samej długości).
         Nie korzysta z AI i nie wprowadza żadnych zmian na koncie Google Ads.
         @if ($canRun)
           <x-slot:actions>
             <form method="post" action="{{ AppUrl::project($project->id, 'audits') }}" data-busy>
               <x-pp.nonce />
-              <x-pp.button icon="audit" data-busy-label="Analiza…">Uruchom audyt</x-pp.button>
+              @include('app.partials.period-fields', ['period' => $period])
+              <x-pp.button icon="audit" data-busy-label="Analiza…">Uruchom audyt dla tego okresu</x-pp.button>
             </form>
           </x-slot:actions>
         @endif
       </x-pp.empty-state>
     </section>
+
+    <div class="max-w-2xl">
+      @include('app.partials.audit.history')
+    </div>
   @else
     @if ($latestId !== null && (int) $run['id'] !== (int) $latestId)
-      <x-pp.alert type="info">Przeglądasz archiwalny audyt z {{ Format::datetime($run['created_at']) }}. <a href="{{ AppUrl::project($project->id, 'audits') }}" class="font-semibold underline">Przejdź do najnowszego</a>.</x-pp.alert>
+      <x-pp.alert type="info">Przeglądasz audyt z {{ Format::datetime($run['created_at']) }} dla okresu {{ Format::period($run['date_from'], $run['date_to']) }}. <a href="{{ AppUrl::project($project->id, 'audits') }}" class="font-semibold underline">Przejdź do bieżącego okresu</a>.</x-pp.alert>
+    @endif
+
+    @if (($run['data_quality']['activity']['state'] ?? null) === 'no_activity')
+      <x-pp.alert type="info" title="Brak aktywności reklamowej">{{ \App\PennyPincher\Domain\Audit\AuditScore::NO_ACTIVITY }}</x-pp.alert>
     @endif
 
     <div class="grid gap-6 2xl:grid-cols-[minmax(0,8fr)_minmax(0,4fr)]">
@@ -56,6 +65,7 @@
               @if ($canRun)
                 <form method="post" action="{{ AppUrl::project($project->id, 'audits') }}" data-busy>
                   <x-pp.nonce />
+                  @include('app.partials.period-fields', ['period' => $period])
                   <x-pp.button variant="secondary" size="sm" icon="refresh" data-busy-label="Analiza…">Uruchom audyt ponownie</x-pp.button>
                 </form>
               @endif
@@ -86,14 +96,23 @@
             </div>
           </div>
 
-          @php $quality = $run['data_quality'] ?? []; @endphp
+          @php $quality = $run['data_quality'] ?? []; $activity = $quality['activity'] ?? null; @endphp
           @if ($quality)
             <div class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
-              Dane kampanii: {{ $quality['covered_days'] ?? 0 }} z {{ $quality['total_days'] ?? 0 }} dni ·
-              źródło: {{ ['api' => 'Google Ads API', 'api_mixed' => 'Google Ads API + importy', 'day' => 'importy (dzienne)', 'period' => 'importy (okresowe)', 'mixed' => 'importy'][$quality['source'] ?? ''] ?? 'brak' }} ·
-              ustawienia konwersji {{ ! empty($quality['conversion_settings_known']) ? 'znane' : 'nieznane (brak połączenia z API)' }}
+              @if ($activity)
+                <dl class="grid gap-x-6 gap-y-1 sm:grid-cols-3">
+                  <div><dt class="inline">Pierwszy dzień z danymi:</dt> <dd class="pp-num inline text-ink">{{ Format::date($activity['first_day']) }}</dd></div>
+                  <div><dt class="inline">Ostatni dzień z danymi:</dt> <dd class="pp-num inline text-ink">{{ Format::date($activity['last_day']) }}</dd></div>
+                  <div><dt class="inline">Dni z aktywnością w okresie:</dt> <dd class="pp-num inline text-ink">{{ $activity['active_days'] ?? 'brak danych dziennych' }}</dd></div>
+                  <div><dt class="inline">Źródło:</dt> <dd class="inline text-ink">{{ $activity['source_label'] }}</dd></div>
+                  <div><dt class="inline">Kompletność:</dt> <dd class="pp-num inline text-ink">{{ $activity['covered_days'] }} z {{ $activity['total_days'] }} dni{{ $activity['complete'] ? '' : ' (niepełne)' }}</dd></div>
+                  <div><dt class="inline">Ustawienia konwersji:</dt> <dd class="inline text-ink">{{ ! empty($quality['conversion_settings_known']) ? 'znane (API)' : 'nieznane' }}</dd></div>
+                </dl>
+              @else
+                Dane kampanii: {{ $quality['covered_days'] ?? 0 }} z {{ $quality['total_days'] ?? 0 }} dni · źródło: {{ \App\PennyPincher\Services\Audit\AuditContextBuilder::sourceLabel($quality['source'] ?? null) }}
+              @endif
               @if (! empty($quality['rule_errors']))
-                · <span class="text-danger">nie sprawdzono reguł: {{ implode(', ', $quality['rule_errors']) }}</span>
+                <p class="mt-1 text-danger">Nie sprawdzono reguł: {{ implode(', ', $quality['rule_errors']) }}</p>
               @endif
             </div>
           @endif
@@ -126,24 +145,7 @@
       </div>
 
       <aside class="space-y-6">
-        <section class="pp-card" aria-labelledby="pp-audit-history">
-          <div class="pp-card-header">
-            <h2 id="pp-audit-history" class="pp-card-title">Historia audytów</h2>
-          </div>
-          <ul class="divide-y divide-line">
-            @foreach ($history as $item)
-              <li>
-                <a href="{{ AppUrl::project($project->id, 'audits/' . $item['id']) }}" @class(['flex items-center gap-3 px-5 py-3 hover:bg-ink/[0.03]', 'bg-mint-soft/60' => (int) $item['id'] === (int) $run['id']])>
-                  <span class="pp-num w-9 text-lg font-semibold text-ink">{{ $item['score'] ?? '—' }}</span>
-                  <span class="min-w-0 flex-1">
-                    <span class="pp-num block text-sm text-ink">{{ Format::datetime($item['created_at']) }}</span>
-                    <span class="block text-[12px] text-ink-mute">{{ (int) $item['critical_count'] }} kryt. · {{ (int) $item['warning_count'] }} ostrz. · {{ (int) $item['info_count'] }} inf. · {{ $triggers[$item['trigger_type']] ?? $item['trigger_type'] }}</span>
-                  </span>
-                </a>
-              </li>
-            @endforeach
-          </ul>
-        </section>
+        @include('app.partials.audit.history')
 
         <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
           <h2 class="pp-card-title">Jak działa audyt</h2>

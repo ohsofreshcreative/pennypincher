@@ -41,7 +41,17 @@ final class Project
 		public readonly ?Role $role,
 		public readonly string $createdAt,
 		public readonly string $updatedAt,
+		public readonly ?BusinessContext $businessContext = null,
+		public readonly ?float $dataforseoMonthlyLimit = null,
 	) {
+	}
+
+	/**
+	 * Kontekst biznesowy (zawsze obiekt – pusty, gdy nic nie uzupełniono).
+	 */
+	public function context(): BusinessContext
+	{
+		return $this->businessContext ?? new BusinessContext([], $this->businessDescription, $this->targetCustomer, $this->landingPageUrl, $this->minProjectValueMicros, $this->maxProjectValueMicros);
 	}
 
 	public static function fromRow(array $row): self
@@ -69,6 +79,15 @@ final class Project
 			role: isset($row['role']) ? Role::tryFrom((string) $row['role']) : null,
 			createdAt: (string) $row['created_at'],
 			updatedAt: (string) $row['updated_at'],
+			businessContext: BusinessContext::fromJson(
+				$row['business_context'] ?? null,
+				$row['business_description'] ?: null,
+				$row['target_customer'] ?: null,
+				$row['landing_page_url'] ?: null,
+				$int($row['min_project_value_micros']),
+				$int($row['max_project_value_micros']),
+			),
+			dataforseoMonthlyLimit: isset($row['dataforseo_monthly_limit']) && $row['dataforseo_monthly_limit'] !== null ? (float) $row['dataforseo_monthly_limit'] : null,
 		);
 	}
 

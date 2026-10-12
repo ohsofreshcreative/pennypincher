@@ -4,6 +4,9 @@ namespace App\PennyPincher\Http\Controllers;
 
 use App\PennyPincher\Domain\Access\Ability;
 use App\PennyPincher\Domain\Access\Policy;
+use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
+use App\PennyPincher\Domain\Metrics\DateRange;
+use App\PennyPincher\Support\AnalysisPeriodRequest;
 use App\PennyPincher\Domain\Audit\RuleRegistry;
 use App\PennyPincher\Domain\Support\NotFound;
 use App\PennyPincher\Domain\Support\ValidationFailed;
@@ -23,16 +26,18 @@ class AuditsController extends Controller
 		AccessService $access,
 		private AuditService $service,
 		private AuditRepository $audits,
+		private AnalysisPeriodRequest $periods,
 	) {
 		parent::__construct($access);
 	}
 
-	public function index(int $project)
+	public function index(int $project, Request $request)
 	{
 		$project = $this->access->project($project);
 		$this->access->rememberProject($project);
+		$period = $this->periods->resolve($request, $project);
 
-		return $this->page($project, $this->audits->latestRun($project->id));
+		return $this->page($project, $this->audits->latestRunForPeriod($project->id, $period->range->fromString(), $period->range->toString()), $period);
 	}
 
 	public function show(int $project, int $run)
@@ -44,13 +49,15 @@ class AuditsController extends Controller
 			throw new NotFound('Audyt nie istnieje.');
 		}
 
-		return $this->page($project, $runRow);
+		$period = new AnalysisPeriod(new DateRange($runRow['date_from'], $runRow['date_to'], 'custom'), array_key_exists((string) $runRow['range_preset'], AnalysisPeriod::PRESETS) ? (string) $runRow['range_preset'] : 'custom');
+
+		return $this->page($project, $runRow, $period);
 	}
 
-	public function store(int $project)
+	public function store(int $project, Request $request)
 	{
 		$project = $this->access->project($project, Ability::ImportData);
-		$runId = $this->service->run($project, 'manual', $this->access->userId());
+		$runId = $this->service->run($project, 'manual', $this->access->userId(), $this->periods->resolve($request, $project));
 
 		return $this->redirect(AppUrl::project($project->id, "audits/{$runId}"), 'Audyt został wykonany.');
 	}
@@ -68,7 +75,7 @@ class AuditsController extends Controller
 		return redirect()->to(AppUrl::project($project->id, 'audits/' . $row['audit_run_id']) . '#finding-' . $row['id']);
 	}
 
-	private function page($project, ?array $run)
+	private function page($project, ?array $run, AnalysisPeriod $period)
 	{
 		$findings = $run ? $this->audits->findings((int) $run['id']) : [];
 		$groups = ['critical' => [], 'warning' => [], 'info' => [], 'dismissed' => []];
@@ -84,6 +91,7 @@ class AuditsController extends Controller
 			'history' => $this->audits->runs($project->id, 20),
 			'rules' => RuleRegistry::byId(),
 			'canRun' => Policy::allows($project->role, Ability::ImportData),
+			'period' => $period,
 			'pageTitle' => 'Audyt',
 			'section' => 'audits',
 		]);

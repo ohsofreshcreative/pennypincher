@@ -11,6 +11,7 @@
 
 @section('content')
   @include('app.partials.dashboard-health')
+  @include('app.partials.dashboard-optimization')
 
   @if (! $hasAnyData)
     <section class="pp-card">

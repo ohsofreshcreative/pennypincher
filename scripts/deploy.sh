@@ -121,6 +121,9 @@ done
 for constant in PP_GOOGLE_ADS_CLIENT_ID PP_GOOGLE_ADS_CLIENT_SECRET; do
 	if remote "$WP config has $constant" >/dev/null 2>&1; then ok "wp-config: $constant ustawione"; else warn "wp-config: brak $constant – integracja Google Ads będzie nieaktywna"; fi
 done
+for constant in PP_DATAFORSEO_LOGIN PP_DATAFORSEO_PASSWORD; do
+	if remote "$WP config has $constant" >/dev/null 2>&1; then ok "wp-config: $constant ustawione"; else warn "wp-config: brak $constant – DataForSEO nieaktywne (opcjonalne, docs/DATAFORSEO.md)"; fi
+done
 DEBUG_DISPLAY="$(remote "$WP config get WP_DEBUG_DISPLAY" 2>/dev/null || echo '')"
 [[ "$DEBUG_DISPLAY" == "1" || "$DEBUG_DISPLAY" == "true" ]] && warn "WP_DEBUG_DISPLAY jest włączone – na produkcji wyłącz (błędy nie mogą być wyświetlane)."
 [[ "$(remote "$WP option get users_can_register" 2>/dev/null || echo 0)" == "0" ]] || warn "users_can_register=1 w bazie (aplikacja i tak wymusza 0)."

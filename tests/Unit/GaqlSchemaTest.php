@@ -31,6 +31,10 @@ class GaqlSchemaTest extends TestCase
 			'keywordMetrics' => Gaql::keywordMetrics('2026-09-01', '2026-09-30'),
 			'searchTermMetrics' => Gaql::searchTermMetrics('2026-09-01', '2026-09-30'),
 			'conversionMetrics' => Gaql::conversionMetrics('2026-09-01', '2026-09-30'),
+			'campaignConversionMetrics' => Gaql::campaignConversionMetrics('2026-09-01', '2026-09-30'),
+			'campaignNegatives' => Gaql::campaignNegativeKeywords(),
+			'adGroupNegatives' => Gaql::adGroupNegativeKeywords(),
+			'sharedNegatives' => Gaql::sharedNegativeKeywords(),
 			'customer' => ConnectionService::CUSTOMER_QUERY,
 			'customerClient' => ConnectionService::CLIENTS_QUERY,
 		];
@@ -45,6 +49,17 @@ class GaqlSchemaTest extends TestCase
 			foreach ($fields as $field) {
 				$this->assertFalse(isset(GaqlSchemaV25::REMOVED[$field]), "{$name}: pole {$field} zostało usunięte z API (" . (GaqlSchemaV25::REMOVED[$field] ?? '') . ')');
 				$this->assertTrue(in_array($field, GaqlSchemaV25::FIELDS[$resource], true), "{$name}: pole {$field} nie jest na liście pól v25 dla FROM {$resource}");
+			}
+		}
+	}
+
+	public function testConversionActionSegmentOnlyWithConversionMetrics(): void
+	{
+		foreach (self::queries() as $name => $query) {
+			[, $fields] = GaqlSchemaV25::parse($query);
+
+			if (in_array('segments.conversion_action', $fields, true)) {
+				$this->assertSame([], array_values(array_intersect($fields, GaqlSchemaV25::NOT_WITH_CONVERSION_ACTION)), "{$name}: segment conversion_action z niedozwoloną metryką");
 			}
 		}
 	}
@@ -70,7 +85,7 @@ class GaqlSchemaTest extends TestCase
 
 	public function testDateRangesAreSafeLiterals(): void
 	{
-		foreach (['campaignMetrics', 'keywordMetrics', 'searchTermMetrics', 'conversionMetrics'] as $name) {
+		foreach (['campaignMetrics', 'keywordMetrics', 'searchTermMetrics', 'conversionMetrics', 'campaignConversionMetrics'] as $name) {
 			$this->assertTrue((bool) preg_match("/segments\.date BETWEEN '\d{4}-\d{2}-\d{2}' AND '\d{4}-\d{2}-\d{2}'$/", trim(self::queries()[$name])), $name);
 		}
 	}

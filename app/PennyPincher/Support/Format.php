@@ -112,6 +112,21 @@ final class Format
 		};
 	}
 
+	/**
+	 * Polska odmiana liczebnika: plural(1, 'fraza', 'frazy', 'fraz').
+	 */
+	public static function plural(int $n, string $one, string $few, string $many): string
+	{
+		if ($n === 1) {
+			return $one;
+		}
+
+		$tens = $n % 100;
+		$units = $n % 10;
+
+		return $units >= 2 && $units <= 4 && ($tens < 12 || $tens > 14) ? $few : $many;
+	}
+
 	private static function groupDecimal(string $decimal): string
 	{
 		$negative = str_starts_with($decimal, '-');

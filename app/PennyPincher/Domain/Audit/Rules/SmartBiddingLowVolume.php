@@ -44,6 +44,8 @@ final class SmartBiddingLowVolume extends BaseRule
 	public function evaluate(AuditContext $context): array
 	{
 		$findings = [];
+		// Próg 15 konwersji na 30 dni, przeskalowany do długości analizowanego okresu.
+		$threshold = round(self::MIN_CONVERSIONS * max(1, $context->range->days()) / 30, 1);
 
 		foreach ($context->campaigns as $campaign) {
 			$conversions = $campaign['current']['conversions'] ?? null;
@@ -53,7 +55,7 @@ final class SmartBiddingLowVolume extends BaseRule
 				|| ! in_array($campaign['bidding_strategy'] ?? '', Enums::SMART_BIDDING, true)
 				|| $conversions === null
 				|| (int) ($campaign['current']['cost_micros'] ?? 0) === 0
-				|| (float) $conversions >= self::MIN_CONVERSIONS
+				|| (float) $conversions >= $threshold
 			) {
 				continue;
 			}
@@ -62,13 +64,13 @@ final class SmartBiddingLowVolume extends BaseRule
 
 			$findings[] = $this->finding(
 				$micro ? Severity::Critical : Severity::Warning,
-				sprintf('„%s” używa strategii %s przy %s konwersjach w 30 dni', $campaign['name'], Enums::BIDDING[$campaign['bidding_strategy']] ?? $campaign['bidding_strategy'], Format::conversions($conversions)),
+				sprintf('„%s” używa strategii %s przy %s konwersjach w %d dni', $campaign['name'], Enums::BIDDING[$campaign['bidding_strategy']] ?? $campaign['bidding_strategy'], Format::conversions($conversions), $context->range->days()),
 				$this->description() . ($micro ? ' Dodatkowo konwersje główne konta to mikrokonwersje, więc algorytm optymalizuje pod niewłaściwy cel.' : ''),
 				[
 					['Strategia', Enums::BIDDING[$campaign['bidding_strategy']] ?? (string) $campaign['bidding_strategy']],
-					['Konwersje (30 dni)', Format::conversions($conversions)],
-					['Próg', self::MIN_CONVERSIONS . ' konwersji / 30 dni'],
-					['Wydatki (30 dni)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
+					['Konwersje (w okresie)', Format::conversions($conversions)],
+					['Próg', self::MIN_CONVERSIONS . ' konwersji / 30 dni (dla tego okresu: ' . Format::conversions($threshold) . ')'],
+					['Wydatki (w okresie)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
 				],
 				'Przy małej liczbie konwersji rozważ Maksymalizację liczby kliknięć z limitem CPC albo połączenie kampanii, aż konwersji będzie więcej. Najpierw upewnij się, że konwersje główne mierzą kontakt z klientem.',
 				'campaign',

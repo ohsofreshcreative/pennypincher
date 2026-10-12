@@ -52,7 +52,7 @@ final class DisplayInSearchCampaign extends BaseRule
 					[
 						['Kampania', (string) $campaign['name']],
 						['Typ', 'Sieć wyszukiwania + sieć reklamowa'],
-						['Wydatki (30 dni)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
+						['Wydatki (w okresie)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
 					],
 					'Wyłącz „Sieć reklamowa Google” w ustawieniach kampanii. Jeśli potrzebujesz zasięgu, użyj osobnej kampanii z własnym budżetem i celami.',
 					'campaign',

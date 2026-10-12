@@ -22,17 +22,27 @@ app/PennyPincher/
   Domain/GoogleAds/Enums.php             mapowanie enumów Google Ads (statusy, kategorie konwersji, strategie)
   Domain/Audit/                          Rule, Finding, AuditContext, Severity, Dimension, Category, AuditScore, RuleRegistry, Rules/*
   Domain/Support/                        NotFound, ValidationFailed
+  Domain/Analysis/                       AnalysisPeriod (okres analizy), Statistics (pewność statystyczna), Text (normalizacja, intencje)
+  Domain/Leaks/                          Leak, LeakContext, LeakDetector (reguły BL1xx–BL4xx), SavingsEstimate
+  Domain/Keywords/                       OpportunityScore, KeywordAnalyzer (możliwości i wykluczenia), SeedSelector
+  Domain/Recommendations/                RecommendationGenerator (łączenie, deduplikacja, priorytet)
+  Domain/Conversions/ConversionClass     klasy biznesowe konwersji
+  Domain/Projects/BusinessContext        kontekst biznesowy projektu (pola opcjonalne)
   Services/                              AccessService, ImportService, DashboardService, ProjectValidator, …
   Repositories/                          zapytania SQL (zawsze zawężone do projektu)
   Infrastructure/Database/               Db ($wpdb + transakcje), Migrator, Schema
   Infrastructure/Import/                 czytniki CSV/XLSX, FileInspector, TableAnalyzer, Writers
   Infrastructure/GoogleAds/              Config, GoogleHttp (biała lista hostów), OAuthClient, GoogleAdsClient, Sync/Gaql, Sync/ApiSyncer
+  Infrastructure/DataForSeo/             DataForSeoConfig, DataForSeoHttp (biała lista hostów, Basic Auth, klasyfikacja błędów), DataForSeoClient, DataForSeoException
   Infrastructure/Security/               SecretBox (szyfrowanie tokenów), Hardening (utwardzenie WordPressa)
   Services/GoogleAds/                    ConnectionService (OAuth, tokeny, konta), SyncService (kolejka synchronizacji)
-  Services/Audit/AuditContextBuilder     dane wejściowe audytu; Services/AuditService – uruchamianie i statusy
+  Services/Audit/AuditContextBuilder     dane wejściowe audytu (okres, stan aktywności); Services/AuditService – uruchamianie i statusy
+  Services/Analysis/                     AnalysisService (potok), AnalysisDataBuilder, BudgetLeakService, KeywordOpportunityService,
+                                         RecommendationService, ConversionBreakdown
+  Services/DataForSeo/DataForSeoService  plan, zgoda, limity, kolejka, worker, pamięć podręczna
   Jobs/ProcessImport.php                 walidacja + zapis importu (samodzielne zadanie)
   Console/                               komendy `wp acorn pp:*`
-  Support/                               AppUrl, Flash, Format, Paginator, LineChart, DateRangeRequest
+  Support/                               AppUrl, Flash, Format, Paginator, LineChart, DateRangeRequest, AnalysisPeriodRequest
 resources/views/app/                     layouty, strony i partiale aplikacji
 resources/views/components/pp/           komponenty Blade (<x-pp.*>)
 resources/css/pp-app.css, resources/js/pp-app.js   osobny entry Vite aplikacji
@@ -43,7 +53,7 @@ scripts/deploy.sh, scripts/rollback.sh   wdrożenie na Hostinger i wycofanie (do
 
 Zależności między warstwami: kontrolery → serwisy → repozytoria/domena. Domena nie zna kontrolerów, widoków ani bazy (wyjątek: `Project::timezone()` korzysta z `wp_timezone()` jako zapasowej strefy).
 
-Nowe moduły (Budget Leaks, Keyword Intelligence…) dostają własne serwisy i repozytoria w tej strukturze; czytają metryki przez `MetricsRepository` + `PeriodResolver`, żeby zachować zasady agregacji.
+Moduły analizy (Budget Leaks, Rekomendacje, Keyword Opportunities) mają warstwy: pobranie (`AnalysisDataBuilder`, `MetricsRepository` + `PeriodResolver`, `DataForSeoClient`) → normalizacja (`Text`, `ConversionBreakdown`) → analiza (`LeakDetector`, `KeywordAnalyzer`) → ocena (`Statistics`, `OpportunityScore`, `Leak::priorityScore`) → rekomendacje (`RecommendationGenerator`) → prezentacja (kontrolery i widoki czytają wyłącznie zapisane wyniki).
 
 ## Routing
 
@@ -62,9 +72,15 @@ Trasy rejestruje Acorn (`withRouting(using: …)` w `functions.php` → `routes/
 | `/app/projects/{id}/settings/` | ustawienia projektu |
 | `/app/projects/{id}/google-ads/` | połączenie, wybór konta, historia synchronizacji; POST `connect/`, `account/`, `sync/`, `sync/{run}/retry/`, `disconnect/` |
 | `/app/google-ads/callback/` | powrót z OAuth Google (projekt i użytkownik ze state) |
-| `/app/projects/{id}/audits/` | najnowszy audyt, `/audits/{run}/` – audyt z historii; POST `audits/` (uruchom), `audits/findings/{id}/status/` |
+| `/app/projects/{id}/audits/` | audyt wybranego okresu (`?period=last_30\|last_90\|last_180\|last_365\|custom&from=&to=`), `/audits/{run}/` – audyt z historii; POST `audits/` (uruchom), `audits/findings/{id}/status/` |
+| `/app/projects/{id}/budget-leaks/` | Budget Leaks okresu (filtry: kampania, kategoria, priorytet, status); POST `budget-leaks/{id}/status/` |
+| `/app/projects/{id}/recommendations/` | rekomendacje (filtry, sortowanie, `?open=` – historia); POST `recommendations/{id}/status/`, `/note/`, `/obsolete/` |
+| `/app/projects/{id}/keywords/` | Keyword Opportunities (`?tab=opportunities\|negatives\|dataforseo`); POST `keywords/dataforseo/` (zlecenie po zgodzie), `keywords/dataforseo/test/`, `keywords/dataforseo/limit/` |
+| `/app/projects/{id}/conversions/` | klasyfikacja konwersji (GET, POST) |
+| POST `/app/projects/{id}/analysis/` | pełna analiza okresu (audyt → Budget Leaks → słowa → rekomendacje) |
+| POST `/app/projects/{id}/settings/context/` | kontekst biznesowy; POST `google-ads/backfill/` – ponowne pobranie historii |
 | `/app/organizations/{id}/members/` | członkowie organizacji |
-| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/`, `/app/google-ads/`, `/app/audits/` | skróty → bieżący projekt |
+| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/`, `/app/google-ads/`, `/app/audits/`, `/app/budget-leaks/`, `/app/recommendations/`, `/app/keywords/`, `/app/conversions/` | skróty → bieżący projekt |
 | `/app/switch/?project=` | przełącznik projektu |
 | inne `/app/*` | 404 aplikacji |
 
@@ -84,7 +100,8 @@ Wymaga „ładnych” bezpośrednich odnośników (Ustawienia → Bezpośrednie 
 - **Przekierowania**: `redirect_to` tylko w obrębie `/app/` (`AppUrl::safeRedirect`).
 - **Pliki**: limit rozmiaru (filtr `pennypincher/import/max_bytes`, domyślnie 15 MB, nie więcej niż limit PHP), rozszerzenia csv/tsv/txt/xlsx, kontrola sygnatury (XLSX = ZIP z `xl/workbook.xml`, CSV ≠ ZIP/PDF/ELF/PHP), ochrona przed zip bombą i ścieżkami `..`, XML bez sieci (`LIBXML_NONET`). Plik jest czytany z katalogu tymczasowego PHP i nigdy nie trafia do `uploads`.
 - **Nagłówki**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store`, `noindex`.
-- **Sekrety**: tylko integracja Google Ads – `PP_GOOGLE_ADS_CLIENT_ID/SECRET` i `PP_ENCRYPTION_KEY` w `wp-config.php`/zmiennych środowiskowych, nigdy w repozytorium ani bazie; tokeny OAuth w bazie są szyfrowane (`SecretBox`). Aplikacja nie używa APP_KEY ani sesji Laravel.
+- **Sekrety**: `PP_GOOGLE_ADS_CLIENT_ID/SECRET`, `PP_ENCRYPTION_KEY` oraz `PP_DATAFORSEO_LOGIN/PASSWORD` w `wp-config.php`/zmiennych środowiskowych, nigdy w repozytorium ani bazie; tokeny OAuth w bazie są szyfrowane (`SecretBox`). Dane DataForSEO trafiają wyłącznie do nagłówka `Authorization` żądań na `api.dataforseo.com`/`sandbox.dataforseo.com` i nie są logowane ani wyświetlane. Aplikacja nie używa APP_KEY ani sesji Laravel.
+- **Brak zmian na kontach**: żaden moduł nie wysyła mutacji do Google Ads (brak słów, wykluczeń, budżetów, ustawień konwersji) – Penny Pincher tylko czyta i proponuje. Płatne zapytania DataForSEO wymagają zgody użytkownika z rolą administratora projektu i miesięcznego limitu.
 - **WordPress i serwer**: `Hardening` (rejestracja, XML-RPC, wyliczanie użytkowników), `.htaccess` motywu, HSTS; pełna lista: `docs/SECURITY.md`, `docs/DEPLOYMENT.md`.
 
 ## Model danych
@@ -110,9 +127,18 @@ Tabele `{$wpdb->prefix}pp_*`, InnoDB, klucze obce (30), migracje w `Infrastructu
 | `pp_data_coverage` | okna dat, za które dane z API są kompletne (per projekt, źródło, zbiór danych) |
 | `pp_audit_runs` | audyty: wynik (NULL = brak wyniku), rozbicie wyniku i jakość danych (JSON), zakres, wersja reguł, wyzwalacz |
 | `pp_audit_findings` | problemy: reguła, kategoria, ważność, opis, dowody (JSON), rekomendacja, encja, odcisk, kara, obszar wyniku, status |
+| `pp_negative_keywords` | słowa wykluczające z Google Ads (kampania, grupa reklam, listy wspólne) – pełna wymiana przy synchronizacji |
+| `pp_analysis_runs` | przebiegi analiz (`budget_leaks`, `keywords`): okres, preset, podsumowanie (JSON), wyzwalacz |
+| `pp_budget_leaks` | wykryte wycieki: reguła, kategoria, odcisk, encja, koszt, kliknięcia, konwersje (Google i wartościowe), pewność, priorytet, szacunek oszczędności, dowody, status |
+| `pp_keyword_opportunities`, `pp_negative_suggestions` | wyniki analizy słów: frazy z Opportunity Score i rozbiciem, propozycje wykluczeń (`already_excluded`) |
+| `pp_recommendations` | rekomendacje – jedna na odcisk w projekcie (unikalny klucz), status, notatka, nieaktualność, okres ostatniej analizy |
+| `pp_recommendation_events` | historia: utworzenie, zmiany statusu, notatki, nieaktualność, przywrócenie |
+| `pp_dataforseo_tasks` | zadania DataForSEO: endpoint, zadanie (JSON), hash, status, szacunek i koszt faktyczny, próby, błąd, kto zlecił i kiedy zatwierdził |
+| `pp_dataforseo_cache` | odpowiedzi API (klucz = endpoint + treść zadania + tryb), ważność |
+| `pp_keyword_ideas` | pomysły słów z DataForSEO per projekt, lokalizacja i język (unikalne po frazie znormalizowanej) |
 | `pp_schema_migrations` | zastosowane migracje |
 
-Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje), `2026_10_12_000003_google_ads_sync_audit` (tabele wyżej; w tabelach metryk `source` (`import`/`api`), `sync_run_id`, `import_id` może być NULL, unikalny klucz rozszerzony o `source` – nowy klucz powstaje przed usunięciem starego; ustawienia kampanii (`settings` JSON), status grup reklam, ustawienia działań konwersji: `category_code`, `primary_for_goal`, `counting_type`, `type`, `settings`). Wszystkie zmiany są warunkowe (sprawdzenie `information_schema`).
+Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje), `2026_10_12_000003_google_ads_sync_audit` (tabele wyżej; w tabelach metryk `source` (`import`/`api`), `sync_run_id`, `import_id` może być NULL, unikalny klucz rozszerzony o `source` – nowy klucz powstaje przed usunięciem starego; ustawienia kampanii (`settings` JSON), status grup reklam, ustawienia działań konwersji: `category_code`, `primary_for_goal`, `counting_type`, `type`, `settings`). `2026_10_12_000004_analysis_modules` (tabele modułów analizy wyżej; `projects.business_context` (JSON), `projects.dataforseo_monthly_limit`; `conversion_actions.business_class/business_goal/classified_by/classified_at`; `audit_runs.range_preset` + indeks okresu; `conversion_metrics` per kampania przez istniejące `campaign_scope`). Wszystkie zmiany są warunkowe (sprawdzenie `information_schema`) i addytywne – istniejące dane się nie zmieniają.
 
 Zasady:
 
@@ -162,9 +188,9 @@ Dashboard: KPI i wykresy wyłącznie z raportu kampanii; sekcja haseł z raportu
 - **Problem** (`Finding`): ważność (`critical`/`warning`/`info`), tytuł, opis, dowody (pary etykieta–wartość), rekomendacja, encja, obszar wyniku i kara; `fingerprint()` = reguła + encja + wariant – status „Przejrzany/Pominięty” przechodzi na kolejne audyty.
 - **Nowa reguła** (Prompt 3+): klasa w `Domain/Audit/Rules/` rozszerzająca `BaseRule` (stałe `ID`, `NAME`, `DESCRIPTION`, `CATEGORY`, `DIMENSION`), wpis w `RuleRegistry::RULES`, podbicie `RuleRegistry::VERSION`, test w `tests/Unit/AuditRulesTest.php`. Dane, których brakuje w kontekście, dodaje się w `AuditContextBuilder` (+ `AuditContext`).
 - **Audit Score** (`AuditScore`): pule – konfiguracja 25, pomiar konwersji 30, ryzyka i efektywność 30, kompletność danych 15. Kara: krytyczny 10, ostrzeżenie 4, informacja 1 (część informacji 0), w puli obszaru, nie więcej niż pula. Pominięte problemy nie liczą się (wynik przeliczany po zmianie statusu). Brak danych kampanii lub pokrycie < 50% → wynik `NULL` z powodem. To ocena higieny konta, nie ROAS.
-- **Uruchamianie**: ręcznie (`/audits/`, `wp acorn pp:audit`) i automatycznie po każdej zakończonej synchronizacji. Błąd jednej reguły jest logowany i zapisywany w `data_quality.rule_errors`, audyt dostaje status `partial`.
+- **Uruchamianie**: ręcznie (`/audits/` dla wybranego okresu, `wp acorn pp:audit`, `pp:analyze`) i automatycznie po każdej zakończonej synchronizacji (ostatnie 30 dni). Progi zależne od długości okresu (np. CS005: 15 konwersji na 30 dni) są skalowane. Błąd jednej reguły jest logowany i zapisywany w `data_quality.rule_errors`, audyt dostaje status `partial`.
 
-Reguły (wersja 1.0):
+Reguły (wersja 1.1 – dodana DQ008):
 
 | ID | Kategoria | Warunek | Ważność |
 |---|---|---|---|
@@ -185,11 +211,55 @@ Reguły (wersja 1.0):
 | DQ005 | Jakość danych | Dane pokrywają część okresu (< 80% ostrzeżenie) | informacja / ostrzeżenie |
 | DQ006 | Jakość danych | Nakładające się źródła (pominięte importy) | informacja, bez kary |
 | DQ007 | Jakość danych | Waluta konta ≠ waluta projektu | ostrzeżenie |
+| DQ008 | Jakość danych | Dane są, ale w okresie brak wydatków i wyświetleń (kampanie wyłączone) – komunikat z sugestią wcześniejszego okresu; DQ001 się wtedy nie uruchamia | informacja, bez kary (wynik = brak) |
 | PF001 | Skuteczność | CPC +30% (≥ 100 kliknięć w obu okresach) | ostrzeżenie |
 | PF002 | Skuteczność | CTR −25% (≥ 1000 wyświetleń w obu okresach) | ostrzeżenie |
 | PF003 | Skuteczność | CPA +30% (≥ 10 konwersji w obu okresach; pomijane przy mikrokonwersjach) | ostrzeżenie |
 | PF004 | Skuteczność | Kampania bez konwersji z wydatkami ≥ max(100 jedn. waluty, 10% budżetu) (≥ 25% budżetu krytyczny); brak danych o konwersjach ≠ 0 | ostrzeżenie / krytyczny |
 | PF005 | Skuteczność | Hasła z ≥ 10 kliknięciami bez konwersji ≥ 10% wydatków na hasła (≥ 25% ostrzeżenie) | informacja / ostrzeżenie |
+
+## Okres analizy
+
+`AnalysisPeriod`: `last_30`, `last_90`, `last_180` (6 miesięcy), `last_365` (12 miesięcy) – zawsze kończą się wczoraj w strefie projektu – albo `custom` (maks. 731 dni, nie w przyszłość). Wybór jest zapamiętywany per użytkownik i projekt (user meta `pp_analysis_period`), a parametry `period/from/to` są w URL. Audyt, Budget Leaks, słowa kluczowe i rekomendacje liczą się dla tego samego okresu; porównania – z poprzednim okresem tej samej długości. Przebiegi różnych okresów są osobnymi wierszami (`audit_runs`, `analysis_runs` z datami i presetem) – nie nadpisują się.
+
+Stan danych okresu (`AuditContextBuilder::activity`): `no_data` (brak danych), `no_activity` (dane są, ale bez wydatków i wyświetleń – np. kampanie wstrzymane; komunikat informacyjny zamiast błędu), `partial` (niepełne pokrycie), `complete`. Do tego pierwszy/ostatni dzień danych, dni z aktywnością, źródło i kompletność.
+
+## Moduły analizy
+
+Potok `AnalysisService::run(projekt, okres)`: audyt → `BudgetLeakService` → `KeywordOpportunityService` → `RecommendationService::refresh`. Błąd jednego modułu nie blokuje pozostałych. Uruchamiany ręcznie (POST `analysis/`, `wp acorn pp:analyze {projekt} --period=`), po każdej synchronizacji (ostatnie 30 dni) i po pobraniu danych z DataForSEO (bez audytu). Nigdy przy wyświetlaniu strony.
+
+**Budget Leaks** (`LeakDetector`): reguły na danych okresu.
+
+| Reguła | Opis |
+|---|---|
+| BL101 | Hasło bez konwersji: ≥ 10 kliknięć i koszt ≥ max(20 jedn. waluty, 0,5% wydatków, typowy koszt konwersji kampanii); pewność z P(0 konwersji) = (1−p)^n przy współczynniku kampanii (≥ 50 kliknięć) lub konta |
+| BL102 | Hasło o niskiej intencji (darmowe, praca, nauka, zrób to sam, niepożądani odbiorcy z kontekstu) |
+| BL103 | Powtarzający się temat (ten sam rdzeń w ≥ 3 hasłach) bez konwersji |
+| BL104 | CPC hasła ≥ 2× CPC kampanii bez wyników |
+| BL105 | Hasło bez związku z ofertą i słowami grupy (tylko przy opisanej ofercie; niska pewność) |
+| BL201 | Słowo kluczowe bez konwersji (te same progi i pewność co BL101) |
+| BL202 | Zbyt szerokie dopasowanie – duża część kosztu haseł słowa to zapytania mało związane z jego treścią |
+| BL203 | Koszt konwersji słowa ≥ 2,5× średniej kampanii |
+| BL204 | Zdublowane słowo (ten sam tekst i dopasowanie w kilku grupach) |
+| BL301 | Kampania (≥ 15% wydatków lub ≥ 10% budżetu okresu, ≥ 30 kliknięć) bez konwersji celów biznesowych (gdy są dane per kampania) albo bez konwersji Google |
+| BL302 | Udział w wydatkach ≥ 1,5× udziału w konwersjach celów biznesowych |
+| BL303 | Wzrost kosztu konwersji względem poprzedniego okresu tej samej długości |
+| BL304 | Kampania w sieci wyszukiwania z siecią reklamową/partnerami (bez oceny kosztu – brak podziału na sieci) |
+| BL401 | Konwersje Google Ads to w ≥ 50% mikrokonwersje |
+| BL402 | Brak działań oznaczonych jako cel biznesowy |
+| BL403 | Cele biznesowe to głównie potencjalne kontakty (kliknięcia e-maila/telefonu) |
+| BL404 | Podejrzanie wysoki współczynnik konwersji kampanii |
+| BL405 | Mało danych do oceny (informacja o niskiej pewności wniosków) |
+
+Pewność: wysoka gdy P < 5%, średnia < 20%, inaczej niska; przy głównie mikrokonwersjach obniżana. Priorytet (0–100) = wpływ (≤ 45, udział w wydatkach / nadpisanie dla pomiaru) + pewność (35/22/8) + istotność biznesowa (≤ 20) → wysoki ≥ 60, średni ≥ 35. Oszczędności (`SavingsEstimate`): miesięczny run-rate (koszt / dni × 30,4) tylko przy pewności ≥ średnia; per kampania maksimum z (suma unikalnych haseł, suma słów, suma kampanii), ograniczone miesięcznymi wydatkami kampanii – nakładające się problemy nie są sumowane. Status (Nowy/Przejrzany/Pominięty) przechodzi na kolejne przebiegi po odcisku.
+
+**Konwersje** (`ConversionClass`, `ConversionBreakdown`): klasy lead / potencjalny kontakt (kliknięcie e-maila, telefonu) / potwierdzony lead / sprzedaż / mikrokonwersja / inna / nieokreślona + znacznik „cel biznesowy”. Propozycja z kategorii Google Ads, ręczna zmiana w `/conversions/` (bez ponownej synchronizacji, bez zmian w Google Ads). Metryki Google (`google`, `google_micro`) i biznesowe (`goals`, `leads`, `potential`, `confirmed`, `sales`…) są osobne; `confirmed` = NULL, jeśli żadne działanie nie jest potwierdzonym leadem. Konta i kampanii nie sumujemy; konwersji nie rozdzielamy proporcjonalnie na hasła i słowa (te mają tylko „Konwersje” Google).
+
+**Słowa kluczowe** (`KeywordAnalyzer`): kandydaci = konwertujące hasła spoza słów kluczowych + pomysły z DataForSEO → deduplikacja po `Text::normalize` → pominięcie aktywnych słów i fraz objętych wykluczeniami (semantyka exact/phrase/broad) → intencja (zablokowane: niepożądani odbiorcy, praca, darmowe, nauka, DIY) → `OpportunityScore` (wagi w kodzie: oferta 35, intencja 25, CPC 15, wolumen 10, brak pokrycia 15; brak danych = 0 pkt i niższa pewność; CPC w USD nie jest porównywane z walutą konta) → sugerowana kampania/grupa (największe pokrycie rdzeni) → zapis ze źródłami. Wykluczenia: grupy tokenów niskiej intencji (informacyjne tylko z niską pewnością i przy istotnym koszcie) + pojedyncze kosztowne hasła (ścisłe), z flagą `already_excluded`.
+
+**Rekomendacje** (`RecommendationGenerator` + `RecommendationService`): z problemów audytu (bez informacji i pominiętych), Budget Leaks (bez pominiętych i niskich/niepewnych), możliwości (score ≥ 50, grupowane per grupa reklam) i wykluczeń (grupowane per powód, bez już wykluczonych). Podobne problemy są łączone (hasła i słowa per kampania, duplikaty), ten sam temat z kilku źródeł (np. PF004 i BL301) – deduplikowany (wyższy priorytet + 5, źródła łączone). Odcisk = sha1(temat), niezależny od okresu: ponowna analiza aktualizuje treść, zachowuje status i notatkę. Brak w analizie tego samego okresu → „nieaktualna” (automatycznie przywracana, gdy problem wraca; ręczne oznaczenie zostaje). Statusy: Nowa, Do sprawdzenia, Zaakceptowana, Odrzucona, Wykonana (wyłącznie ręczne potwierdzenie). Każda zmiana → `recommendation_events`.
+
+**DataForSEO**: `docs/DATAFORSEO.md`.
 
 ## Interfejs
 
@@ -213,4 +283,6 @@ Reguły (wersja 1.0):
 | REST Google Ads API przez WP HTTP API zamiast biblioteki `googleads/google-ads-php` | Biblioteka wymaga gRPC/protobuf (rozszerzenia PHP niedostępne na hostingu współdzielonym) i dużych zależności; potrzebujemy tylko odczytu `searchStream`. Atrapy testów działają przez `pre_http_request`. |
 | Kolejka w tabeli `pp_sync_runs` + systemowy cron | Hosting współdzielony bez workerów; kroki są krótkie, wznawialne i chronione `GET_LOCK`, WP-Cron nie jest jedynym mechanizmem. |
 | Zastępowanie okna metryk API zamiast upsertu wierszy | Google koryguje dane wstecz (konwersje z opóźnieniem); usunięcie i wstawienie okna w transakcji usuwa też wiersze, które zniknęły. |
+| Rekomendacje jako jeden wiersz na odcisk (nie per przebieg) | Status, notatka i historia należą do użytkownika i muszą przetrwać ponowne analizy; wyniki przebiegów (leaks, frazy) są per przebieg, żeby okresy się nie nadpisywały. |
+| DataForSEO przez kolejkę w `pp_dataforseo_tasks` i worker `pp:sync:work` | Płatne zapytanie tylko po zgodzie, kontrola limitu tuż przed wywołaniem, ponowienia bez blokowania żądania HTTP (timeout API 120 s). |
 | Libsodium secretbox z kluczem w `wp-config.php` | Wbudowane w PHP ≥ 7.2, uwierzytelnione szyfrowanie, prosta rotacja; klucz poza bazą chroni tokeny przy wycieku zrzutu bazy. |

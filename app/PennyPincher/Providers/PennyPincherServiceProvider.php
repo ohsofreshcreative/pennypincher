@@ -2,8 +2,10 @@
 
 namespace App\PennyPincher\Providers;
 
+use App\PennyPincher\Console\AnalyzeCommand;
 use App\PennyPincher\Console\AuditCommand;
 use App\PennyPincher\Console\CreateOrganizationCommand;
+use App\PennyPincher\Console\DataForSeoCheckCommand;
 use App\PennyPincher\Console\GenerateKeyCommand;
 use App\PennyPincher\Console\GoogleAdsCheckCommand;
 use App\PennyPincher\Console\GoogleAdsDiagnoseCommand;
@@ -72,9 +74,11 @@ class PennyPincherServiceProvider extends ServiceProvider
 				SyncWorkCommand::class,
 				SyncProjectCommand::class,
 				AuditCommand::class,
+				AnalyzeCommand::class,
 				GenerateKeyCommand::class,
 				GoogleAdsCheckCommand::class,
 				GoogleAdsDiagnoseCommand::class,
+				DataForSeoCheckCommand::class,
 			]);
 		}
 	}

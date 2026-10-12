@@ -33,12 +33,13 @@ Konfiguracja pierwszego projektu (to ustawienia projektu, a nie stałe aplikacji
 | Import raportów Google Ads (CSV/XLSX) | 1 | gotowe |
 | Przegląd (dashboard), Kampanie, Wyszukiwane hasła, Ustawienia | 1 | gotowe |
 | Google Ads Integration (OAuth, wybór konta, synchronizacja 12 mies. + codzienna) | 2 | zaimplementowane, przetestowane tylko na atrapie API – wymaga konfiguracji Google Cloud |
-| Ads Audit (22 reguły deterministyczne, Audit Score, statusy problemów) | 2 | gotowe (na danych z importów; reguły ustawień wymagają danych z API) |
+| Ads Audit (23 reguły deterministyczne, Audit Score, statusy problemów, wybór okresu) | 2–3 | gotowe |
 | Wdrożenie produkcyjne (Hostinger) | 2 | przygotowane, niewykonane (blokada: klucz SSH) |
-| Budget Leaks | 2–3 | planowane |
-| Keyword Intelligence (m.in. propozycje wykluczeń) | 3 | planowane |
-| Conversion Intelligence | 3+ | planowane |
-| Recommendations | 3+ | planowane |
+| Budget Leaks | 3 | gotowe (reguły hasła/słowa/kampanie/pomiar, pewność statystyczna, szacunek oszczędności) |
+| Keyword Opportunities (Opportunity Score, propozycje wykluczeń) | 3 | gotowe; frazy z DataForSEO zweryfikowane tylko na atrapie API |
+| Klasyfikacja konwersji (lead / potencjalny kontakt / sprzedaż / mikro…) | 3 | gotowe (podstawa Conversion Intelligence) |
+| Recommendations | 3 | gotowe (statusy, notatki, historia, deduplikacja) |
+| Integracja DataForSEO | 3 | zaimplementowana, przetestowana tylko na atrapie – wymaga danych dostępowych |
 | Campaign Planner | 4 | planowane |
 | Monitoring i alerty | 4 | planowane |
 
@@ -69,6 +70,19 @@ Poza zakresem etapu 1: Google Ads API, silnik audytowy, AI, automatyczne wyklucz
 
 Penny Pincher nigdy nie zmienia kampanii na koncie Google Ads – rekomendacje wdraża użytkownik.
 
+## Zakres etapu 3
+
+- **Okres analizy** dla audytu i modułów: 30 / 90 dni, 6 / 12 miesięcy, własny zakres; zapamiętywany per użytkownik i projekt; historia przebiegów per okres; rozróżnienie: brak danych / brak aktywności (kampanie wyłączone – informacja, nie błąd) / niepełne dane / pełne dane.
+- **Budget Leaks**: wyszukiwane hasła, słowa kluczowe, kampanie i jakość pomiaru; dla każdego problemu: kategoria, kampania/grupa, okres, wydatki, kliknięcia, konwersje Google i wartościowe, pewność, priorytet, uzasadnienie, działanie, SZACUNEK oszczędności; filtry i statusy.
+- **Rekomendacje**: łączenie podobnych problemów, deduplikacja między modułami, priorytet z wpływu, pewności, istotności i kosztu; statusy Nowa / Do sprawdzenia / Zaakceptowana / Odrzucona / Wykonana (ręcznie), notatki, historia, nieaktualność.
+- **Kontekst biznesowy** projektu (wszystkie pola opcjonalne): opis, produkty/usługi, usługi priorytetowe, grupa docelowa, klient idealny, niepożądani odbiorcy, lokalizacje, język, przewagi, średnia wartość, cele, landing page.
+- **Klasyfikacja konwersji** bez zmian w Google Ads i bez ponownej synchronizacji; metryki Google i biznesowe osobno.
+- **Keyword Opportunities**: nowe frazy z Opportunity Score 0–100 (heurystyka, nie ROI), propozycje wykluczeń z informacją, czy fraza jest już wykluczona.
+- **DataForSEO**: pomysły słów kluczowych po zgodzie użytkownika, w miesięcznym limicie, w tle, z pamięcią podręczną.
+- **Dashboard**: największe problemy budżetowe, nowe rekomendacje, nowe możliwości, szacowany potencjał optymalizacji – albo stan pusty, gdy analiza nie była uruchamiana.
+
+Penny Pincher nadal niczego nie zmienia na koncie Google Ads: nie dodaje słów ani wykluczeń, nie zmienia budżetów ani ustawień konwersji.
+
 ## Zasady dotyczące danych
 
 - Nie pokazujemy fikcyjnych wyników poza projektem demo.
@@ -81,5 +95,5 @@ Penny Pincher nigdy nie zmienia kampanii na koncie Google Ads – rekomendacje w
 ## Plan dalszego rozwoju
 
 1. ~~**Prompt 2** – Google Ads API, synchronizacja, silnik audytu, wdrożenie~~ (zrobione poza prawdziwym połączeniem z API i samym wdrożeniem – `docs/PROGRESS.md`).
-2. **Prompt 3** – Keyword Intelligence i Budget Leaks: klasyfikacja wyszukiwanych haseł (intencja, dopasowanie do oferty i klienta docelowego z ustawień projektu), propozycje wykluczeń, kolejne reguły audytu w istniejącym silniku.
-3. **Prompt 4** – Conversion Intelligence, rekomendacje, planer kampanii i monitoring z alertami.
+2. ~~**Prompt 3** – Budget Leaks, rekomendacje, Keyword Opportunities, DataForSEO, rozbudowa audytu~~ (zrobione; DataForSEO i nowe zapytania Google Ads zweryfikowane na atrapach – `docs/PROGRESS.md`).
+3. **Prompt 4** – Conversion Intelligence (import potwierdzonych leadów z CRM), planer kampanii, monitoring z alertami, cykliczne odświeżanie DataForSEO.

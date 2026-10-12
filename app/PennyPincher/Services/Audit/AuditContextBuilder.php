@@ -2,8 +2,10 @@
 
 namespace App\PennyPincher\Services\Audit;
 
+use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Domain\Audit\AuditContext;
 use App\PennyPincher\Domain\Metrics\DateRange;
+use App\PennyPincher\Domain\Metrics\ResolvedPeriods;
 use App\PennyPincher\Domain\Projects\Project;
 use App\PennyPincher\Infrastructure\Database\Db;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
@@ -26,11 +28,12 @@ class AuditContextBuilder
 	) {
 	}
 
-	public function build(Project $project, ?DateTimeImmutable $today = null): AuditContext
+	public function build(Project $project, ?AnalysisPeriod $period = null, ?DateTimeImmutable $today = null): AuditContext
 	{
 		$today = ($today ?? new DateTimeImmutable('now', $project->timezone()))->setTime(0, 0);
-		$range = new DateRange($today->modify('-' . self::PERIOD_DAYS . ' days'), $today->modify('-1 day'));
-		$previous = new DateRange($range->from->modify('-' . self::PERIOD_DAYS . ' days'), $range->from->modify('-1 day'));
+		$period ??= AnalysisPeriod::fromPreset(AnalysisPeriod::DEFAULT, $project->timezone(), $today);
+		$range = $period->range;
+		$previous = $period->previous();
 
 		$coverage = $this->metrics->resolve('campaign_metrics', $project->id, $range);
 		$current = $this->metrics->campaignMetricsByCampaign($project->id, $coverage);
@@ -70,7 +73,82 @@ class AuditContextBuilder
 			searchTermsTotalCostMicros: $terms['total_cost_micros'],
 			now: time(),
 			projectCurrencyMismatch: ($connection['currency'] ?? null) && $connection['currency'] !== $project->currency ? $connection['currency'] : null,
+			activity: $this->activity($project->id, $range, $coverage),
 		);
+	}
+
+	/**
+	 * Pokrycie i aktywność w okresie – rozróżnia brak danych, brak aktywności i dane niepełne.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function activity(int $projectId, DateRange $range, ResolvedPeriods $coverage): array
+	{
+		$extent = $this->metrics->dataExtent($projectId, 'campaign_metrics');
+		$activeDays = null;
+		$firstActive = null;
+		$lastActive = null;
+
+		if ($coverage->hasDaily()) {
+			$activeDays = 0;
+
+			foreach ($this->metrics->dailySeries($projectId, $coverage, $range) as $day) {
+				if ((int) ($day['cost_micros'] ?? 0) > 0 || (int) ($day['impressions'] ?? 0) > 0) {
+					$activeDays++;
+					$firstActive ??= $day['date'];
+					$lastActive = $day['date'];
+				}
+			}
+		}
+
+		$totals = $coverage->isEmpty() ? [] : $this->metrics->campaignTotals($projectId, $coverage);
+		$hasActivity = (int) ($totals['cost_micros'] ?? 0) > 0 || (int) ($totals['impressions'] ?? 0) > 0;
+
+		$state = match (true) {
+			$coverage->isEmpty() => 'no_data',
+			! $hasActivity => 'no_activity',
+			! $coverage->isComplete() => 'partial',
+			default => 'complete',
+		};
+
+		return [
+			'state' => $state,
+			'first_day' => $extent[0] ?? null,
+			'last_day' => $extent[1] ?? null,
+			'active_days' => $activeDays,
+			'first_active_day' => $firstActive,
+			'last_active_day' => $lastActive ?? $this->lastActiveDay($projectId),
+			'covered_days' => min($coverage->coveredDays, $coverage->totalDays),
+			'total_days' => $coverage->totalDays,
+			'complete' => $coverage->isComplete(),
+			'source' => $coverage->isEmpty() ? null : $coverage->source(),
+			'source_label' => self::sourceLabel($coverage->isEmpty() ? null : $coverage->source()),
+		];
+	}
+
+	public static function sourceLabel(?string $source): string
+	{
+		return match ($source) {
+			'api' => 'Google Ads API',
+			'api_mixed' => 'Google Ads API + importy',
+			'day' => 'importy (dane dzienne)',
+			'period' => 'importy (raporty okresowe)',
+			'mixed' => 'importy (dzienne i okresowe)',
+			default => 'brak',
+		};
+	}
+
+	/**
+	 * Ostatni dzień z wydatkami lub wyświetleniami w całych danych projektu (podpowiedź przy braku aktywności).
+	 */
+	private function lastActiveDay(int $projectId): ?string
+	{
+		$value = $this->db->scalar(
+			'SELECT MAX(date_to) FROM ' . $this->db->table('campaign_metrics') . " WHERE project_id = ? AND (cost_micros > 0 OR impressions > 0)",
+			[$projectId]
+		);
+
+		return $value ? (string) $value : null;
 	}
 
 	/**

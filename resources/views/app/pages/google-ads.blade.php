@@ -139,6 +139,14 @@
               </form>
             @endif
 
+            @if ($status === 'active' && ! $openRun)
+              <form method="post" action="{{ $base }}backfill" data-busy
+                onsubmit="return confirm('Pobrać ponownie pełną historię (12 miesięcy)? Dane z API w tym okresie zostaną zastąpione aktualnymi; zaimportowane pliki pozostaną bez zmian.')">
+                <x-pp.nonce />
+                <x-pp.button variant="secondary" icon="refresh" data-busy-label="Pobieranie…" title="Uzupełnia nowe zakresy danych (konwersje per kampania, słowa wykluczające) dla całej historii">Pobierz historię ponownie</x-pp.button>
+              </form>
+            @endif
+
             @if ($connection && $status !== 'disconnected')
               <form method="post" action="{{ $base }}diagnose" data-busy>
                 <x-pp.nonce />

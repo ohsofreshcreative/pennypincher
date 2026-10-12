@@ -7,11 +7,15 @@ use App\PennyPincher\Domain\Metrics\BudgetCalculator;
 use App\PennyPincher\Domain\Metrics\DateRange;
 use App\PennyPincher\Domain\Metrics\MetricCalculator;
 use App\PennyPincher\Domain\Projects\Project;
+use App\PennyPincher\Repositories\AnalysisRepository;
 use App\PennyPincher\Repositories\AuditRepository;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Repositories\ImportRepository;
 use App\PennyPincher\Repositories\MetricsRepository;
+use App\PennyPincher\Repositories\RecommendationRepository;
 use App\PennyPincher\Repositories\SyncRunRepository;
+use App\PennyPincher\Services\Analysis\BudgetLeakService;
+use App\PennyPincher\Services\Analysis\KeywordOpportunityService;
 use App\PennyPincher\Services\Audit\AuditContextBuilder;
 
 /**
@@ -27,7 +31,36 @@ class DashboardService
 		private SyncRunRepository $runs,
 		private AuditRepository $audits,
 		private AuditContextBuilder $auditContext,
+		private AnalysisRepository $analyses,
+		private RecommendationRepository $recommendations,
 	) {
+	}
+
+	/**
+	 * Optymalizacja: najważniejsze wycieki budżetu, nowe rekomendacje i możliwości z ostatnich analiz.
+	 * Bez analizy – null (widok pokazuje stan pusty, bez sztucznych liczb).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function optimization(Project $project): array
+	{
+		$leakRun = $this->analyses->latestRun($project->id, BudgetLeakService::TYPE);
+		$keywordRun = $this->analyses->latestRun($project->id, KeywordOpportunityService::TYPE);
+		$leaks = $leakRun ? array_values(array_filter($this->analyses->leaks((int) $leakRun['id']), fn ($l) => $l['status'] !== 'dismissed')) : [];
+		$counts = $this->recommendations->counts($project->id);
+
+		return [
+			'leak_run' => $leakRun,
+			'top_leaks' => array_slice($leaks, 0, 3),
+			'leak_count' => count($leaks),
+			'savings' => $leakRun ? BudgetLeakService::savings($leaks, $leakRun['summary']) : null,
+			'keyword_run' => $keywordRun,
+			'opportunities' => $keywordRun ? count(array_filter($this->analyses->opportunities((int) $keywordRun['id']), fn ($o) => (int) $o['score'] >= 50)) : null,
+			'negatives' => $keywordRun ? count(array_filter($this->analyses->negativeSuggestions((int) $keywordRun['id']), fn ($n) => ! (int) $n['already_excluded'])) : null,
+			'new_recommendations' => $counts['new'] ?? 0,
+			'open_recommendations' => ($counts['new'] ?? 0) + ($counts['to_review'] ?? 0) + ($counts['accepted'] ?? 0),
+			'top_recommendations' => $this->recommendations->top($project->id, 3),
+		];
 	}
 
 	/**

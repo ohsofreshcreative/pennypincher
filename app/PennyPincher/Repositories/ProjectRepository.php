@@ -14,6 +14,7 @@ class ProjectRepository
 	public const EDITABLE = [
 		'name', 'platform', 'currency', 'timezone', 'monthly_budget_micros', 'website_url', 'landing_page_url',
 		'business_description', 'target_customer', 'min_project_value_micros', 'max_project_value_micros', 'status',
+		'business_context', 'dataforseo_monthly_limit',
 	];
 
 	public function __construct(private Db $db)

@@ -10,7 +10,7 @@ namespace App\PennyPincher\Domain\Audit;
 final class RuleRegistry
 {
 	/** Zmieniaj przy każdej zmianie reguł lub progów – zapisywane przy każdym audycie. */
-	public const VERSION = '1.0';
+	public const VERSION = '1.1';
 
 	public const RULES = [
 		Rules\MicroConversionAsPrimary::class,
@@ -24,6 +24,7 @@ final class RuleRegistry
 		Rules\MonthlyPacingForecast::class,
 		Rules\DailyBudgetsExceedMonthly::class,
 		Rules\NoCampaignData::class,
+		Rules\NoActivity::class,
 		Rules\NoApiConnection::class,
 		Rules\StaleSync::class,
 		Rules\ConnectionProblem::class,

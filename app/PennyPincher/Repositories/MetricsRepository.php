@@ -176,7 +176,7 @@ class MetricsRepository
 
 			$rows = $this->db->select(
 				sprintf(
-					"SELECT m.date_from AS date, SUM(m.cost_micros) AS cost_micros, SUM(m.clicks) AS clicks, SUM(m.conversions) AS conversions
+					"SELECT m.date_from AS date, SUM(m.cost_micros) AS cost_micros, SUM(m.clicks) AS clicks, SUM(m.impressions) AS impressions, SUM(m.conversions) AS conversions
 					FROM %s m WHERE m.project_id = ? AND m.granularity = 'day' AND (%s)%s GROUP BY m.date_from",
 					$this->db->table('campaign_metrics'),
 					$condition,
@@ -203,6 +203,7 @@ class MetricsRepository
 				'date' => $key,
 				'cost_micros' => isset($row['cost_micros']) ? (int) $row['cost_micros'] : ($apiDay ? 0 : null),
 				'clicks' => isset($row['clicks']) ? (int) $row['clicks'] : ($apiDay ? 0 : null),
+				'impressions' => isset($row['impressions']) ? (int) $row['impressions'] : ($apiDay ? 0 : null),
 				'conversions' => isset($row['conversions']) ? (float) $row['conversions'] : ($apiDay ? 0.0 : null),
 			];
 		}
@@ -513,6 +514,139 @@ class MetricsRepository
 			], $rows),
 			'total_cost_micros' => $total === null ? null : (int) $total,
 		];
+	}
+
+	/**
+	 * Wszystkie wyszukiwane hasła z sumami w okresie (do analiz) – posortowane po koszcie, z limitem.
+	 *
+	 * @return array<int, array{id: int, term: string, campaign_id: int, ad_group_id: ?int, keyword_text: ?string, match_type: ?string, added_excluded: ?string, impressions: int, clicks: int, cost_micros: int, conversions: ?float}>
+	 */
+	public function searchTermStats(int $projectId, ResolvedPeriods $resolved, int $limit = 5000): array
+	{
+		if ($resolved->isEmpty()) {
+			return [];
+		}
+
+		[$condition, $params] = $this->condition($resolved, 'm');
+
+		$rows = $this->db->select(
+			sprintf(
+				'SELECT st.id, st.term, st.campaign_id, st.ad_group_id, st.keyword_text, st.match_type, st.added_excluded,
+					agg.impressions, agg.clicks, agg.cost_micros, agg.conversions
+				FROM (
+					SELECT m.search_term_id, SUM(m.impressions) AS impressions, SUM(m.clicks) AS clicks, SUM(m.cost_micros) AS cost_micros, SUM(m.conversions) AS conversions
+					FROM %s m WHERE m.project_id = ? AND (%s) GROUP BY m.search_term_id
+				) agg
+				INNER JOIN %s st ON st.id = agg.search_term_id AND st.project_id = ?
+				ORDER BY agg.cost_micros DESC LIMIT %d',
+				$this->db->table('search_term_metrics'),
+				$condition,
+				$this->db->table('search_terms'),
+				$limit
+			),
+			[$projectId, ...$params, $projectId]
+		);
+
+		return array_map(fn ($row) => [
+			'id' => (int) $row['id'],
+			'term' => (string) $row['term'],
+			'campaign_id' => (int) $row['campaign_id'],
+			'ad_group_id' => $row['ad_group_id'] === null ? null : (int) $row['ad_group_id'],
+			'keyword_text' => $row['keyword_text'],
+			'match_type' => $row['match_type'],
+			'added_excluded' => $row['added_excluded'],
+			'impressions' => (int) $row['impressions'],
+			'clicks' => (int) $row['clicks'],
+			'cost_micros' => (int) $row['cost_micros'],
+			'conversions' => $row['conversions'] === null ? null : (float) $row['conversions'],
+		], $rows);
+	}
+
+	/**
+	 * Słowa kluczowe z sumami w okresie (tylko te z danymi).
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function keywordStats(int $projectId, ResolvedPeriods $resolved, int $limit = 5000): array
+	{
+		if ($resolved->isEmpty()) {
+			return [];
+		}
+
+		[$condition, $params] = $this->condition($resolved, 'm');
+
+		$rows = $this->db->select(
+			sprintf(
+				'SELECT k.id, k.text, k.match_type, k.status, k.campaign_id, k.ad_group_id, k.quality_score,
+					agg.impressions, agg.clicks, agg.cost_micros, agg.conversions
+				FROM (
+					SELECT m.keyword_id, SUM(m.impressions) AS impressions, SUM(m.clicks) AS clicks, SUM(m.cost_micros) AS cost_micros, SUM(m.conversions) AS conversions
+					FROM %s m WHERE m.project_id = ? AND (%s) GROUP BY m.keyword_id
+				) agg
+				INNER JOIN %s k ON k.id = agg.keyword_id AND k.project_id = ?
+				ORDER BY agg.cost_micros DESC LIMIT %d',
+				$this->db->table('keyword_metrics'),
+				$condition,
+				$this->db->table('keywords'),
+				$limit
+			),
+			[$projectId, ...$params, $projectId]
+		);
+
+		return array_map(fn ($row) => [
+			'id' => (int) $row['id'],
+			'text' => (string) $row['text'],
+			'match_type' => $row['match_type'],
+			'status' => $row['status'],
+			'campaign_id' => (int) $row['campaign_id'],
+			'ad_group_id' => $row['ad_group_id'] === null ? null : (int) $row['ad_group_id'],
+			'quality_score' => $row['quality_score'] === null ? null : (int) $row['quality_score'],
+			'impressions' => (int) $row['impressions'],
+			'clicks' => (int) $row['clicks'],
+			'cost_micros' => (int) $row['cost_micros'],
+			'conversions' => $row['conversions'] === null ? null : (float) $row['conversions'],
+		], $rows);
+	}
+
+	/**
+	 * Wszystkie słowa kluczowe projektu (także bez danych w okresie) – do sprawdzania pokrycia fraz.
+	 *
+	 * @return array<int, array{id: int, text: string, match_type: ?string, status: ?string, campaign_id: int, ad_group_id: ?int}>
+	 */
+	public function allKeywords(int $projectId): array
+	{
+		return array_map(fn ($row) => [
+			'id' => (int) $row['id'],
+			'text' => (string) $row['text'],
+			'match_type' => $row['match_type'],
+			'status' => $row['status'],
+			'campaign_id' => (int) $row['campaign_id'],
+			'ad_group_id' => $row['ad_group_id'] === null ? null : (int) $row['ad_group_id'],
+		], $this->db->select('SELECT id, text, match_type, status, campaign_id, ad_group_id FROM ' . $this->db->table('keywords') . ' WHERE project_id = ?', [$projectId]));
+	}
+
+	/**
+	 * @return array<int, array{id: int, name: string, campaign_id: int, status: ?string}>
+	 */
+	public function adGroups(int $projectId): array
+	{
+		$groups = [];
+
+		foreach ($this->db->select('SELECT id, name, campaign_id, status FROM ' . $this->db->table('ad_groups') . ' WHERE project_id = ?', [$projectId]) as $row) {
+			$groups[(int) $row['id']] = ['id' => (int) $row['id'], 'name' => (string) $row['name'], 'campaign_id' => (int) $row['campaign_id'], 'status' => $row['status']];
+		}
+
+		return $groups;
+	}
+
+	/**
+	 * Słowa wykluczające zsynchronizowane z Google Ads.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function negativeKeywords(int $projectId): array
+	{
+		return $this->db->select('SELECT id, level, campaign_id, ad_group_id, shared_set_name, text, normalized, match_type FROM ' . $this->db->table('negative_keywords') . ' WHERE project_id = ?', [$projectId]);
 	}
 
 	public function hasAnyData(int $projectId): bool

@@ -29,4 +29,21 @@
       </div>
     @endif
   </form>
+
+  <form method="post" action="{{ AppUrl::project($project->id, 'settings/context') }}" id="kontekst" class="pp-card max-w-4xl scroll-mt-24" novalidate>
+    <x-pp.nonce />
+    <div class="pp-card-header">
+      <h2 class="pp-card-title">Kontekst biznesowy</h2>
+      <p class="text-[13px] text-ink-mute">Używany w Budget Leaks, rekomendacjach i ocenie słów kluczowych</p>
+    </div>
+    <div class="p-5 sm:p-6">
+      @include('app.partials.context-fields', ['disabled' => ! $canEdit, 'errors' => $contextErrors ?? [], 'old' => $contextOld ?? []])
+    </div>
+    @if ($canEdit)
+      <div class="flex flex-wrap items-center gap-3 border-t border-line px-5 py-4 sm:px-6">
+        <x-pp.button>Zapisz kontekst</x-pp.button>
+        <a href="{{ AppUrl::project($project->id, 'conversions') }}" class="text-sm font-semibold text-mint hover:underline">Klasyfikacja konwersji →</a>
+      </div>
+    @endif
+  </form>
 @endsection

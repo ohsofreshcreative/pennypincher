@@ -48,6 +48,19 @@ class AuditRepository
 		return $row ? $this->decodeRun($row) : null;
 	}
 
+	/**
+	 * Najnowszy audyt dokładnie tego okresu (te same daty) – audyty różnych okresów się nie nadpisują.
+	 */
+	public function latestRunForPeriod(int $projectId, string $from, string $to): ?array
+	{
+		$row = $this->db->first(
+			'SELECT * FROM ' . $this->db->table('audit_runs') . ' WHERE project_id = ? AND date_from = ? AND date_to = ? ORDER BY id DESC LIMIT 1',
+			[$projectId, $from, $to]
+		);
+
+		return $row ? $this->decodeRun($row) : null;
+	}
+
 	public function findRun(int $projectId, int $runId): ?array
 	{
 		$row = $this->db->first('SELECT * FROM ' . $this->db->table('audit_runs') . ' WHERE id = ? AND project_id = ?', [$runId, $projectId]);

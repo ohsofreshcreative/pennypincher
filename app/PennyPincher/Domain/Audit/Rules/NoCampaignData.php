@@ -25,7 +25,8 @@ final class NoCampaignData extends BaseRule
 
 	public function evaluate(AuditContext $context): array
 	{
-		if ($context->hasCampaignData()) {
+		// Okres pokryty danymi, ale bez aktywności, to nie brak danych (zgłasza to DQ008, bez kary).
+		if ($context->hasCampaignData() || in_array($context->dataState(), ['no_activity', 'partial', 'complete'], true)) {
 			return [];
 		}
 
@@ -34,7 +35,7 @@ final class NoCampaignData extends BaseRule
 			'Brak danych o kampaniach w okresie audytu',
 			$this->description() . ' Większość reguł nie może zostać sprawdzona, dlatego Audit Score nie jest wyliczany.',
 			[['Okres audytu', Format::period($context->range->fromString(), $context->range->toString())], ['Kampanie w projekcie', (string) count($context->campaigns)]],
-			'Połącz konto Google Ads i uruchom synchronizację albo zaimportuj raport kampanii obejmujący ostatnie 30 dni.',
+			'Połącz konto Google Ads i uruchom synchronizację albo zaimportuj raport kampanii obejmujący wybrany okres.',
 			variant: 'no_data',
 			penalty: (float) Dimension::Data->maxPoints(),
 		)];

@@ -26,6 +26,7 @@ class DashboardController extends Controller
 			'pageTitle' => 'Przegląd',
 			'section' => 'overview',
 			'health' => $this->dashboard->health($project),
+			'optimization' => $this->dashboard->optimization($project),
 		] + $this->dashboard->build($project, $range));
 	}
 }

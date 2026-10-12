@@ -45,13 +45,26 @@ Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac
   ze stałymi `ID/NAME/DESCRIPTION/CATEGORY/DIMENSION`), wpis w `RuleRegistry::RULES`, podbicie `RuleRegistry::VERSION`,
   test w `tests/Unit/AuditRulesTest.php`. Reguły są deterministyczne i nie czytają bazy (dane dostarcza `AuditContextBuilder`).
   Brak danych ≠ zero; przy niepewnych danych reguła milczy albo zgłasza problem jakości danych.
+- Moduły analizy (`docs/ARCHITECTURE.md` → „Okres analizy”, „Moduły analizy”): wszystko liczone dla `AnalysisPeriod`
+  (presety lub własny zakres) – nie zakładaj „ostatnich 30 dni”. Budget Leaks = reguły `BLxxx` w `Domain/Leaks/LeakDetector`
+  (pewność z `Statistics`, brak konwersji przy małej próbie ≠ strata, oszczędności tylko jako SZACUNEK i przez
+  `SavingsEstimate` – bez sumowania nakładających się problemów). Rekomendacje: `RecommendationGenerator` (temat →
+  odcisk niezależny od okresu) + `RecommendationService` (status, notatka, historia, nieaktualność – nigdy nie nadpisuj
+  decyzji użytkownika). Opportunity Score: wagi tylko w `OpportunityScore::WEIGHTS`, brak danych = 0 pkt, nigdy
+  wartości zastępcze. Konwersje: metryki Google i biznesowe (`ConversionBreakdown`) są osobne; nie wymyślaj potwierdzonych
+  leadów, nie rozdzielaj konwersji proporcjonalnie, nie sumuj konta z kampaniami. Kontekst biznesowy to dane projektu
+  (`BusinessContext`) – nigdy nie wpisuj danych konkretnego klienta do kodu.
+- DataForSEO (`docs/DATAFORSEO.md`): tylko przez `Infrastructure/DataForSeo` (hosty DataForSEO, Basic Auth z
+  `PP_DATAFORSEO_LOGIN/PASSWORD`). Płatne zapytania wyłącznie jako zadania w `pp_dataforseo_tasks` zlecone po zgodzie
+  użytkownika i w limicie – nigdy z widoku, testu ani automatycznie; w testach wyłącznie atrapa `pre_http_request`.
+  Nowy endpoint: wpis w `DataForSeoClient::ESTIMATES`, parser, test; pola sprawdź w dokumentacji, nie zgaduj.
 - Wdrożenie (`docs/DEPLOYMENT.md`): tylko `scripts/deploy.sh` (najpierw `--check`), wyłącznie za zgodą użytkownika; nigdy
   `deploy/deploy-db.sh` ani kopiowanie lokalnej bazy na produkcję; produkcja nie jest środowiskiem developerskim.
   Sekrety (`PP_*`, hasła) tylko w `wp-config.php` serwera / `scripts/deploy.env` (ignorowany) – nigdy w repozytorium ani czacie.
 - Testy: `wp eval-file tests/run.php` (wszystkie; integracyjne w wycofywanej transakcji) albo
   `php tests/run.php unit` (bez WordPressa); filtr: `tests/run.php all GoogleAds`. Komendy: `wp acorn pp:migrate`,
   `pp:organization:create`, `pp:import`, `pp:imports:prune`, `pp:sync:work`, `pp:sync {projekt}`, `pp:audit {projekt}`,
-  `pp:key:generate`, `pp:google-ads:check`, `pp:google-ads:diagnose`.
+  `pp:analyze {projekt} --period=`, `pp:key:generate`, `pp:google-ads:check`, `pp:google-ads:diagnose`, `pp:dataforseo:check`.
 - Dla zadań dotyczących aplikacji `/app/` wolno uruchamiać `yarn build` i sprawdzać widoki w przeglądarce
   (wymaga tego definicja ukończenia etapów Penny Pincher). Commit nadal wykonuje użytkownik.
 

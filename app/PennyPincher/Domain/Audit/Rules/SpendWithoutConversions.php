@@ -10,7 +10,7 @@ use App\PennyPincher\Support\Format;
 
 /**
  * PF004: kampania wydaje budżet, ale nie przynosi żadnych konwersji.
- * Próg: większy z 100 jednostek waluty i 10% budżetu miesięcznego; krytyczne od 25% budżetu.
+ * Próg: większy z 100 jednostek waluty i 10% budżetu okresu; krytyczne od 25% budżetu okresu.
  */
 final class SpendWithoutConversions extends BaseRule
 {
@@ -28,7 +28,8 @@ final class SpendWithoutConversions extends BaseRule
 
 	public function evaluate(AuditContext $context): array
 	{
-		$budget = $context->monthlyBudgetMicros;
+		// Budżet dla analizowanego okresu (budżet miesięczny × dni / 30,4).
+		$budget = $context->monthlyBudgetMicros ? (int) round($context->monthlyBudgetMicros * $context->range->days() / 30.4) : null;
 		$threshold = max(self::MIN_SPEND_MICROS, $budget ? (int) round($budget * 0.1) : 0);
 		$findings = [];
 
@@ -52,7 +53,7 @@ final class SpendWithoutConversions extends BaseRule
 					['Wydatki w okresie audytu', self::money((int) $cost, $context->currency)],
 					['Kliknięcia', Format::number($current['clicks'] ?? null)],
 					['Konwersje', '0'],
-					$budget ? ['Udział w budżecie miesięcznym', self::percent($cost / $budget * 100)] : null,
+					$budget ? ['Udział w budżecie okresu', self::percent($cost / $budget * 100)] : null,
 				])),
 				'Sprawdź, czy konwersje tej kampanii są mierzone (cele konwersji kampanii), przejrzyj wyszukiwane hasła i rozważ ograniczenie budżetu do czasu wyjaśnienia.',
 				'campaign',

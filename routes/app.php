@@ -7,15 +7,20 @@
  * (/app/projects/{project}/…), a dostęp jest sprawdzany w kontrolerze przez AccessService.
  */
 
+use App\PennyPincher\Http\Controllers\AnalysisController;
 use App\PennyPincher\Http\Controllers\AuditsController;
 use App\PennyPincher\Http\Controllers\AuthController;
+use App\PennyPincher\Http\Controllers\BudgetLeaksController;
 use App\PennyPincher\Http\Controllers\CampaignsController;
+use App\PennyPincher\Http\Controllers\ConversionsController;
 use App\PennyPincher\Http\Controllers\DashboardController;
 use App\PennyPincher\Http\Controllers\GoogleAdsController;
 use App\PennyPincher\Http\Controllers\HomeController;
 use App\PennyPincher\Http\Controllers\ImportsController;
+use App\PennyPincher\Http\Controllers\KeywordOpportunitiesController;
 use App\PennyPincher\Http\Controllers\OrganizationsController;
 use App\PennyPincher\Http\Controllers\ProjectsController;
+use App\PennyPincher\Http\Controllers\RecommendationsController;
 use App\PennyPincher\Http\Controllers\SearchTermsController;
 use App\PennyPincher\Http\Controllers\SettingsController;
 use App\PennyPincher\Http\Middleware\Authenticate;
@@ -67,12 +72,27 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('audits', [AuditsController::class, 'store']);
 			Route::get('audits/{run}', [AuditsController::class, 'show'])->whereNumber('run');
 			Route::post('audits/findings/{finding}/status', [AuditsController::class, 'updateStatus'])->whereNumber('finding');
+			Route::post('google-ads/backfill', [GoogleAdsController::class, 'backfill']);
+			Route::post('analysis', [AnalysisController::class, 'store']);
+			Route::get('budget-leaks', [BudgetLeaksController::class, 'index'])->name('pp.budget-leaks');
+			Route::post('budget-leaks/{leak}/status', [BudgetLeaksController::class, 'updateStatus'])->whereNumber('leak');
+			Route::get('recommendations', [RecommendationsController::class, 'index'])->name('pp.recommendations');
+			Route::post('recommendations/{recommendation}/status', [RecommendationsController::class, 'updateStatus'])->whereNumber('recommendation');
+			Route::post('recommendations/{recommendation}/note', [RecommendationsController::class, 'updateNote'])->whereNumber('recommendation');
+			Route::post('recommendations/{recommendation}/obsolete', [RecommendationsController::class, 'obsolete'])->whereNumber('recommendation');
+			Route::get('keywords', [KeywordOpportunitiesController::class, 'index'])->name('pp.keywords');
+			Route::post('keywords/dataforseo/test', [KeywordOpportunitiesController::class, 'testDataForSeo']);
+			Route::post('keywords/dataforseo', [KeywordOpportunitiesController::class, 'requestDataForSeo']);
+			Route::post('keywords/dataforseo/limit', [KeywordOpportunitiesController::class, 'updateLimit']);
+			Route::get('conversions', [ConversionsController::class, 'index'])->name('pp.conversions');
+			Route::post('conversions', [ConversionsController::class, 'update']);
+			Route::post('settings/context', [SettingsController::class, 'updateContext']);
 			Route::get('settings', [SettingsController::class, 'edit'])->name('pp.settings');
 			Route::post('settings', [SettingsController::class, 'update']);
 		});
 
 		// Skróty bez identyfikatora projektu – przekierowują do bieżącego projektu.
-		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', ['campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits']);
+		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', ['campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits', 'budget-leaks', 'recommendations', 'keywords', 'conversions']);
 
 		Route::any('{any}', [HomeController::class, 'notFound'])->where('any', '.*');
 	});

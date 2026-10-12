@@ -14,6 +14,8 @@ final class AuditScore
 	/** Minimalne pokrycie okresu audytu danymi kampanii, od którego liczymy wynik. */
 	public const MIN_COVERAGE = 0.5;
 
+	public const NO_ACTIVITY = 'W wybranym okresie kampanie nie generowały wydatków ani wyświetleń. Wybierz wcześniejszy okres, aby przeanalizować wyniki historyczne.';
+
 	/**
 	 * @param array<int, array{severity: string, penalty: float|string, score_dimension: string, status?: string}> $findings
 	 * @return array{score: ?int, reason: ?string, dimensions: array<string, array{label: string, max: int, penalty: float, points: float, findings: int}>}
@@ -56,8 +58,12 @@ final class AuditScore
 	 */
 	public static function unavailableReason(AuditContext $context): ?string
 	{
+		if ($context->dataState() === 'no_activity') {
+			return self::NO_ACTIVITY;
+		}
+
 		if (! $context->hasCampaignData()) {
-			return 'Brak danych o kampaniach z ostatnich 30 dni – połącz Google Ads albo zaimportuj raport kampanii.';
+			return 'Brak danych o kampaniach w wybranym okresie – połącz Google Ads albo zaimportuj raport kampanii.';
 		}
 
 		$coverage = $context->coverage;

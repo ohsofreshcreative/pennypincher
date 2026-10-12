@@ -174,6 +174,20 @@ class GoogleAdsController extends Controller
 
 	public function syncNow(int $project)
 	{
+		return $this->enqueueSync($project, 'incremental');
+	}
+
+	/**
+	 * Ponowne pobranie pełnej historii (12 miesięcy) – np. po dodaniu nowych danych (konwersje per kampania, wykluczenia).
+	 * Dane z API w oknach są zastępowane nowymi; importy plików pozostają bez zmian.
+	 */
+	public function backfill(int $project)
+	{
+		return $this->enqueueSync($project, 'backfill');
+	}
+
+	private function enqueueSync(int $project, string $type)
+	{
 		$project = $this->access->project($project, Ability::UpdateProject);
 		$back = AppUrl::project($project->id, 'google-ads');
 		$connection = $this->connections->currentForProject($project->id);
@@ -182,7 +196,7 @@ class GoogleAdsController extends Controller
 			return $this->redirect($back, 'Synchronizacja wymaga aktywnego połączenia z kontem reklamowym.', 'error');
 		}
 
-		$run = $this->sync->enqueue($connection, 'incremental', $this->access->userId());
+		$run = $this->sync->enqueue($connection, $type, $this->access->userId());
 
 		// Część pracy wykonujemy od razu (krótko), resztę dokończy zadanie cron – żądanie HTTP nie może trwać długo.
 		if (in_array($run['status'], [SyncRunRepository::QUEUED, SyncRunRepository::RUNNING], true) && $run['next_attempt_at'] === null) {

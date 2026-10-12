@@ -8,6 +8,10 @@
         ['campaigns', 'Kampanie', 'campaigns', AppUrl::project($project->id, 'campaigns')],
         ['search-terms', 'Wyszukiwane hasła', 'search', AppUrl::project($project->id, 'search-terms')],
         ['audits', 'Audyt', 'audit', AppUrl::project($project->id, 'audits')],
+        ['budget-leaks', 'Budget Leaks', 'leak', AppUrl::project($project->id, 'budget-leaks')],
+        ['recommendations', 'Rekomendacje', 'idea', AppUrl::project($project->id, 'recommendations')],
+        ['keywords', 'Keyword Opportunities', 'keyword', AppUrl::project($project->id, 'keywords')],
+        ['conversions', 'Konwersje', 'target', AppUrl::project($project->id, 'conversions')],
         ['google-ads', 'Google Ads', 'link', AppUrl::project($project->id, 'google-ads')],
         ['imports', 'Importy', 'import', AppUrl::project($project->id, 'imports')],
       ]
@@ -91,8 +95,6 @@
         <div class="mt-6 px-3 pb-6">
           <p class="text-[12px] font-medium text-sidebar-text/60">W kolejnych etapach</p>
           <ul class="mt-2 space-y-1.5 text-[13.5px] text-sidebar-text/45">
-            <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Wycieki budżetu</li>
-            <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Rekomendacje</li>
             <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Planer kampanii</li>
           </ul>
         </div>
@@ -137,6 +139,9 @@
 
           @isset($range)
             <x-pp.date-range :range="$range" />
+          @endisset
+          @isset($period)
+            <x-pp.period-select :period="$period" />
           @endisset
         </div>
       </header>

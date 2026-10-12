@@ -94,4 +94,34 @@ final class Gaql
 			metrics.conversions_value, metrics.all_conversions_value'
 			. " FROM customer WHERE segments.date BETWEEN '{$from}' AND '{$to}'";
 	}
+
+	/**
+	 * Konwersje per kampania i działanie konwersji (dzień). Z segmentem conversion_action dozwolone są tylko metryki konwersji.
+	 */
+	public static function campaignConversionMetrics(string $from, string $to): string
+	{
+		return 'SELECT campaign.id, segments.conversion_action, segments.date, metrics.conversions, metrics.all_conversions, metrics.conversions_value'
+			. " FROM campaign WHERE segments.date BETWEEN '{$from}' AND '{$to}'";
+	}
+
+	public static function campaignNegativeKeywords(): string
+	{
+		return "SELECT campaign.id, campaign_criterion.criterion_id, campaign_criterion.keyword.text, campaign_criterion.keyword.match_type, campaign_criterion.negative
+			FROM campaign_criterion
+			WHERE campaign_criterion.type = 'KEYWORD' AND campaign_criterion.negative = TRUE AND campaign.status != 'REMOVED'";
+	}
+
+	public static function adGroupNegativeKeywords(): string
+	{
+		return "SELECT campaign.id, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type
+			FROM ad_group_criterion
+			WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group_criterion.negative = TRUE AND ad_group_criterion.status != 'REMOVED'";
+	}
+
+	public static function sharedNegativeKeywords(): string
+	{
+		return "SELECT shared_set.id, shared_set.name, shared_set.type, shared_criterion.criterion_id, shared_criterion.keyword.text, shared_criterion.keyword.match_type
+			FROM shared_criterion
+			WHERE shared_set.type IN ('NEGATIVE_KEYWORDS', 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS') AND shared_set.status = 'ENABLED'";
+	}
 }

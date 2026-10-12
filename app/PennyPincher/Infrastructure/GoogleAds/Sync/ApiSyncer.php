@@ -20,14 +20,22 @@ use App\PennyPincher\Infrastructure\Import\Writers\ReportWriter;
  */
 class ApiSyncer
 {
-	public const STRUCTURE_STEPS = ['campaigns', 'locations', 'ad_groups', 'keywords', 'conversion_actions'];
+	public const STRUCTURE_STEPS = ['campaigns', 'locations', 'ad_groups', 'keywords', 'conversion_actions', 'negative_keywords'];
 
+	/** Krok metryk → zbiór danych w `data_coverage`. */
 	public const METRIC_STEPS = [
 		'campaign_metrics' => 'campaigns',
 		'keyword_metrics' => 'keywords',
 		'search_term_metrics' => 'search_terms',
 		'conversion_metrics' => 'conversions',
+		'campaign_conversion_metrics' => 'conversions_by_campaign',
 	];
+
+	/**
+	 * Kroki uzupełniające: odrzucone zapytanie (INVALID_ARGUMENT) nie zatrzymuje synchronizacji – krok jest
+	 * pomijany i opisany w dzienniku przebiegu. Dane podstawowe (kampanie, metryki) pozostają obowiązkowe.
+	 */
+	public const OPTIONAL_STEPS = ['negative_keywords', 'campaign_conversion_metrics'];
 
 	public function __construct(private Db $db, private GoogleAdsClient $client)
 	{
@@ -52,6 +60,8 @@ class ApiSyncer
 			'keyword_metrics' => $this->keywordMetrics($projectId, $syncRunId, $step, $query(Gaql::keywordMetrics($step['from'], $step['to']))),
 			'search_term_metrics' => $this->searchTermMetrics($projectId, $syncRunId, $step, $query(Gaql::searchTermMetrics($step['from'], $step['to']))),
 			'conversion_metrics' => $this->conversionMetrics($projectId, $syncRunId, $step, $query(Gaql::conversionMetrics($step['from'], $step['to']))),
+			'campaign_conversion_metrics' => $this->campaignConversionMetrics($projectId, $syncRunId, $step, $query(Gaql::campaignConversionMetrics($step['from'], $step['to']))),
+			'negative_keywords' => $this->negativeKeywords($projectId, $syncRunId, $query),
 			default => throw new \InvalidArgumentException("Nieznany krok synchronizacji: {$step['type']}"),
 		};
 	}
@@ -420,19 +430,138 @@ class ApiSyncer
 			];
 		}
 
-		return $this->replaceWindow('conversion_metrics', 'conversion_action_id', $projectId, $syncRunId, $step, array_values($records));
+		return $this->replaceWindow('conversion_metrics', 'conversion_action_id', $projectId, $syncRunId, $step, array_values($records), 'conversion_metrics', 'campaign_scope = 0');
+	}
+
+	/**
+	 * Konwersje per kampania i działanie (campaign_scope = id kampanii w aplikacji). Wiersze konta (campaign_scope = 0)
+	 * są zapisywane osobnym krokiem i nigdy nie są sumowane z tymi – to dwa widoki tych samych konwersji.
+	 */
+	private function campaignConversionMetrics(int $projectId, int $syncRunId, array $step, array $rows): int
+	{
+		$campaignIds = $this->campaignIdMap($projectId);
+		$actionIds = [];
+
+		foreach ($this->db->select('SELECT id, external_id FROM ' . $this->db->table('conversion_actions') . ' WHERE project_id = ? AND external_id IS NOT NULL', [$projectId]) as $action) {
+			$actionIds[(string) $action['external_id']] = (int) $action['id'];
+		}
+
+		$records = [];
+		$now = $this->db->now();
+
+		foreach ($rows as $row) {
+			$campaignId = $campaignIds[(string) ($row['campaign']['id'] ?? '')] ?? null;
+			$externalId = preg_match('/conversionActions\/(\d+)$/', (string) ($row['segments']['conversionAction'] ?? ''), $m) ? $m[1] : null;
+			$actionId = $externalId !== null ? ($actionIds[$externalId] ?? null) : null;
+
+			if ($campaignId === null || $actionId === null) {
+				continue;
+			}
+
+			$metrics = $row['metrics'] ?? [];
+			$records[] = [
+				'project_id' => $projectId,
+				'conversion_action_id' => $actionId,
+				'campaign_scope' => $campaignId,
+				'granularity' => 'day',
+				'date_from' => $row['segments']['date'],
+				'date_to' => $row['segments']['date'],
+				'source' => 'api',
+				'conversions' => self::decimal($metrics['conversions'] ?? 0),
+				'view_through_conversions' => null,
+				'all_conversions' => self::decimal($metrics['allConversions'] ?? 0),
+				'conversions_value_micros' => self::micros($metrics['conversionsValue'] ?? 0),
+				'all_conversions_value_micros' => null,
+				'currency' => null,
+				'import_id' => null,
+				'sync_run_id' => $syncRunId,
+				'created_at' => $now,
+				'updated_at' => $now,
+			];
+		}
+
+		return $this->replaceWindow('conversion_metrics', 'conversion_action_id', $projectId, $syncRunId, $step, $records, 'campaign_conversion_metrics', 'campaign_scope > 0');
+	}
+
+	/**
+	 * Słowa wykluczające (kampanie, grupy reklam, listy wspólne) – pełna wymiana w transakcji przy każdej synchronizacji.
+	 */
+	private function negativeKeywords(int $projectId, int $syncRunId, callable $query): int
+	{
+		$campaignIds = $this->campaignIdMap($projectId);
+		$adGroupIds = $this->adGroupIdMap($projectId);
+		$now = $this->db->now();
+		$records = [];
+
+		$add = function (string $level, ?int $campaignId, ?int $adGroupId, ?string $setId, ?string $setName, array $keyword) use (&$records, $projectId, $syncRunId, $now) {
+			$text = trim((string) ($keyword['text'] ?? ''));
+
+			if ($text === '') {
+				return;
+			}
+
+			$normalized = self::normalizeKeyword($text);
+			$key = sha1(implode('|', [$level, $campaignId ?? 0, $adGroupId ?? 0, $setId ?? '', $normalized, $keyword['matchType'] ?? '']));
+			$records[$key] = [
+				'project_id' => $projectId,
+				'natural_key' => $key,
+				'level' => $level,
+				'campaign_id' => $campaignId,
+				'ad_group_id' => $adGroupId,
+				'shared_set_external_id' => $setId,
+				'shared_set_name' => $setName !== null ? mb_substr($setName, 0, 255) : null,
+				'text' => mb_substr($text, 0, 500),
+				'normalized' => mb_substr($normalized, 0, 500),
+				'match_type' => Enums::keywordMatchType($keyword['matchType'] ?? null),
+				'sync_run_id' => $syncRunId,
+				'created_at' => $now,
+				'updated_at' => $now,
+			];
+		};
+
+		foreach ($query(Gaql::campaignNegativeKeywords()) as $row) {
+			$add('campaign', $campaignIds[(string) ($row['campaign']['id'] ?? '')] ?? null, null, null, null, $row['campaignCriterion']['keyword'] ?? []);
+		}
+
+		foreach ($query(Gaql::adGroupNegativeKeywords()) as $row) {
+			$add('ad_group', $campaignIds[(string) ($row['campaign']['id'] ?? '')] ?? null, $adGroupIds[(string) ($row['adGroup']['id'] ?? '')] ?? null, null, null, $row['adGroupCriterion']['keyword'] ?? []);
+		}
+
+		foreach ($query(Gaql::sharedNegativeKeywords()) as $row) {
+			$set = $row['sharedSet'] ?? [];
+			$add(($set['type'] ?? '') === 'ACCOUNT_LEVEL_NEGATIVE_KEYWORDS' ? 'account' : 'shared', null, null, (string) ($set['id'] ?? ''), $set['name'] ?? null, $row['sharedCriterion']['keyword'] ?? []);
+		}
+
+		$this->db->transaction(function () use ($projectId, $records) {
+			$this->db->statement('DELETE FROM ' . $this->db->table('negative_keywords') . ' WHERE project_id = ?', [$projectId]);
+			$this->db->insertMany('negative_keywords', array_values($records), 400);
+		});
+
+		return count($records);
+	}
+
+	/**
+	 * Tekst frazy bez znaków dopasowania (+, [], cudzysłowy), małymi literami, z pojedynczymi spacjami.
+	 */
+	public static function normalizeKeyword(string $text): string
+	{
+		$text = mb_strtolower(trim(str_replace(['+', '[', ']', '"'], ' ', $text)));
+
+		return (string) preg_replace('/\s+/u', ' ', trim($text));
 	}
 
 	/**
 	 * Zastępuje wiersze API w oknie dat i zapisuje pokrycie – jedna transakcja.
 	 */
-	private function replaceWindow(string $table, string $entityColumn, int $projectId, int $syncRunId, array $step, array $records): int
+	private function replaceWindow(string $table, string $entityColumn, int $projectId, int $syncRunId, array $step, array $records, ?string $stepType = null, string $scopeSql = ''): int
 	{
 		$records = self::aggregate($records, $entityColumn);
+		$dataset = self::METRIC_STEPS[$stepType ?? $table];
+		$scope = $scopeSql !== '' ? " AND {$scopeSql}" : '';
 
-		return $this->db->transaction(function () use ($table, $projectId, $syncRunId, $step, $records) {
+		return $this->db->transaction(function () use ($table, $projectId, $syncRunId, $step, $records, $dataset, $scope) {
 			$this->db->statement(
-				"DELETE FROM {$this->db->table($table)} WHERE project_id = ? AND source = 'api' AND granularity = 'day' AND date_from BETWEEN ? AND ?",
+				"DELETE FROM {$this->db->table($table)} WHERE project_id = ? AND source = 'api' AND granularity = 'day' AND date_from BETWEEN ? AND ?{$scope}",
 				[$projectId, $step['from'], $step['to']]
 			);
 
@@ -441,7 +570,7 @@ class ApiSyncer
 			$this->db->statement(
 				"INSERT INTO {$this->db->table('data_coverage')} (project_id, source, dataset, date_from, date_to, sync_run_id, created_at)
 				VALUES (?, 'api', ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE sync_run_id = VALUES(sync_run_id), created_at = VALUES(created_at)",
-				[$projectId, self::METRIC_STEPS[$table], $step['from'], $step['to'], $syncRunId, $this->db->now()]
+				[$projectId, $dataset, $step['from'], $step['to'], $syncRunId, $this->db->now()]
 			);
 
 			return count($records);

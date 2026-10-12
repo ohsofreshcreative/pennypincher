@@ -34,7 +34,17 @@ final class AuditContext
 		public readonly ?int $searchTermsTotalCostMicros,
 		public readonly int $now,
 		public readonly ?string $projectCurrencyMismatch = null,
+		public readonly ?array $activity = null,
 	) {
+	}
+
+	/**
+	 * Stan danych w okresie: no_data (brak danych), no_activity (dane są, ale bez wydatków i wyświetleń),
+	 * partial (dane tylko dla części dni), complete. Null = nieznany (np. kontekst testowy bez aktywności).
+	 */
+	public function dataState(): ?string
+	{
+		return $this->activity['state'] ?? null;
 	}
 
 	public function hasCampaignData(): bool

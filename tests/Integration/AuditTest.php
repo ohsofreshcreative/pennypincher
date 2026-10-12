@@ -28,7 +28,7 @@ class AuditTest extends IntegrationTestCase
 		$this->assertTrue(str_contains($run['score_breakdown']['reason'], 'Brak danych'));
 		$this->assertTrue(in_array('DQ001', $rules, true));
 		$this->assertTrue(in_array('DQ002', $rules, true));
-		$this->assertSame('1.0', $run['rules_version']);
+		$this->assertSame(\App\PennyPincher\Domain\Audit\RuleRegistry::VERSION, $run['rules_version']);
 		$this->assertSame(30, (int) $run['data_quality']['total_days']);
 	}
 
@@ -76,7 +76,7 @@ class AuditTest extends IntegrationTestCase
 		$controller = $this->make(AuditsController::class);
 		wp_set_current_user($bob);
 		$this->assertThrows(NotFound::class, fn () => $controller->show($a['project']->id, $runId));
-		$this->assertThrows(NotFound::class, fn () => $controller->store($a['project']->id));
+		$this->assertThrows(NotFound::class, fn () => $controller->store($a['project']->id, \Illuminate\Http\Request::create('/')));
 
 		wp_set_current_user($member);
 		$this->assertSame(200, $controller->show($a['project']->id, $runId)->getStatusCode(), 'Członek organizacji widzi audyt.');
@@ -141,10 +141,10 @@ class AuditTest extends IntegrationTestCase
 		$controller = $this->make(AuditsController::class);
 
 		wp_set_current_user($outsider);
-		$this->assertThrows(NotFound::class, fn () => $controller->index($setup['project']->id));
+		$this->assertThrows(NotFound::class, fn () => $controller->index($setup['project']->id, \Illuminate\Http\Request::create('/')));
 
 		wp_set_current_user($owner);
-		$response = $controller->store($setup['project']->id);
+		$response = $controller->store($setup['project']->id, \Illuminate\Http\Request::create('/'));
 		$this->assertSame(302, $response->getStatusCode());
 		$this->assertTrue($this->make(AuditRepository::class)->latestRun($setup['project']->id) !== null);
 	}

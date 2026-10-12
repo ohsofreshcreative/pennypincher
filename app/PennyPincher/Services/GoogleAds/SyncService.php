@@ -8,7 +8,8 @@ use App\PennyPincher\Infrastructure\GoogleAds\Sync\ApiSyncer;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Repositories\ProjectRepository;
 use App\PennyPincher\Repositories\SyncRunRepository;
-use App\PennyPincher\Services\AuditService;
+use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
+use App\PennyPincher\Services\Analysis\AnalysisService;
 use DateTimeImmutable;
 use DateTimeZone;
 use Throwable;
@@ -213,10 +214,23 @@ class SyncService
 				}
 
 				$step = $run['steps'][$index];
-				$count = $this->syncer->run($connection, $token, $runId, $step);
+				$skipped = null;
+
+				try {
+					$count = $this->syncer->run($connection, $token, $runId, $step);
+				} catch (GoogleAdsApiException $e) {
+					// Krok uzupełniający odrzucony jako błędne zapytanie – pomijamy go, dane podstawowe synchronizujemy dalej.
+					if ($e->kind !== GoogleAdsApiException::INVALID || ! in_array($step['type'], ApiSyncer::OPTIONAL_STEPS, true)) {
+						throw $e;
+					}
+
+					$count = 0;
+					$skipped = mb_substr($e->getMessage(), 0, 300);
+				}
+
 				$index++;
 				$records += $count;
-				$log[] = ['step' => $step['type'], 'from' => $step['from'] ?? null, 'to' => $step['to'] ?? null, 'records' => $count, 'at' => gmdate('c')];
+				$log[] = array_filter(['step' => $step['type'], 'from' => $step['from'] ?? null, 'to' => $step['to'] ?? null, 'records' => $count, 'skipped' => $skipped, 'at' => gmdate('c')], fn ($value) => $value !== null);
 
 				$this->runs->update($runId, [
 					'step_index' => $index,
@@ -345,10 +359,11 @@ class SyncService
 			$project = $this->projects->findById($projectId);
 
 			if ($project !== null) {
-				app(AuditService::class)->run($project, 'sync');
+				// Audyt + Budget Leaks + słowa kluczowe + rekomendacje dla domyślnego okresu (tylko dane z bazy).
+				app(AnalysisService::class)->run($project, AnalysisPeriod::fromPreset(AnalysisPeriod::DEFAULT, $project->timezone()), 'sync');
 			}
 		} catch (Throwable $e) {
-			error_log('[Penny Pincher] Audyt po synchronizacji nie powiódł się: ' . $e->getMessage());
+			error_log('[Penny Pincher] Analiza po synchronizacji nie powiodła się: ' . $e->getMessage());
 		}
 	}
 }

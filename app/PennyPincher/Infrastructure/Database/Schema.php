@@ -514,4 +514,294 @@ class Schema
 
 		return $statements;
 	}
+
+	/**
+	 * Etap 3: okresy audytu, kontekst biznesowy, klasyfikacja konwersji, wykluczenia z API,
+	 * Budget Leaks, rekomendacje, okazje słów kluczowych i DataForSEO. Wyłącznie zmiany addytywne.
+	 */
+	public static function analysis(Db $db, string $charset): array
+	{
+		$t = fn (string $name) => $db->table($name);
+		$p = $db->wpdb()->prefix;
+		$statements = [];
+
+		$hasColumn = fn (string $table, string $column) => $db->scalar(
+			'SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?',
+			[$t($table), $column]
+		) !== null;
+
+		$hasIndex = fn (string $table, string $index) => $db->scalar(
+			'SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?',
+			[$t($table), $index]
+		) !== null;
+
+		foreach (['business_context' => 'LONGTEXT NULL', 'dataforseo_monthly_limit' => 'DECIMAL(10,2) NULL'] as $column => $definition) {
+			if (! $hasColumn('projects', $column)) {
+				$statements[] = "ALTER TABLE {$t('projects')} ADD COLUMN {$column} {$definition}";
+			}
+		}
+
+		foreach ([
+			'business_class' => 'VARCHAR(20) NULL',
+			'business_goal' => 'TINYINT(1) NULL',
+			'classified_by' => 'BIGINT UNSIGNED NULL',
+			'classified_at' => 'DATETIME NULL',
+		] as $column => $definition) {
+			if (! $hasColumn('conversion_actions', $column)) {
+				$statements[] = "ALTER TABLE {$t('conversion_actions')} ADD COLUMN {$column} {$definition}";
+			}
+		}
+
+		if (! $hasColumn('audit_runs', 'range_preset')) {
+			$statements[] = "ALTER TABLE {$t('audit_runs')} ADD COLUMN range_preset VARCHAR(20) NULL AFTER date_to";
+		}
+
+		if (! $hasIndex('audit_runs', 'pp_audit_period')) {
+			$statements[] = "ALTER TABLE {$t('audit_runs')} ADD KEY pp_audit_period (project_id, date_from, date_to)";
+		}
+
+		// Słowa wykluczające z Google Ads (kampania, grupa reklam, listy wspólne) – tylko odczyt.
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('negative_keywords')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			project_id BIGINT UNSIGNED NOT NULL,
+			natural_key CHAR(40) NOT NULL,
+			level VARCHAR(20) NOT NULL,
+			campaign_id BIGINT UNSIGNED NULL,
+			ad_group_id BIGINT UNSIGNED NULL,
+			shared_set_external_id VARCHAR(64) NULL,
+			shared_set_name VARCHAR(255) NULL,
+			text VARCHAR(500) NOT NULL,
+			normalized VARCHAR(500) NOT NULL,
+			match_type VARCHAR(20) NULL,
+			sync_run_id BIGINT UNSIGNED NULL,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY pp_negative_key (project_id, natural_key),
+			KEY pp_negative_project (project_id, level),
+			CONSTRAINT {$p}pp_fk_negative_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('analysis_runs')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			project_id BIGINT UNSIGNED NOT NULL,
+			type VARCHAR(30) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			date_from DATE NOT NULL,
+			date_to DATE NOT NULL,
+			range_preset VARCHAR(20) NULL,
+			summary LONGTEXT NULL,
+			trigger_type VARCHAR(20) NOT NULL,
+			requested_by BIGINT UNSIGNED NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_analysis_project (project_id, type, date_from, date_to),
+			CONSTRAINT {$p}pp_fk_analysis_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('budget_leaks')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			analysis_run_id BIGINT UNSIGNED NOT NULL,
+			project_id BIGINT UNSIGNED NOT NULL,
+			rule_id VARCHAR(20) NOT NULL,
+			category VARCHAR(30) NOT NULL,
+			fingerprint CHAR(40) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			entity_type VARCHAR(30) NULL,
+			entity_id BIGINT UNSIGNED NULL,
+			campaign_id BIGINT UNSIGNED NULL,
+			ad_group_id BIGINT UNSIGNED NULL,
+			subject VARCHAR(500) NULL,
+			cost_micros BIGINT NULL,
+			clicks BIGINT NULL,
+			conversions DECIMAL(18,4) NULL,
+			valuable_conversions DECIMAL(18,4) NULL,
+			confidence VARCHAR(10) NOT NULL,
+			priority VARCHAR(10) NOT NULL,
+			priority_score TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			savings_micros BIGINT NULL,
+			savings_group VARCHAR(80) NULL,
+			reason TEXT NOT NULL,
+			action TEXT NOT NULL,
+			evidence LONGTEXT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'new',
+			status_changed_by BIGINT UNSIGNED NULL,
+			status_changed_at DATETIME NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_leak_run (analysis_run_id, priority_score),
+			KEY pp_leak_fingerprint (project_id, fingerprint),
+			CONSTRAINT {$p}pp_fk_leak_run FOREIGN KEY (analysis_run_id) REFERENCES {$t('analysis_runs')} (id) ON DELETE CASCADE,
+			CONSTRAINT {$p}pp_fk_leak_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('negative_suggestions')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			analysis_run_id BIGINT UNSIGNED NOT NULL,
+			project_id BIGINT UNSIGNED NOT NULL,
+			fingerprint CHAR(40) NOT NULL,
+			phrase VARCHAR(255) NOT NULL,
+			reason_code VARCHAR(30) NOT NULL,
+			reason TEXT NOT NULL,
+			related_terms LONGTEXT NULL,
+			cost_micros BIGINT NULL,
+			clicks BIGINT NULL,
+			conversions DECIMAL(18,4) NULL,
+			confidence VARCHAR(10) NOT NULL,
+			level VARCHAR(20) NOT NULL,
+			campaign_id BIGINT UNSIGNED NULL,
+			match_type VARCHAR(20) NOT NULL,
+			already_excluded TINYINT(1) NOT NULL DEFAULT 0,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_negsug_run (analysis_run_id),
+			KEY pp_negsug_fingerprint (project_id, fingerprint),
+			CONSTRAINT {$p}pp_fk_negsug_run FOREIGN KEY (analysis_run_id) REFERENCES {$t('analysis_runs')} (id) ON DELETE CASCADE,
+			CONSTRAINT {$p}pp_fk_negsug_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('keyword_opportunities')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			analysis_run_id BIGINT UNSIGNED NOT NULL,
+			project_id BIGINT UNSIGNED NOT NULL,
+			fingerprint CHAR(40) NOT NULL,
+			phrase VARCHAR(255) NOT NULL,
+			sources VARCHAR(60) NOT NULL,
+			score TINYINT UNSIGNED NOT NULL,
+			score_breakdown LONGTEXT NULL,
+			confidence VARCHAR(10) NOT NULL,
+			intent VARCHAR(20) NULL,
+			search_volume INT UNSIGNED NULL,
+			cpc_micros BIGINT NULL,
+			cpc_currency CHAR(3) NULL,
+			competition VARCHAR(20) NULL,
+			suggested_campaign_id BIGINT UNSIGNED NULL,
+			suggested_ad_group_id BIGINT UNSIGNED NULL,
+			reason TEXT NOT NULL,
+			evidence LONGTEXT NULL,
+			data_updated_at DATETIME NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_opp_run (analysis_run_id, score),
+			KEY pp_opp_fingerprint (project_id, fingerprint),
+			CONSTRAINT {$p}pp_fk_opp_run FOREIGN KEY (analysis_run_id) REFERENCES {$t('analysis_runs')} (id) ON DELETE CASCADE,
+			CONSTRAINT {$p}pp_fk_opp_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('recommendations')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			project_id BIGINT UNSIGNED NOT NULL,
+			fingerprint CHAR(40) NOT NULL,
+			source VARCHAR(30) NOT NULL,
+			type VARCHAR(40) NOT NULL,
+			title VARCHAR(255) NOT NULL,
+			description TEXT NOT NULL,
+			rationale TEXT NOT NULL,
+			evidence LONGTEXT NULL,
+			action TEXT NOT NULL,
+			campaign_id BIGINT UNSIGNED NULL,
+			ad_group_id BIGINT UNSIGNED NULL,
+			priority VARCHAR(10) NOT NULL,
+			priority_score TINYINT UNSIGNED NOT NULL DEFAULT 0,
+			confidence VARCHAR(10) NOT NULL,
+			impact_micros BIGINT NULL,
+			impact_label VARCHAR(255) NULL,
+			date_from DATE NOT NULL,
+			date_to DATE NOT NULL,
+			status VARCHAR(20) NOT NULL DEFAULT 'new',
+			note TEXT NULL,
+			is_obsolete TINYINT(1) NOT NULL DEFAULT 0,
+			obsolete_reason VARCHAR(255) NULL,
+			last_analysis_run_id BIGINT UNSIGNED NULL,
+			first_seen_at DATETIME NOT NULL,
+			last_seen_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY pp_rec_fingerprint (project_id, fingerprint),
+			KEY pp_rec_list (project_id, is_obsolete, status, priority_score),
+			CONSTRAINT {$p}pp_fk_rec_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('recommendation_events')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			recommendation_id BIGINT UNSIGNED NOT NULL,
+			project_id BIGINT UNSIGNED NOT NULL,
+			user_id BIGINT UNSIGNED NULL,
+			event VARCHAR(20) NOT NULL,
+			from_status VARCHAR(20) NULL,
+			to_status VARCHAR(20) NULL,
+			note TEXT NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_recevent_rec (recommendation_id, created_at),
+			CONSTRAINT {$p}pp_fk_recevent_rec FOREIGN KEY (recommendation_id) REFERENCES {$t('recommendations')} (id) ON DELETE CASCADE,
+			CONSTRAINT {$p}pp_fk_recevent_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		// DataForSEO: zadania w kolejce (płatne – tylko po zgodzie użytkownika), pamięć podręczna odpowiedzi, wyniki.
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('dataforseo_tasks')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			project_id BIGINT UNSIGNED NOT NULL,
+			organization_id BIGINT UNSIGNED NOT NULL,
+			endpoint VARCHAR(120) NOT NULL,
+			payload LONGTEXT NOT NULL,
+			payload_hash CHAR(40) NOT NULL,
+			status VARCHAR(20) NOT NULL,
+			estimated_cost DECIMAL(10,4) NULL,
+			cost DECIMAL(10,4) NULL,
+			from_cache TINYINT(1) NOT NULL DEFAULT 0,
+			result_count INT UNSIGNED NULL,
+			attempts INT UNSIGNED NOT NULL DEFAULT 0,
+			next_attempt_at DATETIME NULL,
+			last_error TEXT NULL,
+			error_code VARCHAR(20) NULL,
+			requested_by BIGINT UNSIGNED NULL,
+			approved_at DATETIME NULL,
+			started_at DATETIME NULL,
+			finished_at DATETIME NULL,
+			created_at DATETIME NOT NULL,
+			updated_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			KEY pp_dfs_queue (status, next_attempt_at),
+			KEY pp_dfs_project (project_id, created_at),
+			KEY pp_dfs_org_month (organization_id, finished_at),
+			CONSTRAINT {$p}pp_fk_dfs_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('dataforseo_cache')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			cache_key CHAR(40) NOT NULL,
+			endpoint VARCHAR(120) NOT NULL,
+			response LONGTEXT NOT NULL,
+			cost DECIMAL(10,4) NULL,
+			expires_at DATETIME NOT NULL,
+			created_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY pp_dfs_cache_key (cache_key)
+		) ENGINE=InnoDB {$charset}";
+
+		$statements[] = "CREATE TABLE IF NOT EXISTS {$t('keyword_ideas')} (
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+			project_id BIGINT UNSIGNED NOT NULL,
+			task_id BIGINT UNSIGNED NULL,
+			keyword VARCHAR(255) NOT NULL,
+			normalized VARCHAR(255) NOT NULL,
+			location_code INT UNSIGNED NOT NULL,
+			language_code VARCHAR(10) NOT NULL,
+			seed VARCHAR(255) NULL,
+			search_volume INT UNSIGNED NULL,
+			cpc_micros BIGINT NULL,
+			competition VARCHAR(20) NULL,
+			competition_index TINYINT UNSIGNED NULL,
+			low_bid_micros BIGINT NULL,
+			high_bid_micros BIGINT NULL,
+			source VARCHAR(60) NOT NULL,
+			fetched_at DATETIME NOT NULL,
+			PRIMARY KEY (id),
+			UNIQUE KEY pp_idea_key (project_id, normalized, location_code, language_code, source),
+			CONSTRAINT {$p}pp_fk_idea_project FOREIGN KEY (project_id) REFERENCES {$t('projects')} (id) ON DELETE CASCADE
+		) ENGINE=InnoDB {$charset}";
+
+		return $statements;
+	}
 }

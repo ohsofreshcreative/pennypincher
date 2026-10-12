@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Services;
 
+use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Domain\Audit\AuditContext;
 use App\PennyPincher\Domain\Audit\AuditScore;
 use App\PennyPincher\Domain\Audit\Finding;
@@ -25,9 +26,10 @@ class AuditService
 	) {
 	}
 
-	public function run(Project $project, string $trigger = 'manual', ?int $userId = null): int
+	public function run(Project $project, string $trigger = 'manual', ?int $userId = null, ?AnalysisPeriod $period = null): int
 	{
-		$context = $this->builder->build($project);
+		$period ??= AnalysisPeriod::fromPreset(AnalysisPeriod::DEFAULT, $project->timezone());
+		$context = $this->builder->build($project, $period);
 		$findings = [];
 		$ruleErrors = [];
 
@@ -71,7 +73,7 @@ class AuditService
 
 		$score = AuditScore::calculate($rows, AuditScore::unavailableReason($context));
 
-		return $this->db->transaction(function () use ($project, $trigger, $userId, $context, $rows, $score, $ruleErrors) {
+		return $this->db->transaction(function () use ($project, $trigger, $userId, $context, $rows, $score, $ruleErrors, $period) {
 			$runId = $this->audits->createRun([
 				'project_id' => $project->id,
 				'status' => $ruleErrors === [] ? 'completed' : 'partial',
@@ -80,6 +82,7 @@ class AuditService
 				'data_quality' => self::dataQuality($context, $ruleErrors),
 				'date_from' => $context->range->fromString(),
 				'date_to' => $context->range->toString(),
+				'range_preset' => $period->preset,
 				'rules_version' => RuleRegistry::VERSION,
 				'trigger_type' => $trigger,
 				'requested_by' => $userId,
@@ -153,6 +156,7 @@ class AuditService
 			'connection_status' => $context->connection['status'] ?? null,
 			'last_sync_at' => $context->lastSyncAt,
 			'conversion_settings_known' => $context->hasConversionSettings(),
+			'activity' => $context->activity,
 			'rule_errors' => $ruleErrors,
 		];
 	}

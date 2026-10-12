@@ -49,6 +49,9 @@ define('WP_AUTO_UPDATE_CORE', 'minor');
 define('PP_ENCRYPTION_KEY', '…');       // wp acorn pp:key:generate – osobny klucz dla produkcji
 define('PP_GOOGLE_ADS_CLIENT_ID', '…');
 define('PP_GOOGLE_ADS_CLIENT_SECRET', '…');
+// DataForSEO (opcjonalnie – docs/DATAFORSEO.md); bez tych stałych płatne zapytania są niemożliwe
+// define('PP_DATAFORSEO_LOGIN', '…');
+// define('PP_DATAFORSEO_PASSWORD', '…');  // hasło API z panelu DataForSEO
 ```
 
    Sprawdź też, że klucze `AUTH_KEY`… `NONCE_SALT` są unikalne (nie domyślne) i że prefiks tabel jest ustawiony.
@@ -89,8 +92,11 @@ Kroki skryptu:
 15 3 * * *   cd /home/u679500043/domains/pennypincher.ohsofresh.top/public_html && wp acorn pp:imports:prune >/dev/null 2>&1
 ```
 
-- `pp:sync:work` – codzienna synchronizacja Google Ads, dokańczanie backfillu, ponowienia. Czas pracy 240 s
-  mieści się w odstępie 10 minut; równoległe uruchomienia są bezpieczne (blokada na połączenie).
+- `pp:sync:work` – codzienna synchronizacja Google Ads, dokańczanie backfillu, ponowienia, a po każdej
+  zakończonej synchronizacji analiza (audyt, Budget Leaks, słowa kluczowe, rekomendacje) dla ostatnich 30 dni.
+  W pozostałym czasie wykonuje zadania DataForSEO zatwierdzone ręcznie przez użytkownika (nigdy nie tworzy ich sam).
+  Czas pracy 240 s mieści się w odstępie 10 minut; równoległe uruchomienia są bezpieczne (blokada na połączenie,
+  atomowe przejmowanie zadań DataForSEO).
 - Jeśli `wp` nie jest w `PATH` crona, użyj pełnej ścieżki (`which wp` w SSH), np. `/usr/local/bin/wp`.
 - Utwórz katalog logów: `mkdir -p ~/logs`.
 

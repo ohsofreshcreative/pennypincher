@@ -27,7 +27,7 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 
 		$run = $sync->enqueue($connection, 'incremental');
 		$this->assertSame('backfill', $run['type'], 'Pierwsza synchronizacja zawsze pobiera historię.');
-		$this->assertSame(5 + 4 * count(SyncService::monthWindows($run['date_from'], $run['date_to'])), (int) $run['steps_total']);
+		$this->assertSame(count(\App\PennyPincher\Infrastructure\GoogleAds\Sync\ApiSyncer::STRUCTURE_STEPS) + count(\App\PennyPincher\Infrastructure\GoogleAds\Sync\ApiSyncer::METRIC_STEPS) * count(SyncService::monthWindows($run['date_from'], $run['date_to'])), (int) $run['steps_total']);
 		$this->assertSame($run['id'], $sync->enqueue($connection, 'backfill')['id'], 'Otwarty przebieg nie jest dublowany.');
 
 		$yesterday = (new DateTimeImmutable('yesterday', new DateTimeZone('Europe/Warsaw')))->format('Y-m-d');
@@ -140,7 +140,7 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
 		$this->assertSame('queued', $run['status'], 'Błąd chwilowy → ponowienie, nie porażka.');
 		$this->assertSame(1, (int) $run['attempts']);
-		$this->assertSame(6, (int) $run['step_index'], 'Zatrzymane na kroku metryk słów kluczowych (po 5 krokach struktury i metrykach kampanii).');
+		$this->assertSame(count(\App\PennyPincher\Infrastructure\GoogleAds\Sync\ApiSyncer::STRUCTURE_STEPS) + 1, (int) $run['step_index'], 'Zatrzymane na kroku metryk słów kluczowych (po krokach struktury i metrykach kampanii).');
 		$this->assertTrue(strtotime($run['next_attempt_at'] . ' UTC') >= time() + 55, 'Odczekanie 60 s przed ponowieniem.');
 		$this->assertSame([], $this->make(SyncRunRepository::class)->due(), 'Przed upływem opóźnienia przebieg nie jest wykonywany.');
 
@@ -300,6 +300,51 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 
 		$this->assertNull($this->make(SyncRunRepository::class)->findInProject($projectB->id, (int) $run['id']));
 		$this->assertNull($this->make(GoogleAdsConnectionRepository::class)->currentForProject($projectB->id));
+	}
+
+	public function testNegativeKeywordsAndCampaignConversionsAreStored(): void
+	{
+		[$project, $connection] = $this->connected('negatives');
+		$sync = $this->make(SyncService::class);
+		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
+		$this->assertSame('completed', $run['status'], (string) $run['last_error']);
+
+		$negatives = $this->db->select('SELECT level, text, match_type, shared_set_name FROM ' . $this->db->table('negative_keywords') . ' WHERE project_id = ? ORDER BY text', [$project->id]);
+		$byText = [];
+
+		foreach ($negatives as $row) {
+			$byText[$row['text']] = $row;
+		}
+
+		ksort($byText);
+		$this->assertSame(['darmowe', 'kurs', 'praca'], array_keys($byText));
+		$this->assertSame(['campaign', 'phrase'], [$byText['darmowe']['level'], $byText['darmowe']['match_type']]);
+		$this->assertSame(['ad_group', 'broad'], [$byText['praca']['level'], $byText['praca']['match_type']]);
+		$this->assertSame('Wykluczenia ogólne', $byText['kurs']['shared_set_name']);
+
+		$days = (new DateRange($run['date_from'], $run['date_to']))->days();
+		$this->assertSame($days * 2, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('conversion_metrics') . ' WHERE project_id = ? AND campaign_scope > 0', [$project->id]), 'Konwersje per kampania i działanie.');
+		$accountRows = (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('conversion_metrics') . ' WHERE project_id = ? AND campaign_scope = 0', [$project->id]);
+		$this->assertTrue($accountRows > 0, 'Wiersze konta nie zostały usunięte przez krok kampanii.');
+
+		// Ponowna synchronizacja: pełna wymiana wykluczeń, bez duplikatów.
+		$sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
+		$this->assertSame(3, $this->count('negative_keywords', $project->id));
+		$this->assertSame($days * 2, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('conversion_metrics') . ' WHERE project_id = ? AND campaign_scope > 0', [$project->id]));
+		$this->assertSame($accountRows, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('conversion_metrics') . ' WHERE project_id = ? AND campaign_scope = 0', [$project->id]));
+	}
+
+	public function testOptionalStepWithInvalidQueryIsSkippedNotFatal(): void
+	{
+		[$project, $connection] = $this->connected('optional');
+		$sync = $this->make(SyncService::class);
+		$invalid = [400, [['error' => ['code' => 400, 'status' => 'INVALID_ARGUMENT', 'message' => 'Invalid', 'details' => [['errors' => [['errorCode' => ['queryError' => 'PROHIBITED_RESOURCE_TYPE_IN_SELECT_CLAUSE'], 'message' => 'x']]]]]]]];
+		$this->mock->on('shared_criterion', $invalid)->on('campaign_conversion_metrics', $invalid);
+
+		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
+		$this->assertSame('completed', $run['status'], 'Opcjonalne kroki nie blokują synchronizacji: ' . $run['last_error']);
+		$this->assertTrue($this->count('campaign_metrics', $project->id) > 0);
+		$this->assertSame(0, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('conversion_metrics') . ' WHERE project_id = ? AND campaign_scope > 0', [$project->id]));
 	}
 
 	public function testAggregateSumsDuplicateRowsPerEntityAndDay(): void

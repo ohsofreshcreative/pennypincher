@@ -54,8 +54,8 @@ final class SearchPartnersEnabled extends BaseRule
 				$this->description() . ' To ustawienie nie jest samo w sobie błędem.',
 				[
 					['Kampania', (string) $campaign['name']],
-					['Wydatki (30 dni)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
-					['Konwersje (30 dni)', Format::conversions($campaign['current']['conversions'] ?? null)],
+					['Wydatki (w okresie)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
+					['Konwersje (w okresie)', Format::conversions($campaign['current']['conversions'] ?? null)],
 				],
 				'Porównaj w Google Ads wyniki segmentu „Sieć (z partnerami wyszukiwania)”. Wyłącz partnerów, jeśli ich koszt konwersji jest wyraźnie wyższy.',
 				'campaign',

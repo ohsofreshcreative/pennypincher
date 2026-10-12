@@ -1,6 +1,35 @@
 # Penny Pincher – postęp prac
 
-Stan na 12.10.2026 (etap 2 – Prompt 2; wcześniej Prompt 1 i 1.1).
+Stan na 12.10.2026 (etap 3 – Prompt 3; wcześniej Prompt 1, 1.1, 2 i poprawki diagnostyki/GAQL).
+
+## Prompt 3 – Budget Leaks, Rekomendacje, Keyword Opportunities, DataForSEO, rozbudowa audytu
+
+### Zrobione
+
+- **Okres analizy** (A): presety 30/90 dni, 6/12 miesięcy i własny zakres (maks. 731 dni) dla audytu i wszystkich modułów; zapamiętywanie per użytkownik i projekt; historia audytów i analiz per okres (bez nadpisywania); stany danych `no_data` / `no_activity` / `partial` / `complete` z pierwszym i ostatnim dniem, dniami aktywności, źródłem i kompletnością; nowa reguła DQ008 (informacja „W wybranym okresie kampanie nie generowały wydatków ani wyświetleń…”) zamiast krytycznego błędu, gdy kampanie były wyłączone; progi reguł skalowane do długości okresu.
+- **Kontekst biznesowy i konwersje** (B–C): pola kontekstu w ustawieniach (opcjonalne, z informacją o wpływie na trafność), klasyfikacja działań konwersji (`/conversions/`), metryki Google vs biznesowe, bez wymyślania potwierdzonych leadów. Synchronizacja: słowa wykluczające i konwersje per kampania i działanie (kroki opcjonalne), przycisk „Pobierz historię ponownie”.
+- **Budget Leaks** (D): 18 reguł (hasła, słowa, kampanie, pomiar), pewność statystyczna, priorytet, szacunek oszczędności bez podwójnego liczenia, statusy przenoszone między przebiegami, filtry, historia analiz.
+- **Rekomendacje** (E): generator z grupowaniem i deduplikacją między audytem, Budget Leaks, słowami i wykluczeniami; trwałe rekomendacje (odcisk), statusy, notatki, historia zdarzeń, nieaktualność automatyczna i ręczna, filtry i sortowanie, paginacja.
+- **DataForSEO** (F): konfiguracja w `wp-config.php`, klient REST (biała lista hostów, Basic Auth, timeout 120 s, klasyfikacja kodów błędów), bezpłatny test połączenia i kodów lokalizacji, kolejka zadań z zgodą użytkownika, limitem projektu (wymagany) i organizacji (opcjonalny), ponowną kontrolą limitu przed zapytaniem, ponowieniami, pamięcią podręczną i kosztem z odpowiedzi; worker w `pp:sync:work`; `pp:dataforseo:check`.
+- **Keyword Opportunities i wykluczenia** (G): kandydaci z haseł i DataForSEO, deduplikacja, pominięcie istniejących słów i wykluczeń, intencja, Opportunity Score 0–100 z rozbiciem i pewnością, sugerowana kampania/grupa; propozycje wykluczeń z poziomem, dopasowaniem i informacją „już wykluczona”.
+- **UI i dashboard** (H): menu Budget Leaks, Rekomendacje, Keyword Opportunities, Konwersje; wspólny wybór okresu; stany puste/ładowania/błędów; panel „Optymalizacja” na Przeglądzie (największe problemy, nowe rekomendacje, możliwości, wykluczenia, szacowany potencjał) – bez liczb, gdy analiza nie była uruchomiona.
+- **Potok** `AnalysisService` (ręcznie, `pp:analyze`, po synchronizacji, po DataForSEO).
+
+### Weryfikacja (Prompt 3)
+
+- Testy: 167/167 na pustej bazie (`fresh`) i na bazie z danymi z wcześniejszych etapów (`local`, migracja 4 na istniejących tabelach); nowe: `Unit/AnalysisModulesTest` (18), `Integration/AnalysisModulesTest` (7), `Integration/DataForSeoTest` (6), 2 nowe testy w `GoogleAdsSyncTest`; zaktualizowane oczekiwania w `AuditTest`/`AuditRulesTest` (23 reguły, wersja reguł). Żaden test nie został usunięty.
+- Test HTTP (curl, serwer PHP): wszystkie nowe strony 200 (oba projekty, różne okresy), uruchomienie analizy, zmiana statusu/notatki/nieaktualności rekomendacji, błędny status, limit DataForSEO, zlecenie bez konfiguracji (komunikat), brak nonce → 419.
+- Zrzuty Chromium 1440 px i 390 px (Przegląd, Budget Leaks, Rekomendacje, Keyword Opportunities, DataForSEO) – bez poziomego przewijania.
+- **Nie zweryfikowano z prawdziwymi usługami**: DataForSEO (brak danych dostępowych – tylko atrapa, zero płatnych zapytań) oraz nowe zapytania GAQL (wykluczenia, konwersje per kampania) na prawdziwym koncie – dlatego są krokami opcjonalnymi.
+
+### Znane ograniczenia (Prompt 3)
+
+- Konwersje haseł i słów kluczowych to „Konwersje” Google Ads (Google nie raportuje ich per działanie w tych widokach) – Budget Leaks dla haseł nie rozróżnia mikrokonwersji; zamiast tego obniża pewność, gdy konwersje główne to głównie mikrokonwersje.
+- Potwierdzone leady: klasa istnieje, ale bez importu z CRM liczba jest „brak danych”.
+- Dopasowanie do oferty to porównanie rdzeni słów (bez synonimów i AI) – reguła BL105 ma niską pewność.
+- CPC z DataForSEO jest w USD i nie jest przeliczane na walutę konta.
+- Analiza po synchronizacji liczy tylko ostatnie 30 dni; inne okresy – ręcznie lub `pp:analyze`.
+- Dla połączeń sprzed Prompt 3 konwersje per kampania i wykluczenia wymagają „Pobierz historię ponownie” (albo pojawią się dla 30 dni po najbliższej synchronizacji).
 
 ## Prompt 2 – Google Ads API, synchronizacja, audyt, produkcja
 

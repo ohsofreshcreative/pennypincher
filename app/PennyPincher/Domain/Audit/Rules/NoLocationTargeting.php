@@ -58,7 +58,7 @@ final class NoLocationTargeting extends BaseRule
 				[
 					['Kampania', (string) $campaign['name']],
 					['Typ kampanii', Enums::CHANNELS[$campaign['channel_type'] ?? ''] ?? (string) ($campaign['channel_type'] ?? '—')],
-					['Wydatki (30 dni)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
+					['Wydatki (w okresie)', self::money($campaign['current']['cost_micros'] ?? null, $context->currency)],
 				],
 				'Dodaj lokalizacje obsługiwane przez firmę (np. województwo mazowieckie) i sprawdź raport „Gdzie były wyświetlane reklamy”.',
 				'campaign',
