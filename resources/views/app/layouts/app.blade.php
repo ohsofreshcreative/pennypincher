@@ -12,6 +12,12 @@
         ['recommendations', 'Rekomendacje', 'idea', AppUrl::project($project->id, 'recommendations')],
         ['keywords', 'Keyword Opportunities', 'keyword', AppUrl::project($project->id, 'keywords')],
         ['conversions', 'Konwersje', 'target', AppUrl::project($project->id, 'conversions')],
+        ['planner', 'Campaign Planner', 'planner', AppUrl::project($project->id, 'planner')],
+        ['action-plan', 'Action Plan', 'list', AppUrl::project($project->id, 'action-plan')],
+        ['monitoring', 'Monitoring', 'bell', AppUrl::project($project->id, 'monitoring')],
+        ['changes', 'Change Center', 'changes', AppUrl::project($project->id, 'changes')],
+        ['management', 'Google Ads Management', 'sliders', AppUrl::project($project->id, 'management')],
+        ['conversion-management', 'Conversion Management', 'flag', AppUrl::project($project->id, 'conversion-management')],
         ['google-ads', 'Google Ads', 'link', AppUrl::project($project->id, 'google-ads')],
         ['imports', 'Importy', 'import', AppUrl::project($project->id, 'imports')],
       ]
@@ -63,13 +69,16 @@
         </form>
       @endif
 
-      <nav class="flex-1 overflow-y-auto px-3">
+      <nav class="flex-1 overflow-y-auto px-3 pb-6">
         <ul class="space-y-0.5">
           @foreach ($nav as [$key, $label, $icon, $url])
             <li>
               <a href="{{ $url }}" class="pp-nav-link" @if ($section === $key) aria-current="page" @endif>
                 <x-pp.icon :name="$icon" />
                 {{ $label }}
+                @if ($key === 'monitoring' && ($alertCount ?? 0) > 0)
+                  <span class="pp-num ml-auto rounded-full bg-copper px-1.5 text-[11px] leading-5 font-semibold text-white" title="Nowe alerty">{{ $alertCount > 99 ? '99+' : $alertCount }}<span class="sr-only"> nowych alertów</span></span>
+                @endif
               </a>
             </li>
           @endforeach
@@ -92,12 +101,6 @@
           @endif
         </ul>
 
-        <div class="mt-6 px-3 pb-6">
-          <p class="text-[12px] font-medium text-sidebar-text/60">W kolejnych etapach</p>
-          <ul class="mt-2 space-y-1.5 text-[13.5px] text-sidebar-text/45">
-            <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Planer kampanii</li>
-          </ul>
-        </div>
       </nav>
 
       <div class="border-t border-sidebar-line px-4 py-4">

@@ -10,7 +10,9 @@ dokładny kształt odpowiedzi, limity i uprawnienia konta.
 - Łączy **projekt** z jednym kontem reklamowym przez OAuth 2.0 (autoryzacja w imieniu użytkownika Google).
   Struktura bazy (`pp_google_ads_connections.project_id`) pozwala później na kilka kont w projekcie.
 - Ma dostęp **tylko do odczytu**: wywołuje wyłącznie `customers:listAccessibleCustomers` i `googleAds:searchStream`
-  (zapytania GAQL). Nie wysyła żadnych operacji `mutate` – nie zmienia kampanii, budżetów ani ustawień.
+  (zapytania GAQL). Synchronizacja i analiza nie wysyłają żadnych operacji `mutate`. Zmiany konta są możliwe wyłącznie
+  przez Change Center (przegląd, zatwierdzenie, świadome wdrożenie) i domyślnie są **wyłączone** (`PP_GOOGLE_ADS_WRITE_MODE`
+  = `prepare_only`) – zob. `docs/CHANGE_CENTER.md` i `docs/GOOGLE_ADS_MANAGEMENT.md`.
 - Synchronizuje: kampanie (ID, nazwa, status, typ, budżet, strategia stawek, sieci, typ kierowania na lokalizacje,
   lokalizacje, data i godzina rozpoczęcia/zakończenia – `start_date_time`/`end_date_time`), grupy reklam, słowa kluczowe (z wynikiem jakości), wyszukiwane hasła z metrykami, działania
   konwersji (kategoria, status, konwersja główna/dodatkowa, sposób zliczania, typ, źródło) i dzienne metryki:
@@ -86,6 +88,9 @@ define('PP_ENCRYPTION_KEY', '…');
 // Opcjonalnie:
 // define('PP_GOOGLE_ADS_API_VERSION', 'v25');
 // define('PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID', '1234567890'); // domyślne konto menedżera (MCC)
+// Change Center (domyślnie prepare_only – nic nie jest wysyłane do Google Ads):
+// define('PP_GOOGLE_ADS_WRITE_MODE', 'prepare_only');   // read_only | prepare_only | write_enabled (nieznana wartość = read_only)
+// define('PP_GOOGLE_ADS_API_VALIDATION', false);        // true = walidacja validateOnly (bez zapisu) przy zatwierdzaniu
 ```
 
 Zamiast stałych można użyć zmiennych środowiskowych o tych samych nazwach. Sprawdzenie (bez wyświetlania sekretów
@@ -168,7 +173,13 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
   otwarty przebieg blokuje dodanie kolejnego.
 - **Waluta**: gdy waluta konta różni się od waluty projektu, synchronizacja zatrzymuje się z komunikatem.
 - Po zakończonym przebiegu uruchamia się analiza projektu dla ostatnich 30 dni: audyt, Budget Leaks, słowa
-  kluczowe i rekomendacje (`trigger_type = sync`).
+  kluczowe, rekomendacje i Action Plan (`trigger_type = sync`), a następnie monitoring (alerty z danych w bazie,
+  raz na przebieg – `docs/MONITORING.md`) i ewentualne powiadomienia e-mail (opt-in). Worker przy okazji odświeża
+  kursy walut NBP (najwyżej co 12 h, tylko gdy są potrzebne). Żaden z tych kroków nie odpytuje płatnych API.
+- Frazy z planu kampanii albo zaakceptowane w Keyword Opportunities, które pojawią się na koncie jako aktywne słowa
+  kluczowe, dostają status „Wykorzystana”.
+- **Campaign Planner nie korzysta z Google Ads API** – plany, budżety, wykluczenia i reklamy istnieją tylko
+  w aplikacji (eksport CSV/HTML do ręcznego wdrożenia).
 
 ### Dane z API a importy CSV/XLSX
 
@@ -190,7 +201,9 @@ i ponawia te z błędami chwilowymi. Szczegóły i pozostałe zadania: `docs/DEP
 | `wp acorn pp:sync:work --time=240` | Zadanie crona: planowanie + przetwarzanie kolejki |
 | `wp acorn pp:sync {projekt} [--backfill]` | Ręczna synchronizacja projektu |
 | `wp acorn pp:audit {projekt}` | Audyt projektu |
-| `wp acorn pp:analyze {projekt} --period=last_90` | Pełna analiza okresu (audyt, Budget Leaks, słowa kluczowe, rekomendacje; `--from= --to=` dla własnego zakresu) |
+| `wp acorn pp:analyze {projekt} --period=last_90` | Pełna analiza okresu (audyt, Budget Leaks, słowa kluczowe, rekomendacje, Action Plan; `--from= --to=` dla własnego zakresu) |
+| `wp acorn pp:monitor {projekt}` | Monitoring projektu (alerty z danych w bazie, bez zapytań do API) |
+| `wp acorn pp:fx:update [USD EUR …]` | Kursy walut z publicznego API NBP (tabela A) |
 
 ## Testy
 

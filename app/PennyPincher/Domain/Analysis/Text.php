@@ -23,7 +23,7 @@ final class Text
 		'jobs' => ['praca', 'pracy', 'prace', 'oferty pracy', 'zatrudni', 'rekrutac', 'staz', 'stazu', 'zarobki', 'wynagrodzen', 'pensja', 'job', 'jobs', 'career', 'salary', 'hiring'],
 		'education' => ['kurs', 'kursy', 'kursu', 'kursie', 'szkoleni', 'nauka', 'naucz', 'lekcj', 'studia', 'egzamin', 'certyfikat', 'tutorial', 'course', 'learn', 'lesson', 'training'],
 		'diy' => ['samodzieln', 'krok po kroku', 'kreator', 'generator', 'szablon', 'template', 'wzor', 'wzory', 'wzorow', 'zrob to sam', 'diy', 'do it yourself', 'stworz sam', 'jak zrobic', 'jak stworzyc', 'jak zalozyc'],
-		'informational' => ['jak', 'co to', 'czym jest', 'dlaczego', 'poradnik', 'przyklad', 'definicj', 'wikipedia', 'inspiracj', 'pomysl', 'how to', 'what is', 'why', 'guide', 'example', 'ideas'],
+		'informational' => ['jak', 'co to', 'czym jest', 'dlaczego', 'poradnik', 'przyklad', 'definicj', 'wikipedia', 'opini', 'recenzj', 'forum', 'inspiracj', 'pomysl', 'how to', 'what is', 'why', 'guide', 'example', 'ideas'],
 		'commercial' => ['cena', 'ceny', 'cennik', 'koszt', 'ile kosztuje', 'oferta', 'oferty', 'firma', 'firmy', 'agencj', 'uslug', 'zlecen', 'wycen', 'zamow', 'kup', 'najlepsz', 'profesjonaln', 'dla firm', 'price', 'pricing', 'cost', 'agency', 'company', 'services', 'quote', 'buy', 'hire'],
 	];
 

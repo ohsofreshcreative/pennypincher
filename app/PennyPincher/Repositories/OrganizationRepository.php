@@ -76,7 +76,7 @@ class OrganizationRepository
 
 		$this->db->statement(
 			'INSERT INTO ' . $this->db->table('organization_users') . ' (organization_id, user_id, role, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
-			ON DUPLICATE KEY UPDATE role = VALUES(role), updated_at = VALUES(updated_at)',
+			ON DUPLICATE KEY UPDATE role = VALUES(role), can_execute_changes = IF(VALUES(role) = \'member\', 0, can_execute_changes), updated_at = VALUES(updated_at)',
 			[$organizationId, $userId, $role->value, $now, $now]
 		);
 	}
@@ -106,13 +106,31 @@ class OrganizationRepository
 	{
 		return $this->db->select(
 			sprintf(
-				'SELECT ou.user_id, ou.role, ou.created_at, u.user_email, u.display_name, u.user_login
+				'SELECT ou.user_id, ou.role, ou.can_execute_changes, ou.created_at, u.user_email, u.display_name, u.user_login
 				FROM %s ou LEFT JOIN %s u ON u.ID = ou.user_id
 				WHERE ou.organization_id = ? ORDER BY FIELD(ou.role, \'owner\', \'admin\', \'member\'), u.display_name',
 				$this->db->table('organization_users'),
 				$this->db->wpdb()->users
 			),
 			[$organizationId]
+		);
+	}
+
+	/**
+	 * Wykonawca zmian Google Ads: członek z rolą co najmniej administratora i flagą nadaną przez właściciela.
+	 */
+	public function isExecutor(int $organizationId, int $userId): bool
+	{
+		$row = $this->db->first('SELECT role, can_execute_changes FROM ' . $this->db->table('organization_users') . ' WHERE organization_id = ? AND user_id = ?', [$organizationId, $userId]);
+
+		return $row !== null && (int) $row['can_execute_changes'] === 1 && in_array($row['role'], [Role::Owner->value, Role::Admin->value], true);
+	}
+
+	public function setExecutor(int $organizationId, int $userId, bool $enabled): void
+	{
+		$this->db->statement(
+			'UPDATE ' . $this->db->table('organization_users') . " SET can_execute_changes = ?, updated_at = ? WHERE organization_id = ? AND user_id = ? AND role IN ('owner', 'admin')",
+			[$enabled ? 1 : 0, $this->db->now(), $organizationId, $userId]
 		);
 	}
 }

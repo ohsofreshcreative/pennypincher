@@ -4,6 +4,8 @@ namespace App\PennyPincher\Services\DataForSeo;
 
 use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Domain\Analysis\Text;
+use App\PennyPincher\Domain\Keywords\Concepts;
+use App\PennyPincher\Domain\Keywords\PhraseQuality;
 use App\PennyPincher\Domain\Keywords\SeedSelector;
 use App\PennyPincher\Domain\Projects\Project;
 use App\PennyPincher\Domain\Support\ValidationFailed;
@@ -38,7 +40,78 @@ class DataForSeoService
 		private KeywordIdeaRepository $ideas,
 		private ProjectRepository $projects,
 		private AnalysisDataBuilder $data,
+		private \App\PennyPincher\Infrastructure\Database\Db $db,
 	) {
+	}
+
+	/**
+	 * Zapis własnego zestawu fraz źródłowych (maks. 20, każda maks. 80 znaków). Fraza z listy automatycznej
+	 * zachowuje źródło „auto”, pozostałe są „manual” (nie są automatycznie odrzucane).
+	 *
+	 * @param array<int, string> $phrases
+	 * @param array<int, string> $autoPhrases frazy z ostatniej propozycji automatycznej
+	 */
+	public function saveSeeds(Project $project, array $phrases, array $autoPhrases, int $userId): array
+	{
+		$auto = array_flip(array_map(fn ($p) => Text::normalize($p), $autoPhrases));
+		$seeds = [];
+		$errors = [];
+
+		foreach ($phrases as $phrase) {
+			$phrase = mb_strtolower(SeedSelector::clean(wp_strip_all_tags((string) $phrase)));
+			$key = Text::normalize($phrase);
+
+			if ($key === '' || isset($seeds[$key])) {
+				continue;
+			}
+
+			if (mb_strlen($phrase) > DataForSeoClient::MAX_SEED_LENGTH) {
+				$errors['seeds'] = 'Fraza „' . mb_substr($phrase, 0, 40) . '…” jest dłuższa niż 80 znaków.';
+				continue;
+			}
+
+			$seeds[$key] = ['phrase' => $phrase, 'source' => isset($auto[$key]) ? 'auto' : 'manual'];
+		}
+
+		if (count($seeds) > DataForSeoClient::MAX_SEEDS) {
+			$errors['seeds'] = sprintf('Maksymalnie %d fraz na jedno zlecenie (podano %d).', DataForSeoClient::MAX_SEEDS, count($seeds));
+		}
+
+		if ($seeds === [] && $errors === []) {
+			$errors['seeds'] = 'Dodaj co najmniej jedną frazę albo przywróć propozycje automatyczne.';
+		}
+
+		if ($errors !== []) {
+			throw new ValidationFailed($errors);
+		}
+
+		$state = $this->projects->seedState($project->id);
+		$this->projects->saveSeedState($project->id, ['custom' => array_values($seeds), 'last_used' => $state['last_used'], 'updated_at' => gmdate('Y-m-d H:i:s'), 'updated_by' => $userId]);
+
+		return array_values($seeds);
+	}
+
+	/**
+	 * Przywrócenie propozycji automatycznych (usuwa własny zestaw; ostatnio użyty zostaje w historii).
+	 */
+	public function resetSeeds(Project $project): void
+	{
+		$state = $this->projects->seedState($project->id);
+		$this->projects->saveSeedState($project->id, ['custom' => null, 'last_used' => $state['last_used'], 'updated_at' => gmdate('Y-m-d H:i:s')]);
+	}
+
+	/**
+	 * Wczytanie ostatnio użytego zestawu jako własnego.
+	 */
+	public function restoreLastUsed(Project $project, int $userId): void
+	{
+		$state = $this->projects->seedState($project->id);
+
+		if ($state['last_used'] === []) {
+			throw new ValidationFailed(['seeds' => 'Brak wcześniej użytego zestawu fraz.']);
+		}
+
+		$this->projects->saveSeedState($project->id, ['custom' => $state['last_used'], 'last_used' => $state['last_used'], 'updated_at' => gmdate('Y-m-d H:i:s'), 'updated_by' => $userId]);
 	}
 
 	public function isConfigured(): bool
@@ -69,7 +142,23 @@ class DataForSeoService
 	{
 		$leakContext = $this->data->leakContext($project, $period);
 		$context = $project->context();
-		$seeds = SeedSelector::select($context, $leakContext->terms, $leakContext->keywords);
+		$working = [];
+
+		foreach ([...array_column($leakContext->keywords, 'text'), ...array_column($leakContext->campaigns, 'name'), ...array_column($leakContext->adGroups, 'name')] as $text) {
+			array_push($working, ...Concepts::of((string) $text));
+		}
+
+		$auto = SeedSelector::analyze($context, $leakContext->terms, $leakContext->keywords, DataForSeoClient::MAX_SEEDS, array_values(array_unique($working)));
+		$state = $this->projects->seedState($project->id);
+		$seeds = $state['custom'] ?? $auto['seeds'];
+
+		// Frazy dodane ręcznie nie są odrzucane – dostają tylko ostrzeżenie o możliwej niskiej trafności.
+		foreach ($seeds as &$seed) {
+			$flags = array_values(array_intersect(PhraseQuality::flags($seed['phrase'], $context, array_values(array_unique($working))), PhraseQuality::REJECT_AUTO));
+			$seed['warning'] = ($seed['source'] ?? '') === 'manual' && $flags !== [] ? 'Możliwa niska trafność: ' . PhraseQuality::describe($flags) . '.' : null;
+		}
+
+		unset($seed);
 		$endpoint = DataForSeoClient::KEYWORDS_FOR_KEYWORDS;
 		$payload = DataForSeoClient::keywordsForKeywordsPayload(array_column($seeds, 'phrase'), $context->locationCode(), $context->language());
 		$cacheKey = $this->cacheKey($endpoint, $payload);
@@ -79,6 +168,11 @@ class DataForSeoService
 		return [
 			'endpoint' => $endpoint,
 			'seeds' => $seeds,
+			'auto_seeds' => $auto['seeds'],
+			'rejected_seeds' => $auto['rejected'],
+			'custom' => $state['custom'] !== null,
+			'last_used' => $state['last_used'],
+			'seeds_updated_at' => $state['updated_at'],
 			'payload' => $payload,
 			'payload_hash' => sha1(wp_json_encode($payload)),
 			'location_code' => $context->locationCode(),
@@ -105,6 +199,25 @@ class DataForSeoService
 
 		$plan = $this->plan($project, $period);
 
+		// Kontrola limitu i utworzenie zadania pod blokadą organizacji – równoległe zlecenia nie obejdą limitu.
+		$lock = 'pp_dfs_org_' . $project->organizationId;
+
+		if ((int) $this->db->scalar('SELECT GET_LOCK(?, 10)', [$lock]) !== 1) {
+			throw new ValidationFailed(['dataforseo' => 'Inne zlecenie DataForSEO jest właśnie zapisywane. Spróbuj ponownie za chwilę.']);
+		}
+
+		try {
+			return $this->createTask($project, $plan, $userId, $acceptedEstimate);
+		} finally {
+			$this->db->scalar('SELECT RELEASE_LOCK(?)', [$lock]);
+		}
+	}
+
+	private function createTask(Project $project, array $plan, int $userId, ?string $acceptedEstimate): array
+	{
+		// Limit liczony ponownie pod blokadą (plan mógł powstać przed zapisem innego zadania).
+		$plan['blocked'] = $plan['seeds'] === [] ? 'Brak fraz źródłowych.' : $this->budgetProblem($project, $plan['estimated_cost']);
+
 		if ($plan['blocked'] !== null) {
 			throw new ValidationFailed(['dataforseo' => $plan['blocked']]);
 		}
@@ -119,6 +232,9 @@ class DataForSeoService
 		if ($active !== null) {
 			return $active;
 		}
+
+		$state = $this->projects->seedState($project->id);
+		$this->projects->saveSeedState($project->id, ['custom' => $state['custom'], 'last_used' => array_map(fn ($s) => ['phrase' => $s['phrase'], 'source' => $s['source'] ?? 'auto'], $plan['seeds']), 'updated_at' => $state['updated_at']]);
 
 		$id = $this->tasks->create([
 			'project_id' => $project->id,
@@ -294,6 +410,7 @@ class DataForSeoService
 				'seed' => null,
 				'search_volume' => $item['search_volume'],
 				'cpc_micros' => $item['cpc_micros'],
+				'cpc_currency' => 'USD', // DataForSEO (Google Ads) podaje CPC i stawki w USD
 				'competition' => $item['competition'],
 				'competition_index' => $item['competition_index'],
 				'low_bid_micros' => $item['low_bid_micros'],

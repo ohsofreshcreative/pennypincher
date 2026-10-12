@@ -3,8 +3,8 @@
 namespace App\PennyPincher\Infrastructure\GoogleAds;
 
 /**
- * Klient REST Google Ads API (tylko odczyt: listAccessibleCustomers i googleAds:searchStream z GAQL).
- * Aplikacja nie wykonuje żadnych operacji zmieniających konto reklamowe.
+ * Klient REST Google Ads API do odczytu: listAccessibleCustomers i googleAds:searchStream z GAQL.
+ * Zapis (googleAds:mutate) jest wyłącznie w `Mutate\GoogleAdsMutateClient` i wymaga trybu WRITE_ENABLED.
  */
 class GoogleAdsClient
 {
@@ -79,7 +79,7 @@ class GoogleAdsClient
 	/**
 	 * @return array<string, string>
 	 */
-	private function headers(string $accessToken, ?string $loginCustomerId, bool $useDefaultLogin = true): array
+	public function headers(string $accessToken, ?string $loginCustomerId, bool $useDefaultLogin = true): array
 	{
 		$headers = ['Authorization' => 'Bearer ' . $accessToken];
 

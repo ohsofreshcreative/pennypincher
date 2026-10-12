@@ -14,7 +14,7 @@ class ProjectRepository
 	public const EDITABLE = [
 		'name', 'platform', 'currency', 'timezone', 'monthly_budget_micros', 'website_url', 'landing_page_url',
 		'business_description', 'target_customer', 'min_project_value_micros', 'max_project_value_micros', 'status',
-		'business_context', 'dataforseo_monthly_limit',
+		'business_context', 'dataforseo_monthly_limit', 'keyword_seeds',
 	];
 
 	public function __construct(private Db $db)
@@ -80,6 +80,24 @@ class ProjectRepository
 	{
 		$values = array_intersect_key($values, array_flip(self::EDITABLE));
 		$this->db->update('projects', $values + ['updated_at' => $this->db->now()], ['id' => $projectId]);
+	}
+
+	/**
+	 * Zestaw fraz źródłowych DataForSEO projektu: własny (edytowany) i ostatnio użyty.
+	 *
+	 * @return array{custom: ?array, last_used: array, updated_at: ?string}
+	 */
+	public function seedState(int $projectId): array
+	{
+		$raw = $this->db->scalar('SELECT keyword_seeds FROM ' . $this->db->table('projects') . ' WHERE id = ?', [$projectId]);
+		$state = $raw ? (json_decode((string) $raw, true) ?: []) : [];
+
+		return ['custom' => isset($state['custom']) && is_array($state['custom']) ? $state['custom'] : null, 'last_used' => (array) ($state['last_used'] ?? []), 'updated_at' => $state['updated_at'] ?? null];
+	}
+
+	public function saveSeedState(int $projectId, array $state): void
+	{
+		$this->db->update('projects', ['keyword_seeds' => wp_json_encode($state)], ['id' => $projectId]);
 	}
 
 	private function uniqueSlug(int $organizationId, string $name): string

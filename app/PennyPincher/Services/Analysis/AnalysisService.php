@@ -4,6 +4,7 @@ namespace App\PennyPincher\Services\Analysis;
 
 use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Domain\Projects\Project;
+use App\PennyPincher\Services\ActionPlan\ActionPlanService;
 use App\PennyPincher\Services\AuditService;
 use Throwable;
 
@@ -53,6 +54,14 @@ class AnalysisService
 		} catch (Throwable $e) {
 			$result['errors']['recommendations'] = 'Nie udało się odświeżyć rekomendacji. Szczegóły są w logu serwera.';
 			error_log('[Penny Pincher] Rekomendacje projektu #' . $project->id . ': ' . $e->getMessage());
+		}
+
+		// Action Plan odświeżany z aktualnych rekomendacji (statusy działań zostają).
+		try {
+			$result['actions'] = app(ActionPlanService::class)->refresh($project, $period->range->fromString(), $period->range->toString());
+		} catch (Throwable $e) {
+			$result['errors']['actions'] = 'Nie udało się odświeżyć Action Plan. Szczegóły są w logu serwera.';
+			error_log('[Penny Pincher] Action Plan projektu #' . $project->id . ': ' . $e->getMessage());
 		}
 
 		return $result;

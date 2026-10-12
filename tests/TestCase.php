@@ -46,6 +46,11 @@ abstract class TestCase
 		$this->assertSame(null, $value, $message);
 	}
 
+	protected function assertNotNull(mixed $value, string $message = 'Wartość nie powinna być pusta (null).'): void
+	{
+		$this->assertTrue($value !== null, $message);
+	}
+
 	protected function assertCount(int $count, array $items, string $message = ''): void
 	{
 		$this->assertSame($count, count($items), $message);
@@ -73,12 +78,15 @@ abstract class TestCase
 		try {
 			$callback();
 		} catch (\Throwable $e) {
+			// Komunikat do sprawdzenia: treść wyjątku + błędy walidacji (ValidationFailed ma ogólny komunikat).
+			$text = $e->getMessage() . ($e instanceof \App\PennyPincher\Domain\Support\ValidationFailed ? ' ' . implode(' ', $e->errors) : '');
+
 			if (! $e instanceof $class) {
-				throw new AssertionFailed("Oczekiwano wyjątku {$class}, otrzymano " . get_class($e) . ': ' . $e->getMessage());
+				throw new AssertionFailed("Oczekiwano wyjątku {$class}, otrzymano " . get_class($e) . ': ' . $text);
 			}
 
 			if ($messageContains !== null) {
-				$this->assertContains($messageContains, $e->getMessage());
+				$this->assertContains($messageContains, $text);
 			}
 
 			return $e;

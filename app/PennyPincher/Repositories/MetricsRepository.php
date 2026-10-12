@@ -211,6 +211,41 @@ class MetricsRepository
 		return $series;
 	}
 
+	/**
+	 * Sumy dzienne per kampania (tylko dane dzienne wybrane przez resolver) – do monitoringu.
+	 *
+	 * @return array<int, array<string, array{impressions: int, clicks: int, cost_micros: int, conversions: float}>> kampania => data => metryki
+	 */
+	public function campaignDaily(int $projectId, ResolvedPeriods $resolved): array
+	{
+		if (! $resolved->hasDaily()) {
+			return [];
+		}
+
+		[$condition, $params] = $this->condition($resolved, 'm');
+		$rows = $this->db->select(
+			sprintf(
+				"SELECT m.campaign_id, m.date_from AS date, SUM(m.impressions) AS impressions, SUM(m.clicks) AS clicks, SUM(m.cost_micros) AS cost_micros, SUM(m.conversions) AS conversions
+				FROM %s m WHERE m.project_id = ? AND m.granularity = 'day' AND (%s) GROUP BY m.campaign_id, m.date_from",
+				$this->db->table('campaign_metrics'),
+				$condition
+			),
+			[$projectId, ...$params]
+		);
+		$out = [];
+
+		foreach ($rows as $row) {
+			$out[(int) $row['campaign_id']][$row['date']] = [
+				'impressions' => (int) $row['impressions'],
+				'clicks' => (int) $row['clicks'],
+				'cost_micros' => (int) $row['cost_micros'],
+				'conversions' => (float) $row['conversions'],
+			];
+		}
+
+		return $out;
+	}
+
 	private function inRanges(string $day, array $ranges): bool
 	{
 		foreach ($ranges as [$from, $to]) {

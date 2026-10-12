@@ -168,8 +168,9 @@
                     <h4 class="text-[13px] font-semibold text-mint-dark">Sugerowane działanie</h4>
                     <p class="mt-0.5 text-ink">{{ $leak['action'] }}</p>
                   </div>
+                  @include('app.partials.changes.source-change', ['sourceId' => $leak['id'], 'action' => AppUrl::project($project->id, 'budget-leaks/' . $leak['id'] . '/prepare-change'), 'blocker' => in_array($leak['rule_id'], \App\PennyPincher\Services\Changes\ChangeProposalService::LEAK_RULES, true) && $leak['campaign_id'] !== null ? null : 'Wymaga decyzji lub działań poza Google Ads API – bez operacji do wdrożenia.'])
                   <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-[12.5px] text-ink-mute">{{ $leak['rule_id'] }} · zmiany wprowadzasz samodzielnie w Google Ads.</p>
+                    <p class="text-[12.5px] text-ink-mute">{{ $leak['rule_id'] }} · status wycieku ustawiasz samodzielnie – wdrożenie zmiany go nie zmienia.</p>
                     @if ($canRun)
                       <form method="post" action="{{ AppUrl::project($project->id, 'budget-leaks/' . $leak['id'] . '/status') }}" class="flex flex-wrap gap-2">
                         <x-pp.nonce />

@@ -18,7 +18,7 @@ Stan kontroli: 12.10.2026 (Prompt 2 – Google Ads API, produkcja).
 | Nagłówki | `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store`, `Permissions-Policy`, `noindex`; przez HTTPS także `Strict-Transport-Security`. |
 | Google Ads – OAuth | Autoryzacja kodem z PKCE (S256); `state` 256-bitowy, jednorazowy, 10 minut, powiązany z użytkownikiem i projektem; uprawnienie właściciela/administratora sprawdzane przy starcie i przy powrocie. Projekt demo nie może się połączyć. |
 | Google Ads – tokeny | Szyfrowane libsodium (`SecretBox`, `v1:` + nonce) kluczem `PP_ENCRYPTION_KEY` spoza repozytorium i bazy, z rotacją przez `PP_ENCRYPTION_KEY_PREVIOUS`. Tokeny nie są zwracane w danych połączenia, logach ani komunikatach. Rozłączenie unieważnia token w Google i usuwa go z bazy. |
-| Google Ads – ruch wychodzący | Tylko HTTPS do `oauth2.googleapis.com`, `googleads.googleapis.com`, `accounts.google.com` (biała lista w `GoogleHttp`); tylko odczyt (`searchStream`, `listAccessibleCustomers`) – brak operacji zmieniających konto. |
+| Google Ads – ruch wychodzący | Tylko HTTPS do `oauth2.googleapis.com`, `googleads.googleapis.com`, `accounts.google.com` (biała lista w `GoogleHttp`); odczyt (`searchStream`, `listAccessibleCustomers`); zapis (`googleAds:mutate`) wyłącznie w `GoogleAdsMutateClient`, tylko z workera Change Center, tylko przy `PP_GOOGLE_ADS_WRITE_MODE=write_enabled` + zgodzie właściciela dla konta + zatwierdzonej wersji zestawu + wykonawcy z uprawnieniem. |
 | WordPress | `Hardening`: rejestracja zawsze wyłączona, XML-RPC → 403, `/wp/v2/users` i `?author=N` niedostępne anonimowo, bez wersji WP w nagłówkach. |
 | Pliki motywu | `.htaccess` motywu przepuszcza tylko `public/build/assets/*`, `resources/images|fonts` i `style.css`/`screenshot.png`; kod, `vendor`, `composer.*`, testy, dokumentacja, `key` → 403. |
 | Audyt | Wyłącznie odczyt danych; statusy problemów zmienia członek organizacji (nonce, izolacja projektu). |
@@ -29,6 +29,15 @@ Uwagi poza kodem aplikacji:
 
 - Lokalne skrypty `deploy/*.sh` (ignorowane przez Git) zawierają dane dostępowe do serwera i bazy. Nie są w repozytorium, ale warto przenieść hasło bazy do zmiennej środowiskowej lub `~/.my.cnf`.
 - `WP_DEBUG` musi być wyłączony na produkcji (inaczej Acorn pokaże szczegóły błędów).
+
+## Zmiany Google Ads (Change Center)
+
+- Tryb efektywny = najbardziej restrykcyjny z: stałej serwera `PP_GOOGLE_ADS_WRITE_MODE` (domyślnie `prepare_only`, nieznana wartość = `read_only`) i zgody właściciela zapisanej przy połączeniu. Przełącznik w UI nie włącza zapisu, gdy serwer go nie pozwala; zgoda wygasa przy zmianie konta i rozłączeniu.
+- Role: członek przygotowuje, administrator zatwierdza, wdraża tylko administrator z flagą „wykonawca zmian” nadaną przez właściciela. Uprawnienia sprawdzane w kontrolerze, w serwisie i ponownie w workerze (w imieniu osoby, która zleciła wdrożenie).
+- Zestaw jest na stałe związany z organizacją, projektem, połączeniem i kontem Google Ads; identyfikator konta nie przychodzi z żądania HTTP. Zasoby spoza konta zestawu są odrzucane (`ResourceName::isValid`).
+- Zatwierdzana jest konkretna wersja (odcisk SHA-256 operacji); każda zmiana unieważnia zatwierdzenie. Przed wysłaniem: ponowny odczyt stanu (dryf → stop), blokada `claim` + `GET_LOCK`, jednorazowy `deploy_key`.
+- Wynik nieznany (timeout, 5xx) nigdy nie jest automatycznie ponawiany – wymaga uzgodnienia stanu odczytem.
+- Historia (`change_events`, `change_attempts`) bez tokenów i pełnych odpowiedzi API (`scrub`).
 
 ## Klucz SSH `key` w repozytorium
 

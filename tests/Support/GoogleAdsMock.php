@@ -143,6 +143,11 @@ final class GoogleAdsMock
 
 		$result = is_callable($handler) ? $handler($request) : $handler;
 
+		// Symulacja braku odpowiedzi (timeout, zerwane połączenie).
+		if ($result instanceof \WP_Error) {
+			return $result;
+		}
+
 		return self::response($result[0], $result[1], $result[2] ?? []);
 	}
 
@@ -180,6 +185,10 @@ final class GoogleAdsMock
 
 		if (str_contains($url, 'listAccessibleCustomers')) {
 			return 'listAccessibleCustomers';
+		}
+
+		if (str_contains($url, 'googleAds:mutate')) {
+			return 'mutate';
 		}
 
 		if ($gaql === null) {

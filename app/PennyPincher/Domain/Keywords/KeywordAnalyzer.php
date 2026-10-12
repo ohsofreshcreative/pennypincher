@@ -17,6 +17,9 @@ final class KeywordAnalyzer
 
 	public const MIN_SCORE = 20;
 
+	/** @var array<int|string, array{0: int, 1: float}>|null */
+	private ?array $rates = null;
+
 	/** Kategorie intencji, których fraz nie proponujemy jako nowych słów kluczowych. */
 	public const BLOCKED_INTENTS = ['excluded', 'jobs', 'free', 'education', 'diy'];
 
@@ -39,7 +42,38 @@ final class KeywordAnalyzer
 		private ?int $averageCpcMicros,
 		private string $currency,
 		private int $days,
+		private ?\Closure $fx = null,
+		private bool $measurementReliable = true,
 	) {
+	}
+
+	/**
+	 * Współczynnik konwersji kampanii (min. 50 kliknięć) albo konta – punkt odniesienia dla wyników historycznych frazy.
+	 */
+	private function referenceRate(?int $campaignId): ?float
+	{
+		if ($this->rates === null) {
+			$this->rates = ['all' => [0, 0.0]];
+
+			foreach ($this->terms as $term) {
+				$c = (int) $term['campaign_id'];
+				$this->rates[$c] ??= [0, 0.0];
+				$this->rates[$c][0] += (int) $term['clicks'];
+				$this->rates[$c][1] += (float) ($term['conversions'] ?? 0);
+				$this->rates['all'][0] += (int) $term['clicks'];
+				$this->rates['all'][1] += (float) ($term['conversions'] ?? 0);
+			}
+		}
+
+		[$clicks, $conversions] = $campaignId !== null ? ($this->rates[$campaignId] ?? [0, 0.0]) : [0, 0.0];
+
+		if ($clicks >= 50 && $conversions > 0) {
+			return $conversions / $clicks;
+		}
+
+		[$clicks, $conversions] = $this->rates['all'];
+
+		return $clicks > 0 && $conversions > 0 ? $conversions / $clicks : null;
 	}
 
 	/**
@@ -80,6 +114,22 @@ final class KeywordAnalyzer
 			}
 		}
 
+		// Pojęcia tego, co konto już targetuje (aktywne lub konwertujące słowa kluczowe) – drugi punkt odniesienia
+		// dla dopasowania do oferty, gdy opis oferty jest ogólny albo go brak.
+		$working = [];
+
+		foreach ($this->keywords as $keyword) {
+			if (in_array($keyword['status'] ?? 'enabled', ['enabled', null], true) || ($keyword['conversions'] ?? 0) > 0) {
+				array_push($working, ...Concepts::of($keyword['text']));
+			}
+		}
+
+		// Nazwy kampanii i grup reklam też opisują, co konto reklamuje (np. „Stoły dębowe”).
+		foreach ([...array_values($this->campaignNames), ...array_map(fn ($g) => (string) $g['name'], $this->adGroups)] as $name) {
+			array_push($working, ...Concepts::of($name));
+		}
+
+		$working = array_values(array_unique($working));
 		$offerStems = array_values(array_unique($offerStems));
 		$priorityStems = array_values(array_unique($priorityStems));
 		$converting = array_values(array_unique($converting));
@@ -128,32 +178,62 @@ final class KeywordAnalyzer
 				continue;
 			}
 
-			$reference = array_values(array_unique([...$offerStems, ...$converting]));
-			$fit = $reference === [] ? null : Text::overlap($candidate['phrase'], $reference);
-
-			if ($fit !== null && $priorityStems !== [] && Text::overlap($candidate['phrase'], $priorityStems) > 0) {
-				$fit = min(1.0, $fit + 0.3);
-			}
-
 			$idea = $candidate['idea'];
 			$term = $candidate['term'];
-			$cpc = $idea['cpc_micros'] ?? null;
-			$cpcCurrency = $idea !== null ? 'USD' : null;
+			$flags = PhraseQuality::flags($candidate['phrase'], $this->context, $working);
+			$fromSearchTerms = isset($candidate['sources']['search_terms']);
+
+			// Automatyczne pomysły DataForSEO w innym języku albo wyglądające na nazwy firm odrzucamy (z własnych haseł – tylko kara).
+			if (! $fromSearchTerms && array_intersect($flags, [PhraseQuality::WRONG_LANGUAGE, PhraseQuality::COMPANY_NAME]) !== []) {
+				continue;
+			}
+
+			// Dopasowanie do oferty: pojęcia z synonimami; bez opisu oferty – podobieństwo do tego, co już konwertuje.
+			$fit = PhraseQuality::offerFit($candidate['phrase'], $this->context, $working);
+
+			if ($fit !== null && $priorityStems !== [] && Text::overlap($candidate['phrase'], $priorityStems) > 0) {
+				$fit = min(1.0, $fit + 0.2);
+			}
+
+			// CPC: z historii konta (waluta projektu) albo z DataForSEO (oryginalna waluta + przeliczenie po kursie z datą i źródłem).
+			$cpc = null;
+			$cpcCurrency = null;
+			$cpcProject = null;
+			$fx = null;
 
 			if ($term !== null && $term['clicks'] > 0) {
 				$cpc = (int) round($term['cost_micros'] / $term['clicks']);
 				$cpcCurrency = $this->currency;
+				$cpcProject = $cpc;
+			} elseif (($idea['cpc_micros'] ?? null) !== null) {
+				$cpc = (int) $idea['cpc_micros'];
+				$cpcCurrency = (string) ($idea['cpc_currency'] ?? 'USD');
+
+				if ($cpcCurrency === $this->currency) {
+					$cpcProject = $cpc;
+				} elseif ($this->fx !== null) {
+					$fx = ($this->fx)($cpc, $cpcCurrency);
+					$cpcProject = $fx['micros'] ?? null;
+				}
 			}
 
-			$score = OpportunityScore::calculate([
+			$referenceRate = $term !== null ? $this->referenceRate($term['campaign_id'] ?? null) : null;
+			$score = OpportunityScoreV2::calculate([
 				'offer_fit' => $fit,
-				'intent' => OpportunityScore::intent($primary),
-				'cpc' => OpportunityScore::cpc($cpc !== null ? (int) $cpc : null, $cpcCurrency, $this->averageCpcMicros, $this->currency),
-				'volume' => OpportunityScore::volume(isset($idea['search_volume']) ? (int) $idea['search_volume'] : null),
+				'intent' => OpportunityScoreV2::intent($primary, $candidate['phrase']),
+				'performance' => $term !== null ? OpportunityScoreV2::performance((int) $term['clicks'], $term['conversions'] === null ? null : (float) $term['conversions'], $referenceRate) : null,
+				'audience' => PhraseQuality::audienceFit($candidate['phrase'], $this->context),
 				'coverage' => $status === null ? 1.0 : 0.5,
+				'cpc' => OpportunityScore::cpc($cpcProject, $cpcProject !== null ? $this->currency : null, $this->averageCpcMicros, $this->currency),
+				'volume' => OpportunityScore::volume(isset($idea['search_volume']) ? (int) $idea['search_volume'] : null),
+				'competition' => OpportunityScoreV2::competition($idea['competition'] ?? null),
+			], $flags, [
+				'term_clicks' => $term !== null ? (int) $term['clicks'] : null,
+				'measurement_reliable' => $this->measurementReliable,
+				'intent_known' => $primary !== 'unknown',
 			]);
 
-			if ($score['score'] < self::MIN_SCORE) {
+			if ($score['score'] < self::MIN_SCORE && ! $fromSearchTerms) {
 				continue;
 			}
 
@@ -176,17 +256,34 @@ final class KeywordAnalyzer
 				$reasons[] = 'Brak opisu oferty w kontekście projektu – dopasowanie nieocenione.';
 			}
 
+			if ($cpcCurrency !== null && $cpcCurrency !== $this->currency && $cpcProject === null) {
+				$reasons[] = sprintf('CPC w %s – brak aktualnego kursu do %s, porównanie z kontem niedostępne.', $cpcCurrency, $this->currency);
+			}
+
 			$opportunities[] = [
 				'phrase' => mb_substr($candidate['phrase'], 0, 255),
 				'normalized' => $key,
 				'sources' => implode(',', array_keys($candidate['sources'])),
 				'score' => $score['score'],
+				'score_version' => OpportunityScoreV2::VERSION,
 				'score_breakdown' => $score['breakdown'],
 				'confidence' => $score['confidence'],
+				'confidence_score' => $score['confidence_score'],
+				'explanation' => [
+					'strengths' => $score['strengths'],
+					'risks' => $score['risks'],
+					'missing' => $score['missing'],
+					'action' => $score['action'],
+				],
+				'quality_flags' => $flags === [] ? null : implode(',', $flags),
 				'intent' => $primary,
 				'search_volume' => isset($idea['search_volume']) ? (int) $idea['search_volume'] : null,
-				'cpc_micros' => $cpc !== null ? (int) $cpc : null,
-				'cpc_currency' => $cpc !== null ? $cpcCurrency : null,
+				'cpc_micros' => $cpc,
+				'cpc_currency' => $cpcCurrency,
+				'cpc_project_micros' => $cpcProject,
+				'fx_rate' => $fx['rate'] ?? null,
+				'fx_date' => $fx['rate_date'] ?? null,
+				'fx_source' => $fx['source'] ?? null,
 				'competition' => $idea['competition'] ?? null,
 				'suggested_campaign_id' => $campaignId,
 				'suggested_ad_group_id' => $adGroupId,

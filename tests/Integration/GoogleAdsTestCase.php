@@ -17,7 +17,7 @@ require_once dirname(__DIR__) . '/Support/GoogleAdsMock.php';
  */
 abstract class GoogleAdsTestCase extends IntegrationTestCase
 {
-	protected const ENV = ['PP_GOOGLE_ADS_CLIENT_ID', 'PP_GOOGLE_ADS_CLIENT_SECRET', 'PP_ENCRYPTION_KEY', 'PP_ENCRYPTION_KEY_PREVIOUS', 'PP_GOOGLE_ADS_DEVELOPER_TOKEN', 'PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID'];
+	protected const ENV = ['PP_GOOGLE_ADS_CLIENT_ID', 'PP_GOOGLE_ADS_CLIENT_SECRET', 'PP_ENCRYPTION_KEY', 'PP_ENCRYPTION_KEY_PREVIOUS', 'PP_GOOGLE_ADS_DEVELOPER_TOKEN', 'PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'PP_GOOGLE_ADS_WRITE_MODE', 'PP_GOOGLE_ADS_API_VALIDATION'];
 
 	protected GoogleAdsMock $mock;
 
@@ -41,6 +41,9 @@ abstract class GoogleAdsTestCase extends IntegrationTestCase
 		putenv('PP_ENCRYPTION_KEY_PREVIOUS');
 		putenv('PP_GOOGLE_ADS_DEVELOPER_TOKEN');
 		putenv('PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID');
+		// Tryb zapisu: domyślny (prepare_only) – testy zapisu włączają go jawnie i wyłącznie dla atrapy API.
+		putenv('PP_GOOGLE_ADS_WRITE_MODE');
+		putenv('PP_GOOGLE_ADS_API_VALIDATION');
 
 		$this->mock = (new GoogleAdsMock())->install();
 	}

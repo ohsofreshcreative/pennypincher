@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use App\PennyPincher\Infrastructure\GoogleAds\Changes\StateQueries;
 use App\PennyPincher\Infrastructure\GoogleAds\Sync\Gaql;
 use App\PennyPincher\Services\GoogleAds\ConnectionService;
 use Tests\Support\GaqlSchemaV25;
@@ -37,6 +38,26 @@ class GaqlSchemaTest extends TestCase
 			'sharedNegatives' => Gaql::sharedNegativeKeywords(),
 			'customer' => ConnectionService::CUSTOMER_QUERY,
 			'customerClient' => ConnectionService::CLIENTS_QUERY,
+			// Change Center – odczyt stanu przed zmianą i weryfikacja po zmianie.
+			'state.budget' => StateQueries::budget('customers/1234567890/campaignBudgets/5'),
+			'state.campaignsByBudget' => StateQueries::campaignsByBudget('customers/1234567890/campaignBudgets/5'),
+			'state.campaign' => StateQueries::campaign('customers/1234567890/campaigns/111'),
+			'state.campaigns' => StateQueries::campaign(),
+			'state.campaignCriterion' => StateQueries::campaignCriterion('customers/1234567890/campaignCriteria/111~5'),
+			'state.campaignCriteria' => StateQueries::campaignCriteria('customers/1234567890/campaigns/111'),
+			'state.adGroup' => StateQueries::adGroup('customers/1234567890/adGroups/222'),
+			'state.adGroups' => StateQueries::adGroups('customers/1234567890/campaigns/111'),
+			'state.adGroupCriterion' => StateQueries::adGroupCriterion('customers/1234567890/adGroupCriteria/222~3'),
+			'state.adGroupCriteria' => StateQueries::adGroupCriteria('customers/1234567890/adGroups/222'),
+			'state.adGroupAd' => StateQueries::adGroupAd('customers/1234567890/adGroupAds/222~9'),
+			'state.adGroupAds' => StateQueries::adGroupAds('customers/1234567890/adGroups/222'),
+			'state.conversionAction' => StateQueries::conversionAction('customers/1234567890/conversionActions/901'),
+			'state.conversionActions' => StateQueries::conversionAction(),
+			'state.customerGoals' => StateQueries::customerGoals(),
+			'state.campaignGoals' => StateQueries::campaignGoals(),
+			'state.customerGoal' => StateQueries::customerGoal('customers/1234567890/customerConversionGoals/PURCHASE~WEBSITE'),
+			'state.campaignGoal' => StateQueries::campaignGoal('customers/1234567890/campaignConversionGoals/111~PURCHASE~WEBSITE'),
+			'state.language' => StateQueries::languageByCode('pl'),
 		];
 	}
 

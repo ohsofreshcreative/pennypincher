@@ -149,9 +149,145 @@ class AnalysisRepository
 		foreach ($rows as &$row) {
 			$row['score_breakdown'] = wp_json_encode($row['score_breakdown']);
 			$row['evidence'] = wp_json_encode($row['evidence']);
+
+			if (isset($row['explanation']) && is_array($row['explanation'])) {
+				$row['explanation'] = wp_json_encode($row['explanation']);
+			}
 		}
 
 		$this->db->insertMany('keyword_opportunities', $rows, 200);
+	}
+
+	public function insertClusters(array $rows): void
+	{
+		foreach ($rows as &$row) {
+			$row['members'] = wp_json_encode($row['members']);
+			$row['cpc_original'] = wp_json_encode($row['cpc_original']);
+		}
+
+		$this->db->insertMany('keyword_clusters', $rows, 200);
+	}
+
+	/**
+	 * Klastry przebiegu z liczbą fraz wg statusu decyzji (bez N+1).
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function clusters(int $runId, int $projectId): array
+	{
+		$rows = $this->db->select('SELECT * FROM ' . $this->db->table('keyword_clusters') . ' WHERE analysis_run_id = ? AND project_id = ? ORDER BY score DESC, phrase_count DESC, id', [$runId, $projectId]);
+
+		return array_map(function ($row) {
+			$row['members'] = json_decode((string) $row['members'], true) ?: [];
+			$row['cpc_original'] = json_decode((string) $row['cpc_original'], true) ?: [];
+
+			return $row;
+		}, $rows);
+	}
+
+	public function findCluster(int $runId, int $projectId, string $clusterKey): ?array
+	{
+		foreach ($this->clusters($runId, $projectId) as $cluster) {
+			if ($cluster['cluster_key'] === $clusterKey) {
+				return $cluster;
+			}
+		}
+
+		return null;
+	}
+
+	/**
+	 * Strona fraz przebiegu z decyzjami użytkownika (status), filtrami i sortowaniem.
+	 *
+	 * @param array{min_score?: ?int, source?: ?string, sort?: string, status?: ?string, cluster?: ?string, intent?: ?string, q?: string, hide_rejected?: bool} $filters
+	 */
+	public function opportunitiesPage(int $runId, int $projectId, array $filters, int $page, int $perPage = 50): \App\PennyPincher\Support\Paginator
+	{
+		$where = ['o.analysis_run_id = ?', 'o.project_id = ?'];
+		$params = [$runId, $projectId];
+
+		if (! empty($filters['min_score'])) {
+			$where[] = 'o.score >= ?';
+			$params[] = (int) $filters['min_score'];
+		}
+
+		if (! empty($filters['source'])) {
+			$where[] = 'o.sources LIKE ?';
+			$params[] = '%' . $this->db->wpdb()->esc_like((string) $filters['source']) . '%';
+		}
+
+		if (! empty($filters['cluster'])) {
+			$where[] = 'o.cluster_key = ?';
+			$params[] = (string) $filters['cluster'];
+		}
+
+		if (! empty($filters['intent'])) {
+			$where[] = 'o.intent = ?';
+			$params[] = (string) $filters['intent'];
+		}
+
+		if (($filters['q'] ?? '') !== '') {
+			$where[] = 'o.phrase LIKE ?';
+			$params[] = '%' . $this->db->wpdb()->esc_like((string) $filters['q']) . '%';
+		}
+
+		if (! empty($filters['status'])) {
+			if ($filters['status'] === 'new') {
+				$where[] = "(d.status IS NULL OR d.status = 'new')";
+			} else {
+				$where[] = 'd.status = ?';
+				$params[] = (string) $filters['status'];
+			}
+		} elseif (! empty($filters['hide_rejected'])) {
+			$where[] = "(d.status IS NULL OR d.status <> 'rejected')";
+		}
+
+		$order = match ($filters['sort'] ?? 'score') {
+			'volume' => 'o.search_volume IS NULL, o.search_volume DESC, o.score DESC',
+			'cpc' => 'o.cpc_project_micros IS NULL, o.cpc_project_micros ASC, o.score DESC',
+			'confidence' => 'o.confidence_score DESC, o.score DESC',
+			default => 'o.score DESC, o.confidence_score DESC',
+		};
+
+		$from = sprintf(' FROM %s o LEFT JOIN %s d ON d.project_id = o.project_id AND d.normalized = o.normalized WHERE %s', $this->db->table('keyword_opportunities'), $this->db->table('keyword_decisions'), implode(' AND ', $where));
+		$paginator = new \App\PennyPincher\Support\Paginator((int) $this->db->scalar('SELECT COUNT(*)' . $from, $params), $page, $perPage);
+		$rows = $this->db->select('SELECT o.*, d.id AS decision_id, d.status AS decision_status, d.note AS decision_note' . $from . " ORDER BY {$order}, o.id LIMIT " . $paginator->perPage . ' OFFSET ' . $paginator->offset(), $params);
+
+		return $paginator->withItems(array_map([self::class, 'decodeOpportunity'], $rows));
+	}
+
+	/**
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function opportunitiesByNormalized(int $runId, int $projectId, array $normalized): array
+	{
+		if ($normalized === []) {
+			return [];
+		}
+
+		$rows = $this->db->select(
+			'SELECT * FROM ' . $this->db->table('keyword_opportunities') . ' WHERE analysis_run_id = ? AND project_id = ? AND normalized IN (' . implode(',', array_fill(0, count($normalized), '?')) . ')',
+			[$runId, $projectId, ...array_values($normalized)]
+		);
+
+		return array_map([self::class, 'decodeOpportunity'], $rows);
+	}
+
+	public static function decodeOpportunity(array $row): array
+	{
+		foreach (['score_breakdown', 'evidence', 'explanation'] as $json) {
+			$row[$json] = isset($row[$json]) && $row[$json] ? (json_decode((string) $row[$json], true) ?: []) : [];
+		}
+
+		$row['quality_flags'] = isset($row['quality_flags']) && $row['quality_flags'] ? explode(',', (string) $row['quality_flags']) : [];
+
+		foreach (['cpc_micros', 'cpc_project_micros', 'search_volume'] as $int) {
+			if (array_key_exists($int, $row)) {
+				$row[$int] = $row[$int] === null ? null : (int) $row[$int];
+			}
+		}
+
+		return $row;
 	}
 
 	public function insertNegativeSuggestions(array $rows): void
@@ -183,12 +319,7 @@ class AnalysisRepository
 
 		$order = ($filters['sort'] ?? '') === 'volume' ? 'search_volume DESC' : (($filters['sort'] ?? '') === 'cpc' ? 'cpc_micros ASC' : 'score DESC');
 
-		return array_map(function ($row) {
-			$row['score_breakdown'] = json_decode((string) $row['score_breakdown'], true) ?: [];
-			$row['evidence'] = json_decode((string) $row['evidence'], true) ?: [];
-
-			return $row;
-		}, $this->db->select('SELECT * FROM ' . $this->db->table('keyword_opportunities') . ' WHERE ' . implode(' AND ', $where) . " ORDER BY {$order}, id", $params));
+		return array_map([self::class, 'decodeOpportunity'], $this->db->select('SELECT * FROM ' . $this->db->table('keyword_opportunities') . ' WHERE ' . implode(' AND ', $where) . " ORDER BY {$order}, id", $params));
 	}
 
 	/**

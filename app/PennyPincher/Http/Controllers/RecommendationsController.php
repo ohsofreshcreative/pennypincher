@@ -11,6 +11,7 @@ use App\PennyPincher\Repositories\MetricsRepository;
 use App\PennyPincher\Repositories\RecommendationRepository;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\Analysis\RecommendationService;
+use App\PennyPincher\Services\Changes\ChangeLinkService;
 use App\PennyPincher\Support\AnalysisPeriodRequest;
 use App\PennyPincher\Support\AppUrl;
 use Illuminate\Http\Request;
@@ -27,6 +28,7 @@ class RecommendationsController extends Controller
 		private RecommendationService $service,
 		private MetricsRepository $metrics,
 		private AnalysisPeriodRequest $periods,
+		private ChangeLinkService $changeLinks,
 	) {
 		parent::__construct($access);
 	}
@@ -52,12 +54,15 @@ class RecommendationsController extends Controller
 
 		$open = ctype_digit((string) $request->query('open', '')) ? (int) $request->query('open') : null;
 
+		$recommendations = $this->recommendations->paginate($project->id, $filters, max(1, (int) $request->query('page', 1)), 25);
+
 		return $this->render('app.pages.recommendations', [
 			'project' => $project,
+			'changes' => $this->changeLinks->forSources($project, 'recommendation', array_column($recommendations->items, 'id')),
 			'period' => $period,
 			'filters' => $filters,
 			'scope' => $only ? 'period' : 'all',
-			'recommendations' => $this->recommendations->paginate($project->id, $filters, max(1, (int) $request->query('page', 1)), 25),
+			'recommendations' => $recommendations,
 			'counts' => $this->recommendations->counts($project->id),
 			'events' => $open ? $this->recommendations->events($project->id, $open) : [],
 			'open' => $open,

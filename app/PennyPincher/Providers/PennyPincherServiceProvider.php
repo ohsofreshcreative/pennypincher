@@ -6,6 +6,8 @@ use App\PennyPincher\Console\AnalyzeCommand;
 use App\PennyPincher\Console\AuditCommand;
 use App\PennyPincher\Console\CreateOrganizationCommand;
 use App\PennyPincher\Console\DataForSeoCheckCommand;
+use App\PennyPincher\Console\FxUpdateCommand;
+use App\PennyPincher\Console\MonitorCommand;
 use App\PennyPincher\Console\GenerateKeyCommand;
 use App\PennyPincher\Console\GoogleAdsCheckCommand;
 use App\PennyPincher\Console\GoogleAdsDiagnoseCommand;
@@ -13,6 +15,7 @@ use App\PennyPincher\Console\ImportFileCommand;
 use App\PennyPincher\Console\MigrateCommand;
 use App\PennyPincher\Console\PruneStagedImportsCommand;
 use App\PennyPincher\Console\SyncProjectCommand;
+use App\PennyPincher\Console\ChangesWorkCommand;
 use App\PennyPincher\Console\SyncWorkCommand;
 use App\PennyPincher\Domain\Access\AccessDenied;
 use App\PennyPincher\Domain\Import\ReportRegistry;
@@ -72,6 +75,7 @@ class PennyPincherServiceProvider extends ServiceProvider
 				ImportFileCommand::class,
 				PruneStagedImportsCommand::class,
 				SyncWorkCommand::class,
+				ChangesWorkCommand::class,
 				SyncProjectCommand::class,
 				AuditCommand::class,
 				AnalyzeCommand::class,
@@ -79,6 +83,8 @@ class PennyPincherServiceProvider extends ServiceProvider
 				GoogleAdsCheckCommand::class,
 				GoogleAdsDiagnoseCommand::class,
 				DataForSeoCheckCommand::class,
+				MonitorCommand::class,
+				FxUpdateCommand::class,
 			]);
 		}
 	}

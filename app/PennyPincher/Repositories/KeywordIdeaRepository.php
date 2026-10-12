@@ -19,7 +19,7 @@ class KeywordIdeaRepository
 	public function upsert(array $rows): void
 	{
 		$this->db->insertMany('keyword_ideas', $rows, 300,
-			'ON DUPLICATE KEY UPDATE keyword = VALUES(keyword), task_id = VALUES(task_id), seed = VALUES(seed), search_volume = VALUES(search_volume), cpc_micros = VALUES(cpc_micros),
+			'ON DUPLICATE KEY UPDATE keyword = VALUES(keyword), task_id = VALUES(task_id), seed = VALUES(seed), search_volume = VALUES(search_volume), cpc_micros = VALUES(cpc_micros), cpc_currency = VALUES(cpc_currency),
 			competition = VALUES(competition), competition_index = VALUES(competition_index), low_bid_micros = VALUES(low_bid_micros), high_bid_micros = VALUES(high_bid_micros), fetched_at = VALUES(fetched_at)');
 	}
 
@@ -33,6 +33,7 @@ class KeywordIdeaRepository
 			'seed' => $row['seed'],
 			'search_volume' => $row['search_volume'] === null ? null : (int) $row['search_volume'],
 			'cpc_micros' => $row['cpc_micros'] === null ? null : (int) $row['cpc_micros'],
+			'cpc_currency' => (string) ($row['cpc_currency'] ?? 'USD'),
 			'competition' => $row['competition'],
 			'source' => $row['source'],
 			'fetched_at' => $row['fetched_at'],

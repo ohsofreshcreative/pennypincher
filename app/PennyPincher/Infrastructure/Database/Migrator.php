@@ -30,6 +30,8 @@ class Migrator
 			'2026_10_12_000002_view_through_conversions' => [Schema::class, 'viewThroughConversions'],
 			'2026_10_12_000003_google_ads_sync_audit' => [Schema::class, 'googleAds'],
 			'2026_10_12_000004_analysis_modules' => [Schema::class, 'analysis'],
+			'2026_10_12_000005_planning_monitoring' => [Schema::class, 'planning'],
+			'2026_10_12_000006_google_ads_changes' => [Schema::class, 'changes'],
 		];
 	}
 

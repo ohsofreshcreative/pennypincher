@@ -88,7 +88,7 @@ foreach ($ppSuites as $dir) {
 				echo 'S';
 			} catch (\Throwable $e) {
 				$ppResults['failed']++;
-				$ppFailures[] = sprintf("%s::%s\n  %s: %s\n  %s:%d", $class, $method, get_class($e), $e->getMessage(), $e->getFile(), $e->getLine());
+				$ppFailures[] = sprintf("%s::%s\n  %s: %s\n  %s:%d", $class, $method, get_class($e), $e->getMessage() . ($e instanceof \App\PennyPincher\Domain\Support\ValidationFailed ? ' ' . implode(' | ', $e->errors) : ''), $e->getFile(), $e->getLine());
 				echo 'F';
 			} finally {
 				try {

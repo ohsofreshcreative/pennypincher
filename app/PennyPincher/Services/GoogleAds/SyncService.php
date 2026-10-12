@@ -10,6 +10,8 @@ use App\PennyPincher\Repositories\ProjectRepository;
 use App\PennyPincher\Repositories\SyncRunRepository;
 use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Services\Analysis\AnalysisService;
+use App\PennyPincher\Services\Monitoring\AlertNotifier;
+use App\PennyPincher\Services\Monitoring\MonitoringService;
 use DateTimeImmutable;
 use DateTimeZone;
 use Throwable;
@@ -243,7 +245,7 @@ class SyncService
 
 			$this->runs->update($runId, ['status' => SyncRunRepository::COMPLETED, 'finished_at' => $this->db->now(), 'next_attempt_at' => null]);
 			$this->connections->update((int) $connection['id'], ['last_error' => null]);
-			$this->afterCompletion((int) $connection['project_id']);
+			$this->afterCompletion((int) $connection['project_id'], $runId);
 
 			return $this->runs->find($runId);
 		} catch (GoogleAdsApiException $e) {
@@ -353,17 +355,30 @@ class SyncService
 		return $this->runs->find((int) $run['id']);
 	}
 
-	private function afterCompletion(int $projectId): void
+	private function afterCompletion(int $projectId, int $runId): void
 	{
-		try {
-			$project = $this->projects->findById($projectId);
+		$project = $this->projects->findById($projectId);
 
-			if ($project !== null) {
-				// Audyt + Budget Leaks + słowa kluczowe + rekomendacje dla domyślnego okresu (tylko dane z bazy).
-				app(AnalysisService::class)->run($project, AnalysisPeriod::fromPreset(AnalysisPeriod::DEFAULT, $project->timezone()), 'sync');
-			}
+		if ($project === null) {
+			return;
+		}
+
+		try {
+			// Audyt + Budget Leaks + słowa kluczowe + rekomendacje + Action Plan dla domyślnego okresu (tylko dane z bazy).
+			app(AnalysisService::class)->run($project, AnalysisPeriod::fromPreset(AnalysisPeriod::DEFAULT, $project->timezone()), 'sync');
 		} catch (Throwable $e) {
 			error_log('[Penny Pincher] Analiza po synchronizacji nie powiodła się: ' . $e->getMessage());
+		}
+
+		try {
+			// Monitoring po udanej synchronizacji (idempotentny per przebieg) i ewentualne powiadomienia (tylko opt-in).
+			$result = app(MonitoringService::class)->run($project, 'sync', $runId);
+
+			if (! $result['skipped']) {
+				app(AlertNotifier::class)->notify($project);
+			}
+		} catch (Throwable $e) {
+			error_log('[Penny Pincher] Monitoring po synchronizacji nie powiódł się: ' . $e->getMessage());
 		}
 	}
 }

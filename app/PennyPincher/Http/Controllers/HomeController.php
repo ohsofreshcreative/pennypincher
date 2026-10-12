@@ -32,7 +32,7 @@ class HomeController extends Controller
 	{
 		$project = $this->access->project((int) $request->query('project'));
 		$section = (string) $request->query('section', '');
-		$allowed = ['', 'campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits', 'budget-leaks', 'recommendations', 'keywords', 'conversions'];
+		$allowed = ['', 'campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits', 'budget-leaks', 'recommendations', 'keywords', 'conversions', 'planner', 'action-plan', 'monitoring', 'changes', 'management', 'conversion-management'];
 
 		return redirect()->to(AppUrl::project($project->id, in_array($section, $allowed, true) ? $section : ''));
 	}

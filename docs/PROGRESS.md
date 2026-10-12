@@ -1,6 +1,65 @@
 # Penny Pincher – postęp prac
 
-Stan na 12.10.2026 (etap 3 – Prompt 3; wcześniej Prompt 1, 1.1, 2 i poprawki diagnostyki/GAQL).
+Stan na 12.10.2026 (etap 5 – Prompt 5; wcześniej Prompt 1, 1.1, 2, 3, 4 i poprawki diagnostyki/GAQL).
+
+## Prompt 5 – Google Ads Management, Change Center, One-Click Optimization
+
+### Zrobione
+
+- **Change Center** (`docs/CHANGE_CENTER.md`): model zestawów i operacji, 11 statusów zestawu i 9 operacji, podgląd przed/po (stan z API), ryzyko, wpływ na budżet (dzień, %, ×30,4), edycja i usuwanie operacji, przegląd → zatwierdzenie wersji (odcisk) → walidacja lokalna / `validateOnly` → świadome wdrożenie (klucz jednorazowy, potwierdzenie „WDRÓŻ” przy wysokim ryzyku), historia, próby API, uzgadnianie, ponowienie nieudanych, cofnięcie jako nowy szkic, efekty przed/po.
+- **Silnik wykonawczy**: `GoogleAdsMutateClient` (jedyny zapis, własna kontrola trybu), `ExecutionService` (claim + `GET_LOCK`, ponowna kontrola uprawnień i konta, odcisk, dryf, grupy atomowe z tymczasowymi ID, `partial_failure`, wynik per operacja, timeout/5xx → „Wymaga uzgodnienia” bez ponawiania, limit → ponowienie z przerwą, przerwany worker → uzgodnienie, weryfikacja odczytem), `pp:changes:work` + krok w `pp:sync:work`. Tryby READ_ONLY / PREPARE_ONLY (domyślny) / WRITE_ENABLED.
+- **Google Ads Management** (`docs/GOOGLE_ADS_MANAGEMENT.md`): kampanie Search (nowa – zawsze wstrzymana z własnym budżetem, nazwa, status, budżet z obsługą współdzielonego, sieci, strategia, lokalizacje, języki, wykluczenia), grupy, słowa (duplikaty, konflikty z wykluczeniami, limit 80 znaków / 10 słów, zmiana dopasowania jako atomowa zamiana), wykluczenia (blokowane słowa), RSA (nowa wersja). Inne typy kampanii – tylko odczyt.
+- **Conversion Management** (`docs/CONVERSION_MANAGEMENT.md`): konfiguracja Google Ads obok klasyfikacji PP, odczyt działań i celów, edycja dozwolonych pól wg typu, tworzenie konwersji WEBPAGE (z ostrzeżeniem o tagu/GTM), cele konta i kampanii, Conversion Health Check (mikrokonwersja główna – przykład „30 sekund”, zliczanie, duplikaty, nieaktywne, cel niepasujący, cele kampanii, brak pomiaru leadów).
+- **Przygotuj zmianę** w Rekomendacjach, Budget Leaks (BL101/102/201/304), Action Plan, Keyword Opportunities (zaznaczone wykluczenia), Monitoringu (przejście do kampanii) i **Przygotuj wdrożenie do Google Ads** w zatwierdzonym planie kampanii (kolejność zależności, kontrola duplikatów nazw i słów, powiązania lokalne ↔ Google chroniące przed ponownym utworzeniem). Elementy bez odpowiednika w API mają opis „wymaga działań poza Google Ads API”.
+- **Uprawnienia**: `PrepareChanges` (członek), `ApproveChanges`, `ExecuteChanges` (administrator + flaga „wykonawca zmian”), `ManageWriteAccess` (właściciel).
+- **Migracja** `2026_10_12_000006_google_ads_changes` – addytywna i warunkowa.
+- **Poprawki w trakcie**: dane z API w Conversion Management miały niższy priorytet niż dane z importu (operator `+`), brak wykrywania konfliktu nowego słowa z istniejącym wykluczeniem, ostrzeżenie PHP w Health Check, pusty szkic po nieudanym przygotowaniu (teraz anulowany z powodem).
+
+### Weryfikacja (Prompt 5)
+
+- Testy: **263/263** na bazach `fresh` i `local` (216 wcześniejszych + 47 nowych), bez ostrzeżeń PHP w logu. Nowe: `Unit/ChangeDomainTest` (13), `Integration/ChangeCenterTest` (20), `Integration/GoogleAdsManagementTest` (14), rozszerzony `GaqlSchemaTest` (19 nowych zapytań stanu). Zapis testowany wyłącznie na atrapie konta `tests/Support/FakeGoogleAdsAccount` (GAQL + `googleAds:mutate`, tymczasowe ID, `partial_failure`, `validateOnly`, wstrzykiwane timeouty, 5xx, limity).
+- Test HTTP (24/24): strony 200, CSRF 419, zatwierdzenie szkicu i wdrożenie odrzucone, zgoda na zapis niemożliwa bez trybu serwera, członek: szkic tak, zatwierdzenie / wdrożenie / zgoda / wykonawca – 403, zestaw innej organizacji – 404.
+- Zrzuty 1440 / 834 / 390 px: Change Center (lista, szczegóły), Management (lista, kampania, grupa), Conversion Management, moduły z przyciskami – bez poziomego przewijania.
+- Żadnej mutacji ani walidacji na prawdziwym koncie, żadnych zapytań DataForSEO.
+
+### Znane ograniczenia (Prompt 5)
+
+- Zapis nie był uruchomiony na prawdziwym (ani testowym) koncie Google Ads – zachowanie API potwierdzone tylko dokumentacją v25 i atrapą.
+- Kontrola konfliktu słów z wykluczeniami korzysta z wykluczeń z synchronizacji (kampania, grupa); listy wspólne nie są uwzględniane.
+- Reklamy i cele konwersji nie są synchronizowane – odczyt na żądanie.
+- Efekty zmian liczone na danych dziennych z synchronizacji (kampanie objęte zmianą lub całe konto dla celów konta).
+
+## Prompt 4 – Keyword Intelligence 2.0, Campaign Planner, Budget Planner, Action Plan, Monitoring, SaaS
+
+### Zrobione
+
+- **A. Keyword Intelligence 2.0**: edycja fraz źródłowych DataForSEO (usuń/dodaj/popraw, przywróć automatyczne, wczytaj ostatnio użyte, licznik, szacunek kosztu, maks. 20; ten sam limit, zgoda, cache i kolejka); nowy `SeedSelector` z odrzucaniem fraz (język, firmy/domeny, konkurencja, informacyjne, darmowe/praca/DIY, spoza oferty) i powodem; pola kontekstu „Własna marka” i „Marki konkurencji”; `Concepts` (synonimy, odmiany), `PhraseQuality`; `KeywordClusterer` z wymiennym `PhraseSimilarity`; `OpportunityScoreV2` (wersjonowany, osobna pewność 0–100, wyjaśnienie: mocne strony, ryzyka, braki, działanie); statusy fraz w `pp_keyword_decisions` (trwałe, z historią, akcje zbiorcze i dla klastra); waluty: `cpc_currency`, kursy NBP (`ExchangeRateService`, `pp:fx:update`, odświeżanie w workerze), „porównanie niedostępne” bez kursu. Nowa zakładka „Klastry”.
+- **B. Campaign Planner** (`docs/CAMPAIGN_PLANNER.md`): plany (statusy, autor, kopia, historia), kampanie, grupy, słowa (dopasowania bez automatycznego przybliżonego, ostrzeżenie przy słabym pomiarze), dodawanie z Keyword Opportunities (frazy i klastry), wykluczenia na 3 poziomach z kontrolą konfliktów wg reguł Google, reklamy RSA (szablon z kontekstu, walidacja limitów), eksport CSV (BOM, `;`, ochrona przed formułami) i HTML.
+- **C. Budget Planner** (`docs/BUDGET_PLANNER.md`): profil kampanii, podział wg scenariusza (Ostrożny / Zrównoważony / Eksperymentalny, konfigurowalne), prognozy w zakresach, przedział Wilsona dla konwersji tylko przy wiarygodnym pomiarze i historii, ostrzeżenia o przekroczeniu, ręczne korekty, informacja o budżecie dziennym Google.
+- **D. Action Plan**: `ActionPlanBuilder` (grupowanie rekomendacji, kategorie, zależności – najpierw dane i pomiar, priorytet z ograniczeniem „wysokich” do 30%), `ActionPlanService` (trwałe statusy, notatki, historia, automatyczna blokada/odblokowanie tylko dla statusów ustawionych przez system), odświeżanie w potoku analizy.
+- **E. Monitoring** (`docs/MONITORING.md`): 10 typów alertów z progami przeciw fałszywym alarmom, statusy (Nowy/Potwierdzony/Wyciszony/Rozwiązany), historia, deduplikacja, licznik w menu, filtry, e-mail opt-in (próg ważności, 1/dobę, bez ponownej wysyłki trwającego alertu), uruchamianie po udanej synchronizacji (idempotentne per przebieg) i `pp:monitor`.
+- **F. SaaS**: nowe uprawnienia (`EditPlans`, `ApprovePlans`, `ManageBudget`, `RunPaidAnalysis`, `ManageAlerts`), izolacja projektu w każdym repozytorium, kontrolerze, formularzu, eksporcie i zadaniu w tle; DataForSEO: blokada `GET_LOCK` per organizacja przy zlecaniu, ponowna kontrola limitu pod blokadą i w workerze, rezerwacje innych projektów w limicie organizacji; paginacja (frazy, plany, alerty; klastry jednym zapytaniem z decyzjami pobieranymi zbiorczo), indeksy, drzewo planu w 5 zapytaniach (bez N+1).
+- **UI**: menu Campaign Planner, Action Plan, Monitoring (licznik nowych alertów); usunięty blok „W kolejnych etapach”; wyjaśnienia dla osób bez doświadczenia w Google Ads przy wynikach, statusach i prognozach.
+- **Migracja** `2026_10_12_000005_planning_monitoring` – wyłącznie addytywna i warunkowa; historyczne migracje bez zmian.
+- **Poprawki w trakcie**: zła kolejność argumentów historii decyzji przy dodawaniu słów do planu (HTTP 500), podwójny ukośnik w adresach formularzy słów w planie, przyciski statusu planu jako akcje („Zatwierdź plan”) zamiast nazw statusów, historia planu obejmuje też zmiany struktury, deduplikacja powiadomień e-mail o trwających alertach.
+
+### Weryfikacja (Prompt 4)
+
+- Testy: **216/216** na pustej bazie (`fresh`) i na bazie z danymi z wcześniejszych etapów (`local`, migracja 5 na istniejących tabelach); `php tests/run.php unit` bez WordPressa: 109/109. Nowe: `Unit/KeywordIntelligenceTest` (13), `Unit/PlannerDomainTest` (10), `Unit/ActionPlanAndAlertsTest` (6), `Integration/CampaignPlannerTest` (7), `Integration/MonitoringTest` (5), `Integration/ActionPlanAndFxTest` (5), 2 nowe w `DataForSeoTest`, 1 nowy w `GoogleAdsSyncTest`. Żaden test nie został usunięty; podczas pełnego przebiegu w logu PHP nie ma ostrzeżeń.
+- Test HTTP (Python, serwer PHP): wszystkie nowe strony 200 dla obu projektów (bez wyjątków w treści); planer: plan z klastra, dodanie fraz do planu, dodanie słów, zmiana dopasowania, przeniesienie, wykluczenie z konfliktem, usunięcie, eksport CSV (BOM), wszystkie zakładki, zablokowana edycja zatwierdzonego planu, 404 dla cudzego projektu (21/21); rola członka: tworzenie planu i wysyłka do przeglądu – tak, zatwierdzenie, budżet i DataForSEO – 403; regresja Prompt 2/3 (17/17).
+- Zrzuty Chromium 1440 px, 834 px (tablet) i 390 px: Keyword Opportunities (3 zakładki), Campaign Planner (lista, struktura, budżet, wykluczenia, reklamy), Action Plan, Monitoring, Przegląd – bez poziomego przewijania strony.
+- Atrapy: DataForSEO, NBP i e-mail (`pre_http_request`, `pre_wp_mail`) – zero zapytań sieciowych w testach, zero płatnych zapytań.
+
+### Znane ograniczenia (Prompt 4)
+
+- Klastry i dopasowanie do oferty są leksykalno-pojęciowe (słownik synonimów dla usług webowych, meblarskich i ogólnych) – frazy spoza słownika grupują się po wspólnych rdzeniach; model semantyczny można podłączyć przez `PhraseSimilarity`.
+- Wykrywanie języka rozróżnia polski i angielski na podstawie znaczników – krótkie frazy bez znaczników mają język „nieustalony” (nie są odrzucane).
+- Kursy NBP nie były pobrane z prawdziwego API w tym środowisku (brak dostępu do sieci) – parser przetestowany na atrapie zgodnej z dokumentacją NBP; pierwszy kurs pobierze worker albo `pp:fx:update`.
+- Prognozy kliknięć wymagają CPC z historii konta albo przeliczonego CPC z DataForSEO; nowe frazy bez danych mają tylko budżet.
+- Monitoring nie modeluje sezonowości rok do roku; e-mail korzysta z `wp_mail` (na produkcji sprawdź konfigurację poczty).
+- Eksport CSV to zestawienie do ręcznego wdrożenia – nie jest formatem importu Google Ads Editor.
+- Action Plan pokazuje do 300 działań (bez paginacji – w praktyce działań jest kilkanaście).
+
 
 ## Prompt 3 – Budget Leaks, Rekomendacje, Keyword Opportunities, DataForSEO, rozbudowa audytu
 

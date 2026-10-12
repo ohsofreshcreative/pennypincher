@@ -24,7 +24,12 @@ app/PennyPincher/
   Domain/Support/                        NotFound, ValidationFailed
   Domain/Analysis/                       AnalysisPeriod (okres analizy), Statistics (pewność statystyczna), Text (normalizacja, intencje)
   Domain/Leaks/                          Leak, LeakContext, LeakDetector (reguły BL1xx–BL4xx), SavingsEstimate
-  Domain/Keywords/                       OpportunityScore, KeywordAnalyzer (możliwości i wykluczenia), SeedSelector
+  Domain/Keywords/                       KeywordAnalyzer (możliwości i wykluczenia), OpportunityScoreV2 (+ OpportunityScore v1),
+                                         Concepts (pojęcia i synonimy), PhraseQuality (język, marki, firmy, związek z ofertą),
+                                         PhraseSimilarity/LexicalSimilarity, KeywordClusterer, KeywordStatus, SeedSelector
+  Domain/Planner/                        MatchType, NegativeConflictChecker, AdValidator, AdTemplates, PlanStatus, BudgetAllocator
+  Domain/ActionPlan/ActionPlanBuilder    działania z rekomendacji (kategorie, zależności, priorytet)
+  Domain/Monitoring/AlertDetector        reguły alertów (bez dostępu do bazy)
   Domain/Recommendations/                RecommendationGenerator (łączenie, deduplikacja, priorytet)
   Domain/Conversions/ConversionClass     klasy biznesowe konwersji
   Domain/Projects/BusinessContext        kontekst biznesowy projektu (pola opcjonalne)
@@ -39,7 +44,13 @@ app/PennyPincher/
   Services/Audit/AuditContextBuilder     dane wejściowe audytu (okres, stan aktywności); Services/AuditService – uruchamianie i statusy
   Services/Analysis/                     AnalysisService (potok), AnalysisDataBuilder, BudgetLeakService, KeywordOpportunityService,
                                          RecommendationService, ConversionBreakdown
-  Services/DataForSeo/DataForSeoService  plan, zgoda, limity, kolejka, worker, pamięć podręczna
+  Services/DataForSeo/DataForSeoService  plan, frazy źródłowe (edycja), zgoda, limity, blokada organizacji, kolejka, worker, cache
+  Services/Analysis/KeywordDecisionService  statusy fraz (Nowa … Wykorzystana) i ich historia
+  Services/Planner/                      CampaignPlanService, BudgetPlannerService, PlanExporter (docs/CAMPAIGN_PLANNER.md)
+  Services/ActionPlan/ActionPlanService  odświeżanie planu działań, statusy, notatki, automatyczne blokady
+  Services/Monitoring/                   MonitoringService, AlertNotifier (docs/MONITORING.md)
+  Services/Fx/ExchangeRateService        kursy walut (NBP), przeliczenia i kursy krzyżowe
+  Infrastructure/Fx/NbpClient            publiczne API NBP (tabela A), bez klucza
   Jobs/ProcessImport.php                 walidacja + zapis importu (samodzielne zadanie)
   Console/                               komendy `wp acorn pp:*`
   Support/                               AppUrl, Flash, Format, Paginator, LineChart, DateRangeRequest, AnalysisPeriodRequest
@@ -53,7 +64,7 @@ scripts/deploy.sh, scripts/rollback.sh   wdrożenie na Hostinger i wycofanie (do
 
 Zależności między warstwami: kontrolery → serwisy → repozytoria/domena. Domena nie zna kontrolerów, widoków ani bazy (wyjątek: `Project::timezone()` korzysta z `wp_timezone()` jako zapasowej strefy).
 
-Moduły analizy (Budget Leaks, Rekomendacje, Keyword Opportunities) mają warstwy: pobranie (`AnalysisDataBuilder`, `MetricsRepository` + `PeriodResolver`, `DataForSeoClient`) → normalizacja (`Text`, `ConversionBreakdown`) → analiza (`LeakDetector`, `KeywordAnalyzer`) → ocena (`Statistics`, `OpportunityScore`, `Leak::priorityScore`) → rekomendacje (`RecommendationGenerator`) → prezentacja (kontrolery i widoki czytają wyłącznie zapisane wyniki).
+Moduły analizy (Budget Leaks, Rekomendacje, Keyword Opportunities) mają warstwy: pobranie (`AnalysisDataBuilder`, `MetricsRepository` + `PeriodResolver`, `DataForSeoClient`) → normalizacja (`Text`, `ConversionBreakdown`) → analiza (`LeakDetector`, `KeywordAnalyzer`) → ocena (`Statistics`, `OpportunityScoreV2`, `PhraseQuality`, `KeywordClusterer`, `Leak::priorityScore`) → rekomendacje (`RecommendationGenerator`) → plan działań (`ActionPlanBuilder`) → prezentacja (kontrolery i widoki czytają wyłącznie zapisane wyniki).
 
 ## Routing
 
@@ -75,12 +86,15 @@ Trasy rejestruje Acorn (`withRouting(using: …)` w `functions.php` → `routes/
 | `/app/projects/{id}/audits/` | audyt wybranego okresu (`?period=last_30\|last_90\|last_180\|last_365\|custom&from=&to=`), `/audits/{run}/` – audyt z historii; POST `audits/` (uruchom), `audits/findings/{id}/status/` |
 | `/app/projects/{id}/budget-leaks/` | Budget Leaks okresu (filtry: kampania, kategoria, priorytet, status); POST `budget-leaks/{id}/status/` |
 | `/app/projects/{id}/recommendations/` | rekomendacje (filtry, sortowanie, `?open=` – historia); POST `recommendations/{id}/status/`, `/note/`, `/obsolete/` |
-| `/app/projects/{id}/keywords/` | Keyword Opportunities (`?tab=opportunities\|negatives\|dataforseo`); POST `keywords/dataforseo/` (zlecenie po zgodzie), `keywords/dataforseo/test/`, `keywords/dataforseo/limit/` |
+| `/app/projects/{id}/keywords/` | Keyword Opportunities (`?tab=opportunities\|clusters\|negatives\|dataforseo`, filtry statusu/klastra/intencji, paginacja); POST `keywords/status/`, `keywords/clusters/status/`, `keywords/dataforseo/seeds/`, `keywords/dataforseo/` (zlecenie po zgodzie), `keywords/dataforseo/test/`, `keywords/dataforseo/limit/` |
+| `/app/projects/{id}/planner/` | Campaign Planner: lista planów (POST – nowy plan), POST `planner/from-keywords/`; `/planner/{plan}/` (`?tab=structure\|budget\|negatives\|ads\|history`), POST `status/`, `copy/`, `campaigns/…`, `groups/…`, `keywords/{id}/`, `negatives/…`, `budget/…`; GET `export/csv/`, `export/html/` |
+| `/app/projects/{id}/action-plan/` | Action Plan (filtry statusu, kategorii, priorytetu); POST `action-plan/generate/`, `{item}/status/`, `{item}/note/` |
+| `/app/projects/{id}/monitoring/` | alerty (filtry), POST `monitoring/check/`, `{alert}/status/`, `preferences/` (e-mail) |
 | `/app/projects/{id}/conversions/` | klasyfikacja konwersji (GET, POST) |
-| POST `/app/projects/{id}/analysis/` | pełna analiza okresu (audyt → Budget Leaks → słowa → rekomendacje) |
+| POST `/app/projects/{id}/analysis/` | pełna analiza okresu (audyt → Budget Leaks → słowa → rekomendacje → Action Plan) |
 | POST `/app/projects/{id}/settings/context/` | kontekst biznesowy; POST `google-ads/backfill/` – ponowne pobranie historii |
 | `/app/organizations/{id}/members/` | członkowie organizacji |
-| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/`, `/app/google-ads/`, `/app/audits/`, `/app/budget-leaks/`, `/app/recommendations/`, `/app/keywords/`, `/app/conversions/` | skróty → bieżący projekt |
+| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/`, `/app/google-ads/`, `/app/audits/`, `/app/budget-leaks/`, `/app/recommendations/`, `/app/keywords/`, `/app/conversions/`, `/app/planner/`, `/app/action-plan/`, `/app/monitoring/` | skróty → bieżący projekt |
 | `/app/switch/?project=` | przełącznik projektu |
 | inne `/app/*` | 404 aplikacji |
 
@@ -92,7 +106,7 @@ Wymaga „ładnych” bezpośrednich odnośników (Ustawienia → Bezpośrednie 
 
 - **Uwierzytelnianie**: standardowe konta i ciasteczka WordPressa (`wp_signon`), własny formularz; limit prób logowania `LoginThrottle` (szczegóły i plan dla klucza SSH: `docs/SECURITY.md`).
 - **Autoryzacja w backendzie**: każdy projekt/organizacja jest pobierany przez `AccessService`, a zapytanie łączy go z `organization_users` dla bieżącego użytkownika. Brak członkostwa = 404 (nie ujawniamy istnienia cudzych danych), niewystarczająca rola = 403. Administrator WordPressa nie ma automatycznego dostępu do danych organizacji – może jedynie zakładać organizacje (filtr `pennypincher/can_create_organization`).
-- **Role**: członek – podgląd i import; administrator – + projekty, ustawienia, członkowie; właściciel – + rola właściciela. Organizacja musi mieć co najmniej jednego właściciela.
+- **Role** (`Ability::minimumRole`): członek – podgląd, import, statusy fraz (`ManageKeywords`), edycja planów kampanii i wysyłka do przeglądu (`EditPlans`), obsługa alertów (`ManageAlerts`); administrator – + projekty, ustawienia, członkowie, zatwierdzanie i archiwizacja planów (`ApprovePlans`), budżety planów (`ManageBudget`), płatne analizy DataForSEO, frazy źródłowe i limit (`RunPaidAnalysis`); właściciel – + rola właściciela. Organizacja musi mieć co najmniej jednego właściciela. Eksporty planów, zadania w tle (worker, monitoring, powiadomienia) i formularze zawsze działają w zakresie projektu (`project_id` w każdym zapytaniu, identyfikatory z formularzy sprawdzane w obrębie projektu i planu).
 - **Izolacja danych**: wszystkie tabele danych mają `project_id`; repozytoria zawsze filtrują po projekcie, także przy filtrach z parametrów (np. kampania z innego projektu jest ignorowana).
 - **CSRF**: nonce WordPressa (`_pp_nonce`, akcja `pennypincher_app`) dla każdego POST – middleware `VerifyNonce`, odpowiedź 419.
 - **SQL**: `Db` wstawia parametry `?` przez `mysqli_real_escape_string` (jak `wpdb::prepare`, ale z obsługą NULL); nazwy kolumn sortowania pochodzą z białej listy; `LIKE` używa `esc_like`.
@@ -136,9 +150,15 @@ Tabele `{$wpdb->prefix}pp_*`, InnoDB, klucze obce (30), migracje w `Infrastructu
 | `pp_dataforseo_tasks` | zadania DataForSEO: endpoint, zadanie (JSON), hash, status, szacunek i koszt faktyczny, próby, błąd, kto zlecił i kiedy zatwierdził |
 | `pp_dataforseo_cache` | odpowiedzi API (klucz = endpoint + treść zadania + tryb), ważność |
 | `pp_keyword_ideas` | pomysły słów z DataForSEO per projekt, lokalizacja i język (unikalne po frazie znormalizowanej) |
+| `pp_keyword_clusters` | klastry fraz per przebieg analizy słów: nazwa, temat, usługa, intencja, członkowie, wolumen (maks. i suma), CPC, score, pewność, sugerowana kampania/grupa |
+| `pp_keyword_decisions`, `pp_keyword_decision_events` | status frazy w projekcie (unikalny projekt + fraza znormalizowana – przetrwa ponowne analizy i DataForSEO) i historia zmian |
+| `pp_exchange_rates` | kursy walut: para, kurs, data notowania, źródło (unikalne para + data) |
+| `pp_campaign_plans`, `pp_plan_campaigns`, `pp_plan_ad_groups`, `pp_plan_keywords`, `pp_plan_negatives`, `pp_plan_ads`, `pp_plan_events` | Campaign Planner (`docs/CAMPAIGN_PLANNER.md`) |
+| `pp_action_items`, `pp_action_item_events` | Action Plan: działanie na odcisk w projekcie, status, notatka, zależności, powiązane rekomendacje, historia |
+| `pp_alerts`, `pp_alert_events`, `pp_monitoring_runs` | Monitoring: alert na odcisk w projekcie, statusy, historia, przebiegi (unikalne projekt + przebieg synchronizacji) |
 | `pp_schema_migrations` | zastosowane migracje |
 
-Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje), `2026_10_12_000003_google_ads_sync_audit` (tabele wyżej; w tabelach metryk `source` (`import`/`api`), `sync_run_id`, `import_id` może być NULL, unikalny klucz rozszerzony o `source` – nowy klucz powstaje przed usunięciem starego; ustawienia kampanii (`settings` JSON), status grup reklam, ustawienia działań konwersji: `category_code`, `primary_for_goal`, `counting_type`, `type`, `settings`). `2026_10_12_000004_analysis_modules` (tabele modułów analizy wyżej; `projects.business_context` (JSON), `projects.dataforseo_monthly_limit`; `conversion_actions.business_class/business_goal/classified_by/classified_at`; `audit_runs.range_preset` + indeks okresu; `conversion_metrics` per kampania przez istniejące `campaign_scope`). Wszystkie zmiany są warunkowe (sprawdzenie `information_schema`) i addytywne – istniejące dane się nie zmieniają.
+Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje), `2026_10_12_000003_google_ads_sync_audit` (tabele wyżej; w tabelach metryk `source` (`import`/`api`), `sync_run_id`, `import_id` może być NULL, unikalny klucz rozszerzony o `source` – nowy klucz powstaje przed usunięciem starego; ustawienia kampanii (`settings` JSON), status grup reklam, ustawienia działań konwersji: `category_code`, `primary_for_goal`, `counting_type`, `type`, `settings`). `2026_10_12_000004_analysis_modules` (tabele modułów analizy wyżej; `projects.business_context` (JSON), `projects.dataforseo_monthly_limit`; `conversion_actions.business_class/business_goal/classified_by/classified_at`; `audit_runs.range_preset` + indeks okresu; `conversion_metrics` per kampania przez istniejące `campaign_scope`). `2026_10_12_000005_planning_monitoring` (Prompt 4: tabele wyżej; `projects.keyword_seeds` (JSON: własny i ostatnio użyty zestaw fraz źródłowych); `keyword_ideas.cpc_currency` (domyślnie USD); w `keyword_opportunities`: `score_version` (istniejące wiersze = 1.0), `confidence_score`, `explanation`, `normalized`, `cluster_key`, `quality_flags`, `cpc_project_micros`, `fx_rate`, `fx_date`, `fx_source` + indeks klastra). `2026_10_12_000006_google_ads_changes` (Prompt 5: `change_sets`, `change_operations`, `change_events`, `change_attempts`, `google_ads_links`, `google_ads_snapshots`; `organization_users.can_execute_changes`; `google_ads_connections.write_enabled`, `write_enabled_by`, `write_enabled_at`). Wszystkie zmiany są warunkowe (sprawdzenie `information_schema`) i addytywne – istniejące dane (w tym historia z Google Ads) się nie zmieniają.
 
 Zasady:
 
@@ -226,7 +246,7 @@ Stan danych okresu (`AuditContextBuilder::activity`): `no_data` (brak danych), `
 
 ## Moduły analizy
 
-Potok `AnalysisService::run(projekt, okres)`: audyt → `BudgetLeakService` → `KeywordOpportunityService` → `RecommendationService::refresh`. Błąd jednego modułu nie blokuje pozostałych. Uruchamiany ręcznie (POST `analysis/`, `wp acorn pp:analyze {projekt} --period=`), po każdej synchronizacji (ostatnie 30 dni) i po pobraniu danych z DataForSEO (bez audytu). Nigdy przy wyświetlaniu strony.
+Potok `AnalysisService::run(projekt, okres)`: audyt → `BudgetLeakService` → `KeywordOpportunityService` → `RecommendationService::refresh` → `ActionPlanService::refresh`. Błąd jednego modułu nie blokuje pozostałych. Uruchamiany ręcznie (POST `analysis/`, `wp acorn pp:analyze {projekt} --period=`), po każdej synchronizacji (ostatnie 30 dni; potem monitoring – `docs/MONITORING.md`) i po pobraniu danych z DataForSEO (bez audytu). Nigdy przy wyświetlaniu strony.
 
 **Budget Leaks** (`LeakDetector`): reguły na danych okresu.
 
@@ -255,11 +275,44 @@ Pewność: wysoka gdy P < 5%, średnia < 20%, inaczej niska; przy głównie mikr
 
 **Konwersje** (`ConversionClass`, `ConversionBreakdown`): klasy lead / potencjalny kontakt (kliknięcie e-maila, telefonu) / potwierdzony lead / sprzedaż / mikrokonwersja / inna / nieokreślona + znacznik „cel biznesowy”. Propozycja z kategorii Google Ads, ręczna zmiana w `/conversions/` (bez ponownej synchronizacji, bez zmian w Google Ads). Metryki Google (`google`, `google_micro`) i biznesowe (`goals`, `leads`, `potential`, `confirmed`, `sales`…) są osobne; `confirmed` = NULL, jeśli żadne działanie nie jest potwierdzonym leadem. Konta i kampanii nie sumujemy; konwersji nie rozdzielamy proporcjonalnie na hasła i słowa (te mają tylko „Konwersje” Google).
 
-**Słowa kluczowe** (`KeywordAnalyzer`): kandydaci = konwertujące hasła spoza słów kluczowych + pomysły z DataForSEO → deduplikacja po `Text::normalize` → pominięcie aktywnych słów i fraz objętych wykluczeniami (semantyka exact/phrase/broad) → intencja (zablokowane: niepożądani odbiorcy, praca, darmowe, nauka, DIY) → `OpportunityScore` (wagi w kodzie: oferta 35, intencja 25, CPC 15, wolumen 10, brak pokrycia 15; brak danych = 0 pkt i niższa pewność; CPC w USD nie jest porównywane z walutą konta) → sugerowana kampania/grupa (największe pokrycie rdzeni) → zapis ze źródłami. Wykluczenia: grupy tokenów niskiej intencji (informacyjne tylko z niską pewnością i przy istotnym koszcie) + pojedyncze kosztowne hasła (ścisłe), z flagą `already_excluded`.
+**Słowa kluczowe – Keyword Intelligence 2.0** (`KeywordAnalyzer`):
+
+1. Kandydaci = konwertujące hasła spoza słów kluczowych + pomysły z DataForSEO → deduplikacja po `Text::normalize` → pominięcie aktywnych słów i fraz objętych wykluczeniami (semantyka exact/phrase/broad).
+2. Jakość frazy (`PhraseQuality`): język (znaczniki PL/EN), nazwa firmy lub domeny (forma prawna, `*.com/.pl`), marka konkurencji (lista z kontekstu), własna marka (dozwolona), niska intencja, zapytanie informacyjne, brak związku z ofertą. Pomysły z DataForSEO w innym języku lub z nazwą firmy są pomijane; pozostałe flagi obniżają wynik i są pokazywane.
+3. Związek z ofertą na **pojęciach** (`Concepts`: słownik synonimów i odmian, np. cena/koszt/ile kosztuje → `price`, strona/witryna/www → `website`; rdzenie słów) względem kontekstu biznesowego i tego, co konto już reklamuje (aktywne słowa, nazwy kampanii i grup) – nie samych wspólnych słów.
+4. **Opportunity Score 2.0** (`OpportunityScoreV2`, wersja zapisywana w `score_version`): składniki 0–1 z wagami – dopasowanie do oferty 25, intencja zakupowa 20, historyczne wyniki w Google Ads 15 (próba i współczynnik konta), grupa docelowa 10, brak pokrycia w kampaniach 10, CPC 8, wolumen 7, konkurencja 5; kary: inny język −25, nazwa firmy −25, marka konkurencji −15, brak związku z ofertą −15, informacyjne −10. CPC liczy się tylko przy dobrej intencji i dopasowaniu (tani, ale nietrafny ruch nie podnosi wyniku). Brak CPC to brak danych (nie 0), brak wolumenu nie oznacza braku popytu – obniża **pewność** (0–100, osobno od wyniku: kompletność danych, próba historyczna, jakość pomiaru). Wyjaśnienie: rozbicie punktów, mocne strony, ryzyka, brakujące dane, sugerowane działanie.
+5. Waluty: CPC z DataForSEO zostaje w oryginalnej walucie (`cpc_currency`); do porównań przeliczane kursem NBP (`ExchangeRateService`, kurs nie starszy niż 10 dni, kursy krzyżowe przez PLN) z zapisem kursu, daty i źródła. Bez kursu: wartość oryginalna i „porównanie niedostępne”.
+6. **Klastry** (`KeywordClusterer` + interfejs `PhraseSimilarity`, implementacja `LexicalSimilarity` – deterministyczna, gotowa do podmiany na model semantyczny): ta sama grupa intencji (zakupowa/nieokreślona razem, informacyjne/darmowe/DIY osobno), te same modyfikatory (cena, tanio, za darmo, lokalizacja), podobieństwo pojęć ≥ 0,6 albo zawieranie się zbiorów (≥ 2 wspólne pojęcia). Klaster: nazwa, usługa z kontekstu, intencja, liczba fraz, wolumen jako szacunek (maks. i suma jako górna granica – frazy się nakładają), CPC (mediana, oryginalne waluty osobno), score, pewność, sugerowana kampania i grupa.
+7. Statusy fraz (`KeywordStatus`, `pp_keyword_decisions`): Nowa / Do sprawdzenia / Zaakceptowana / Odrzucona / W planie kampanii / Wykorzystana (gdy fraza z planu lub zaakceptowana pojawi się jako aktywne słowo na koncie – ustawia analiza po synchronizacji). Decyzja jest per projekt i fraza znormalizowana, więc przetrwa synchronizację, ponowną analizę i ponowne pobranie DataForSEO; historia w `pp_keyword_decision_events`. Akcje: zaakceptuj, odrzuć, przywróć, dodaj do planu – dla zaznaczonych fraz i całych klastrów.
+
+Wykluczenia: grupy tokenów niskiej intencji (informacyjne tylko z niską pewnością i przy istotnym koszcie) + pojedyncze kosztowne hasła (ścisłe), z flagą `already_excluded`.
+
+Frazy źródłowe DataForSEO (`SeedSelector`): usługi priorytetowe (+ wariant „dla firm”, gdy grupą docelową są firmy), produkty/usługi, konwertujące hasła i słowa, słowa z ruchem; odrzucane z powodem (język, firma, konkurencja, informacyjne, darmowe/praca/nauka, niepożądani odbiorcy, brak związku z ofertą); maks. 20. Użytkownik może je usuwać, dodawać, edytować, przywrócić automatyczne albo ostatnio użyty zestaw (`projects.keyword_seeds`); frazy ręczne dostają tylko ostrzeżenie.
+
+**Action Plan** (`ActionPlanBuilder` + `ActionPlanService`, `/action-plan/`): z aktywnych rekomendacji (które już łączą audyt, Budget Leaks, słowa i wykluczenia) powstają działania – podobne rekomendacje w jednym działaniu (np. pomiar: CT001 + BL401; kampania: PF004 + BL301; wykluczenia „darmowe” – jedno działanie), z linkami do rekomendacji (bez ich kopiowania). Kategorie: dane (blokujące – DQ001/3/4/7), kompletność danych (informacja), pomiar, weryfikacja kampanii, strona docelowa, słowa i hasła, wykluczenia, dopasowania, ustawienia, budżet, nowe słowa. Zależności: wszystko czeka na „dane”, budżet / nowe słowa / dopasowania / kampanie / strona docelowa czekają na pomiar; działania z niespełnionymi zależnościami dostają automatycznie „Zablokowane” i są odblokowywane po wykonaniu zależności (tylko gdy status ustawił system). Priorytet z wpływu, pewności, kosztu problemu, liczby blokowanych działań, nakładu i ryzyka; wysoki najwyżej dla 30% działań. Statusy: Do zrobienia / W trakcie / Zablokowane / Wykonane / Odrzucone – „Wykonane” wyłącznie ręcznie (opcjonalnie także dla powiązanych rekomendacji). Notatki i historia (`pp_action_item_events`).
+
+**Monitoring**: `docs/MONITORING.md`. **Campaign Planner**: `docs/CAMPAIGN_PLANNER.md`. **Budget Planner**: `docs/BUDGET_PLANNER.md`.
 
 **Rekomendacje** (`RecommendationGenerator` + `RecommendationService`): z problemów audytu (bez informacji i pominiętych), Budget Leaks (bez pominiętych i niskich/niepewnych), możliwości (score ≥ 50, grupowane per grupa reklam) i wykluczeń (grupowane per powód, bez już wykluczonych). Podobne problemy są łączone (hasła i słowa per kampania, duplikaty), ten sam temat z kilku źródeł (np. PF004 i BL301) – deduplikowany (wyższy priorytet + 5, źródła łączone). Odcisk = sha1(temat), niezależny od okresu: ponowna analiza aktualizuje treść, zachowuje status i notatkę. Brak w analizie tego samego okresu → „nieaktualna” (automatycznie przywracana, gdy problem wraca; ręczne oznaczenie zostaje). Statusy: Nowa, Do sprawdzenia, Zaakceptowana, Odrzucona, Wykonana (wyłącznie ręczne potwierdzenie). Każda zmiana → `recommendation_events`.
 
 **DataForSEO**: `docs/DATAFORSEO.md`.
+
+## Change Center (Prompt 5)
+
+Szczegóły: `docs/CHANGE_CENTER.md`. Warstwy:
+
+```
+Http/Controllers/{ChangeCenter,GoogleAdsManagement,ConversionManagement}Controller   – formularze, uprawnienia, bez mutacji
+Services/Changes/ChangeProposalService     – budowa operacji z formularzy i źródeł (rekomendacje, wycieki, Action Plan, Health Check)
+Services/Changes/PlanDeploymentService     – plan kampanii → operacje w kolejności zależności, powiązania lokalne ↔ Google
+Services/Changes/ChangeCenterService       – cykl życia zestawu, odczyt stanu, walidacja lokalna/API, zatwierdzanie, kolejka, cofanie
+Services/Changes/ExecutionService          – worker: claim + GET_LOCK, kontrola uprawnień/odcisku/dryfu, wysyłka, uzgadnianie, weryfikacja
+Services/Changes/ChangeEffectsService      – porównanie przed/po
+Services/GoogleAds/{StateReader,WriteGuard} – odczyt GAQL stanu, tryb i uprawnienia zapisu
+Domain/GoogleAds/Changes/*                 – ChangeStatus, WriteMode, OperationCatalog (walidacja, ryzyko, build, expected, inverse, diff), ResourceName
+Infrastructure/GoogleAds/Changes/StateQueries, Infrastructure/GoogleAds/Mutate/GoogleAdsMutateClient (jedyny zapis)
+Console: pp:changes:work (oraz krok w pp:sync:work)
+```
 
 ## Interfejs
 
@@ -285,4 +338,8 @@ Pewność: wysoka gdy P < 5%, średnia < 20%, inaczej niska; przy głównie mikr
 | Zastępowanie okna metryk API zamiast upsertu wierszy | Google koryguje dane wstecz (konwersje z opóźnieniem); usunięcie i wstawienie okna w transakcji usuwa też wiersze, które zniknęły. |
 | Rekomendacje jako jeden wiersz na odcisk (nie per przebieg) | Status, notatka i historia należą do użytkownika i muszą przetrwać ponowne analizy; wyniki przebiegów (leaks, frazy) są per przebieg, żeby okresy się nie nadpisywały. |
 | DataForSEO przez kolejkę w `pp_dataforseo_tasks` i worker `pp:sync:work` | Płatne zapytanie tylko po zgodzie, kontrola limitu tuż przed wywołaniem, ponowienia bez blokowania żądania HTTP (timeout API 120 s). |
+| Klastry przez interfejs `PhraseSimilarity` z deterministyczną implementacją leksykalno-pojęciową | Powtarzalne wyniki i testy bez zewnętrznych usług; model semantyczny (embeddingi) można podłączyć bez zmian w klasteryzacji i widokach. |
+| Statusy fraz w osobnej tabeli decyzji (projekt + fraza) | Wyniki analiz są per przebieg i wersjonowane; decyzje użytkownika muszą przetrwać ponowne analizy i ponowne pobranie danych. |
+| Kursy NBP (tabela A) zamiast płatnego dostawcy | Publiczne, bez klucza, wystarczające do porównań CPC; kurs z datą i źródłem przy każdej wartości. |
+| Monitoring w workerze synchronizacji | Jedno źródło harmonogramu (bez konkurencyjnego crona), dane zawsze świeżo po synchronizacji, idempotencja per przebieg. |
 | Libsodium secretbox z kluczem w `wp-config.php` | Wbudowane w PHP ≥ 7.2, uwierzytelnione szyfrowanie, prosta rotacja; klucz poza bazą chroni tokeny przy wycieku zrzutu bazy. |

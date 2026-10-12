@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Infrastructure\GoogleAds;
 
+use App\PennyPincher\Domain\GoogleAds\Changes\WriteMode;
 use App\PennyPincher\Infrastructure\Security\SecretBox;
 use App\PennyPincher\Support\AppUrl;
 
@@ -57,6 +58,24 @@ class GoogleAdsConfig
 		$version = $this->value('PP_GOOGLE_ADS_API_VERSION') ?? self::DEFAULT_API_VERSION;
 
 		return preg_match('/^v\d{2}$/', $version) ? $version : self::DEFAULT_API_VERSION;
+	}
+
+	/**
+	 * Tryb zapisu z konfiguracji serwera (PP_GOOGLE_ADS_WRITE_MODE): read_only | prepare_only (domyślnie) | write_enabled.
+	 * Nieznana wartość = tylko odczyt. Interfejs aplikacji nie może tego zmienić.
+	 */
+	public function writeMode(): WriteMode
+	{
+		return WriteMode::fromConfig($this->value('PP_GOOGLE_ADS_WRITE_MODE'));
+	}
+
+	/**
+	 * Czy wolno wysyłać do Google Ads żądania walidacyjne (validate_only = true – bez zapisu) w trybie PREPARE_ONLY.
+	 * Domyślnie wyłączone (PP_GOOGLE_ADS_API_VALIDATION = 1, aby włączyć).
+	 */
+	public function apiValidationEnabled(): bool
+	{
+		return in_array(strtolower((string) $this->value('PP_GOOGLE_ADS_API_VALIDATION')), ['1', 'true', 'yes', 'on'], true);
 	}
 
 	public function redirectUri(): string

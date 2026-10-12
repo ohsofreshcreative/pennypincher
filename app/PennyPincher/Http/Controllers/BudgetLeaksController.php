@@ -26,6 +26,7 @@ class BudgetLeaksController extends Controller
 		private BudgetLeakService $service,
 		private MetricsRepository $metrics,
 		private AnalysisPeriodRequest $periods,
+		private \App\PennyPincher\Services\Changes\ChangeLinkService $changeLinks,
 	) {
 		parent::__construct($access);
 	}
@@ -49,6 +50,7 @@ class BudgetLeaksController extends Controller
 
 		return $this->render('app.pages.budget-leaks', [
 			'project' => $project,
+			'changes' => $this->changeLinks->forSources($project, 'budget_leak', array_column($leaks, 'id')),
 			'period' => $period,
 			'run' => $run,
 			'leaks' => $leaks,

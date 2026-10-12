@@ -13,7 +13,7 @@ use App\PennyPincher\Domain\Support\ValidationFailed;
  */
 class BusinessContextValidator
 {
-	private const TEXT_FIELDS = ['products_services', 'priority_services', 'ideal_customer', 'excluded_audiences', 'target_locations', 'advantages', 'secondary_goals'];
+	private const TEXT_FIELDS = ['products_services', 'priority_services', 'ideal_customer', 'excluded_audiences', 'target_locations', 'advantages', 'secondary_goals', 'own_brand', 'competitor_brands'];
 
 	/**
 	 * @return array<string, mixed> wartości do ProjectRepository::update()

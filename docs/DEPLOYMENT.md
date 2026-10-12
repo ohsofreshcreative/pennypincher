@@ -93,12 +93,40 @@ Kroki skryptu:
 ```
 
 - `pp:sync:work` – codzienna synchronizacja Google Ads, dokańczanie backfillu, ponowienia, a po każdej
-  zakończonej synchronizacji analiza (audyt, Budget Leaks, słowa kluczowe, rekomendacje) dla ostatnich 30 dni.
-  W pozostałym czasie wykonuje zadania DataForSEO zatwierdzone ręcznie przez użytkownika (nigdy nie tworzy ich sam).
+  zakończonej synchronizacji analiza (audyt, Budget Leaks, słowa kluczowe, rekomendacje, Action Plan) dla ostatnich
+  30 dni, monitoring (alerty) i powiadomienia e-mail dla osób, które je włączyły. W pozostałym czasie wykonuje zadania
+  DataForSEO zatwierdzone ręcznie przez użytkownika (nigdy nie tworzy ich sam) i najwyżej co 12 h odświeża kursy walut
+  z publicznego API NBP (`api.nbp.pl` musi być osiągalne z serwera; bez tego CPC z DataForSEO pokazuje się
+  w oryginalnej walucie z informacją „porównanie niedostępne”). Osobny cron dla monitoringu nie jest potrzebny.
+- E-maile z alertami idą przez `wp_mail` – przed włączeniem powiadomień sprawdź pocztę WordPressa na serwerze
+  (np. wtyczka SMTP lub poczta Hostingera).
   Czas pracy 240 s mieści się w odstępie 10 minut; równoległe uruchomienia są bezpieczne (blokada na połączenie,
   atomowe przejmowanie zadań DataForSEO).
+- `pp:sync:work` przetwarza też kolejkę Change Center (`pp:changes:work` – do ręcznego uruchomienia). W trybie innym niż
+  `write_enabled` nic nie jest wysyłane do Google Ads; zestawy, które trafiłyby do kolejki, są zatrzymywane z powodem.
 - Jeśli `wp` nie jest w `PATH` crona, użyj pełnej ścieżki (`which wp` w SSH), np. `/usr/local/bin/wp`.
 - Utwórz katalog logów: `mkdir -p ~/logs`.
+
+## Change Center – bezpieczne wdrożenie i włączanie zapisu
+
+**Wdrożenie Promptu 5 bez włączania zapisu**: nie definiuj `PP_GOOGLE_ADS_WRITE_MODE` (domyślnie `prepare_only`) albo ustaw
+`define('PP_GOOGLE_ADS_WRITE_MODE', 'prepare_only');`. Migracja `2026_10_12_000006_google_ads_changes` jest addytywna –
+`wp acorn pp:migrate`. Sprawdź w aplikacji: Google Ads Management → „Uprawnienia do zapisu” pokazuje „Serwer: Przygotowanie zmian
+(bez zapisu)”. `PP_GOOGLE_ADS_API_VALIDATION` pozostaw wyłączone, dopóki nie zdecydujesz się na walidację w Google (żądania
+`validateOnly` nic nie zmieniają, ale są kontaktem z prawdziwym kontem).
+
+**Pierwsza kontrolowana mutacja (osobne konto testowe Google Ads, nie produkcja):**
+1. Utwórz konto testowe (pod kontem menedżera testowego) i połącz je z osobnym projektem Penny Pincher.
+2. Na środowisku testowym/stagingu ustaw `PP_GOOGLE_ADS_WRITE_MODE=write_enabled` (produkcja zostaje w `prepare_only`).
+3. Właściciel: Google Ads Management → „Uprawnienia do zapisu” → wpisz ID konta testowego → „Włącz zapis”; nadaj sobie
+   lub administratorowi flagę „wykonawca zmian”.
+4. Przygotuj jedną zmianę niskiego ryzyka (np. nazwa wstrzymanej kampanii), odczytaj stan, wyślij do przeglądu, zatwierdź,
+   „Wdróż do Google Ads”, uruchom `wp acorn pp:changes:work`.
+5. Sprawdź w Change Center: „Przyjęta przez API” → „Zweryfikowana”, w Google Ads (historia zmian konta) – zmiana z Twojego
+   konta OAuth, a w zakładce „Kontakt z Google Ads API” request-id.
+6. Przygotuj cofnięcie i wdroż je tak samo. Dopiero potem rozważ włączenie zapisu dla konta klienta (zgoda klienta,
+   dostęp Standard/Administrator użytkownika Google, poziom dostępu API co najmniej Explorer).
+7. Wyłączenie awaryjne: `PP_GOOGLE_ADS_WRITE_MODE=prepare_only` (lub `read_only`) – działa natychmiast, także dla zestawów w kolejce.
 
 ## Wycofanie (rollback)
 

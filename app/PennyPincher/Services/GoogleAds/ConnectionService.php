@@ -345,6 +345,10 @@ class ConnectionService
 			'status' => GoogleAdsConnectionRepository::STATUS_ACTIVE,
 			'connected_at' => gmdate('Y-m-d H:i:s'),
 			'last_error' => null,
+			// Zmiana konta = zgoda na zapis musi zostać udzielona ponownie (dotyczyła poprzedniego konta).
+			'write_enabled' => 0,
+			'write_enabled_by' => null,
+			'write_enabled_at' => null,
 		]);
 
 		return $account;
@@ -412,6 +416,7 @@ class ConnectionService
 			'access_token' => null,
 			'access_token_expires_at' => null,
 			'disconnected_at' => gmdate('Y-m-d H:i:s'),
+			'write_enabled' => 0,
 		]);
 
 		delete_transient(self::accountsCacheKey((int) $connection['id']));

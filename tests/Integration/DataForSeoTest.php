@@ -223,6 +223,61 @@ class DataForSeoTest extends IntegrationTestCase
 		$this->assertSame([], $this->requests);
 	}
 
+	public function testSeedEditingCustomSetLimitWarningsAndLastUsed(): void
+	{
+		[$owner, $project] = $this->project(1.0);
+		$service = $this->make(DataForSeoService::class);
+		$period = $this->period($project);
+		$auto = $service->plan($project, $period);
+
+		$this->assertFalse($auto['custom']);
+		$this->assertTrue(count($auto['seeds']) <= 20);
+		$this->assertSame($auto['auto_seeds'], array_map(fn ($s) => array_diff_key($s, ['warning' => 1]), $auto['seeds']));
+
+		$tooMany = array_map(fn ($i) => "sofa model {$i}", range(1, 21));
+		$this->assertContains('Maksymalnie 20 fraz', $this->validationError(fn () => $service->saveSeeds($project, $tooMany, [], $owner)));
+		$this->assertContains('co najmniej jedną', $this->validationError(fn () => $service->saveSeeds($project, ['', '  '], [], $owner)));
+
+		$autoPhrase = $auto['seeds'][0]['phrase'];
+		$saved = $service->saveSeeds($project, [$autoPhrase, '"Online Seller"', 'online seller', '<b>narożnik</b>'], array_column($auto['seeds'], 'phrase'), $owner);
+		$this->assertSame([$autoPhrase, 'online seller', 'narożnik'], array_column($saved, 'phrase'), 'Bez duplikatów i znaczników.');
+		$this->assertSame(['auto', 'manual', 'manual'], array_column($saved, 'source'));
+
+		$plan = $service->plan($project, $period);
+		$this->assertTrue($plan['custom']);
+		$this->assertSame(3, count($plan['seeds']));
+		$manual = array_column($plan['seeds'], 'warning', 'phrase');
+		$this->assertContains('Możliwa niska trafność', (string) $manual['online seller'], 'Ręczna fraza nie jest odrzucana – dostaje ostrzeżenie.');
+		$this->assertSame(0.09, $plan['estimated_cost']);
+
+		$service->request($project, $period, $owner, true);
+		$service->resetSeeds($project);
+		$reset = $service->plan($project, $period);
+		$this->assertFalse($reset['custom']);
+		$this->assertSame(['online seller', 'narożnik'], array_values(array_diff(array_column($reset['last_used'], 'phrase'), [$autoPhrase])), 'Ostatnio użyty zestaw jest zapamiętany.');
+
+		$service->restoreLastUsed($project, $owner);
+		$this->assertSame(array_column($saved, 'phrase'), array_column($service->plan($project, $period)['seeds'], 'phrase'));
+		$this->assertSame([], $this->requests, 'Edycja fraz nie wysyła zapytań.');
+	}
+
+	public function testOrganizationLimitCountsReservationsOfOtherProjects(): void
+	{
+		putenv('PP_DATAFORSEO_ORGANIZATION_MONTHLY_LIMIT=0.1');
+		[$owner, $first] = $this->project(1.0);
+		$secondId = $this->make(ProjectRepository::class)->create($first->organizationId, [
+			'name' => 'Drugi projekt', 'platform' => 'google_ads', 'currency' => 'PLN', 'timezone' => 'Europe/Warsaw', 'status' => 'active',
+		]);
+		[, $second] = $this->project(1.0, $owner, $this->make(ProjectRepository::class)->findForUser($owner, $secondId));
+		$service = $this->make(DataForSeoService::class);
+
+		$service->request($first, $this->period($first), $owner, true);
+		$usage = $service->usage($second);
+		$this->assertEqualsWithDelta(0.09, $usage['organization_reserved'], 0.00001, 'Rezerwacja innego projektu liczy się do limitu organizacji.');
+		$this->assertContains('limit organizacji', $this->validationError(fn () => $service->request($second, $this->period($second), $owner, true)));
+		$this->assertSame([], $this->requests);
+	}
+
 	// --- Pomocnicze ---------------------------------------------------------------------------
 
 	/**

@@ -22,7 +22,7 @@ class GoogleAdsConnectionRepository
 
 	public const LIVE_STATUSES = [self::STATUS_PENDING, self::STATUS_ACTIVE, self::STATUS_REAUTH, self::STATUS_ERROR];
 
-	private const PUBLIC_COLUMNS = 'id, project_id, customer_id, customer_name, login_customer_id, currency, time_zone, google_email, scopes, status, last_error, connected_by, connected_at, disconnected_at, access_token_expires_at, created_at, updated_at';
+	private const PUBLIC_COLUMNS = 'id, project_id, customer_id, customer_name, login_customer_id, currency, time_zone, google_email, scopes, status, last_error, connected_by, connected_at, disconnected_at, access_token_expires_at, created_at, updated_at, write_enabled, write_enabled_by, write_enabled_at';
 
 	public function __construct(private Db $db)
 	{

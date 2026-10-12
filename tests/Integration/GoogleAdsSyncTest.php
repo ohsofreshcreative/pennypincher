@@ -77,6 +77,27 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 		}
 	}
 
+	public function testSuccessfulSyncRunsAnalysisActionPlanAndMonitoringOnce(): void
+	{
+		[$project, $connection] = $this->connected('aftersync');
+		$sync = $this->make(SyncService::class);
+		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
+		$this->assertSame('completed', $run['status'], (string) $run['last_error']);
+
+		$monitoring = $this->db->select('SELECT * FROM ' . $this->db->table('monitoring_runs') . ' WHERE project_id = ?', [$project->id]);
+		$this->assertCount(1, $monitoring, 'Monitoring po udanej synchronizacji (przez kolejkę, bez osobnego crona).');
+		$this->assertSame((int) $run['id'], (int) $monitoring[0]['sync_run_id']);
+		$this->assertSame('sync', $monitoring[0]['trigger_type']);
+		$this->assertTrue($this->count('action_items', $project->id) > 0, 'Action Plan odświeżony po analizie.');
+
+		// Ponowne przetworzenie tego samego przebiegu nie uruchamia monitoringu drugi raz.
+		$this->assertTrue($this->make(\App\PennyPincher\Services\Monitoring\MonitoringService::class)->run($project, 'sync', (int) $run['id'])['skipped']);
+
+		foreach ($this->mock->requests as $request) {
+			$this->assertTrue(in_array(parse_url($request['url'], PHP_URL_HOST), ['oauth2.googleapis.com', 'googleads.googleapis.com'], true), 'Bez płatnych zapytań DataForSEO i innych usług: ' . $request['url']);
+		}
+	}
+
 	public function testApiDataTakesPrecedenceOverImportsWithoutDoubleCounting(): void
 	{
 		[$project, $connection] = $this->connected('precedence');

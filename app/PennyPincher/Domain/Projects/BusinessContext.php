@@ -23,6 +23,8 @@ final class BusinessContext
 		'primary_goal' => 'Główny cel reklamowy',
 		'secondary_goals' => 'Dodatkowe cele reklamowe',
 		'keyword_location_code' => 'Lokalizacja dla danych o słowach kluczowych',
+		'own_brand' => 'Własna marka',
+		'competitor_brands' => 'Marki konkurencji',
 	];
 
 	public const GOALS = [
@@ -117,6 +119,32 @@ final class BusinessContext
 	public function priorityTexts(): array
 	{
 		return self::lines($this->values['priority_services'] ?? null);
+	}
+
+	/**
+	 * Teksty opisujące grupę docelową i klienta idealnego (do oceny zgodności fraz z odbiorcami).
+	 *
+	 * @return array<int, string>
+	 */
+	public function audienceTexts(): array
+	{
+		return array_values(array_filter([$this->targetCustomer, $this->values['ideal_customer'] ?? null]));
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public function ownBrands(): array
+	{
+		return self::lines($this->values['own_brand'] ?? null);
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public function competitorBrands(): array
+	{
+		return self::lines($this->values['competitor_brands'] ?? null);
 	}
 
 	/**

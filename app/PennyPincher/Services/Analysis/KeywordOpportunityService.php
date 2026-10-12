@@ -3,7 +3,12 @@
 namespace App\PennyPincher\Services\Analysis;
 
 use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
+use App\PennyPincher\Domain\Analysis\Text;
 use App\PennyPincher\Domain\Keywords\KeywordAnalyzer;
+use App\PennyPincher\Domain\Keywords\KeywordClusterer;
+use App\PennyPincher\Domain\Keywords\KeywordStatus;
+use App\PennyPincher\Repositories\KeywordDecisionRepository;
+use App\PennyPincher\Services\Fx\ExchangeRateService;
 use App\PennyPincher\Domain\Leaks\LeakDetector;
 use App\PennyPincher\Domain\Projects\Project;
 use App\PennyPincher\Infrastructure\Database\Db;
@@ -26,6 +31,8 @@ class KeywordOpportunityService
 		private MetricsRepository $metrics,
 		private KeywordIdeaRepository $ideas,
 		private LeakDetector $detector,
+		private ExchangeRateService $fx,
+		private KeywordDecisionRepository $decisions,
 	) {
 	}
 
@@ -54,19 +61,30 @@ class KeywordOpportunityService
 			$clicks > 0 ? (int) round($leakContext->totalCost() / $clicks) : null,
 			$project->currency,
 			$period->days(),
+			fn (int $micros, string $currency) => $this->fx->convert($micros, $currency, $project->currency),
+			$leakContext->accountGoals() !== null && $leakContext->accountGoals() > 0 && ! $leakContext->primaryMostlyMicro(),
 		);
 
 		$opportunities = $analyzer->opportunities();
+		$clustering = (new KeywordClusterer())->cluster($opportunities, $context);
+
+		foreach ($opportunities as &$opportunity) {
+			$opportunity['cluster_key'] = $clustering['assignments'][$opportunity['normalized']] ?? null;
+		}
+
+		unset($opportunity);
 		$negatives = $analyzer->negatives($this->detector->minCost($leakContext));
 		$now = $this->db->now();
 
-		return $this->db->transaction(function () use ($project, $period, $trigger, $userId, $opportunities, $negatives, $now, $ideas, $leakContext) {
+		return $this->db->transaction(function () use ($project, $period, $trigger, $userId, $opportunities, $negatives, $now, $ideas, $leakContext, $clustering, $keywords) {
 			$runId = $this->analyses->createRun($project->id, self::TYPE, $period->range->fromString(), $period->range->toString(), $period->preset, $trigger, $userId, [
 				'opportunities' => count($opportunities),
 				'negatives' => count(array_filter($negatives, fn ($n) => ! $n['already_excluded'])),
 				'ideas_available' => count($ideas),
 				'terms_analyzed' => count($leakContext->terms),
 				'context_completeness' => $project->context()->completeness(),
+				'clusters' => count($clustering['clusters']),
+				'score_version' => \App\PennyPincher\Domain\Keywords\OpportunityScoreV2::VERSION,
 			]);
 
 			$this->analyses->insertOpportunities(array_map(fn ($row) => [
@@ -74,7 +92,15 @@ class KeywordOpportunityService
 				'project_id' => $project->id,
 				'fingerprint' => sha1('opp|' . $row['normalized']),
 				'created_at' => $now,
-			] + array_diff_key($row, ['normalized' => true]), $opportunities));
+			] + $row, $opportunities));
+
+			$this->analyses->insertClusters(array_values(array_map(fn ($cluster) => [
+				'analysis_run_id' => $runId,
+				'project_id' => $project->id,
+				'created_at' => $now,
+			] + $cluster, $clustering['clusters'])));
+
+			$this->markUsed($project->id, $keywords);
 
 			$this->analyses->insertNegativeSuggestions(array_map(fn ($row) => [
 				'analysis_run_id' => $runId,
@@ -85,5 +111,18 @@ class KeywordOpportunityService
 
 			return $runId;
 		});
+	}
+
+	/**
+	 * Zaakceptowane / zaplanowane frazy, które pojawiły się jako aktywne słowa kluczowe na koncie → „Wykorzystana”.
+	 */
+	public function markUsed(int $projectId, array $keywords): void
+	{
+		$active = array_map(fn ($k) => Text::normalize($k['text']), array_filter($keywords, fn ($k) => in_array($k['status'] ?? 'enabled', ['enabled', null], true)));
+
+		foreach ($this->decisions->pendingUsed($projectId, $active) as $decision) {
+			$this->decisions->update((int) $decision['id'], ['status' => KeywordStatus::USED]);
+			$this->decisions->addEvent((int) $decision['id'], $projectId, 'used', null, $decision['status'], KeywordStatus::USED, 'Fraza jest aktywnym słowem kluczowym na koncie Google Ads (synchronizacja).');
+		}
 	}
 }

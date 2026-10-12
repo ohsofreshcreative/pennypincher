@@ -26,6 +26,8 @@ abstract class Controller
 			'projects' => $this->access->projects(),
 			'project' => $project instanceof Project ? $project : null,
 			'flash' => Flash::pull(),
+			// Licznik nowych alertów w nawigacji (jedno zapytanie po indeksie; tylko dla projektu bieżącego użytkownika).
+			'alertCount' => $project instanceof Project ? app(\App\PennyPincher\Repositories\AlertRepository::class)->newCount($project->id) : 0,
 			'errors' => [],
 			'old' => [],
 		];

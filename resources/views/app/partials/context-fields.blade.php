@@ -42,5 +42,11 @@
     <x-pp.field name="primary_goal" label="Główny cel reklamowy" :options="['' => 'Wybierz…'] + BusinessContext::GOALS" :value="$value('primary_goal', $context->get('primary_goal'))" :errors="$errors" />
     <x-pp.field name="landing_page_url" label="Adres strony docelowej" type="url" :value="$value('landing_page_url', $project->landingPageUrl)" :errors="$errors" placeholder="https://" />
   </div>
+ <div class="grid gap-5 lg:grid-cols-2">
+    <x-pp.field name="own_brand" label="Własna marka (nazwy, warianty)" type="textarea" rows="2" :value="$value('own_brand', $context->get('own_brand'))" :errors="$errors"
+      help="Jedna w linii. Frazy z własną marką nie są traktowane jako przypadkowe nazwy firm." />
+    <x-pp.field name="competitor_brands" label="Marki konkurencji" type="textarea" rows="2" :value="$value('competitor_brands', $context->get('competitor_brands'))" :errors="$errors"
+      help="Jedna w linii. Frazy z tymi markami dostają niższą ocenę (nie są blokowane – możesz je dodać świadomie)." />
+  </div>
   <x-pp.field name="secondary_goals" label="Dodatkowe cele reklamowe" type="textarea" rows="2" :value="$value('secondary_goals', $context->get('secondary_goals'))" :errors="$errors" />
 </fieldset>

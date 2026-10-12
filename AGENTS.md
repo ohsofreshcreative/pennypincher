@@ -17,7 +17,9 @@ Aplikacja Penny Pincher (`/app/`)
 
 Motyw zawiera aplikację SaaS do audytu kampanii Google Ads. Jej zasady są inne niż zasady bloków ACF
 opisane niżej (anatomia bloku, `-smt`, zakaz mikro-typografii itd. **nie dotyczą** widoków aplikacji).
-Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac: `docs/PROGRESS.md`.
+Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac: `docs/PROGRESS.md`; moduły: `docs/CAMPAIGN_PLANNER.md`,
+`docs/BUDGET_PLANNER.md`, `docs/MONITORING.md`, `docs/GOOGLE_ADS.md`, `docs/DATAFORSEO.md`, `docs/CHANGE_CENTER.md`,
+`docs/GOOGLE_ADS_MANAGEMENT.md`, `docs/CONVERSION_MANAGEMENT.md`.
 
 - Kod: `app/PennyPincher/` (Controllers → Services → Repositories/Domain; Infrastructure, Jobs, Console),
   trasy: `routes/app.php` (Acorn, rejestrowane w `functions.php` przez `withRouting`),
@@ -36,7 +38,11 @@ Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac
 - UI: Tailwind w Blade + klasy komponentów `pp-*` z `pp-app.css`; tokeny kolorów `paper`, `ink`, `mint`, `copper`,
   `line` itd. (bez hexów w Blade). Teksty interfejsu po polsku. Niedziałających modułów nie pokazujemy jako gotowych.
 - Google Ads API (`docs/GOOGLE_ADS.md`): REST przez `Infrastructure/GoogleAds/GoogleHttp` (tylko hosty Google, HTTPS),
-  wyłącznie odczyt – **nigdy nie dodawaj operacji `mutate`** ani innych zmian na koncie reklamowym. Tokeny tylko przez
+  odczyt przez GAQL. **Zmiany na koncie wyłącznie przez Change Center** (`docs/CHANGE_CENTER.md`): operacja w
+  `Domain/GoogleAds/Changes/OperationCatalog` (walidacja, build, expected, inverse) → szkic → zatwierdzenie → worker
+  `Services/Changes/ExecutionService` → jedyny klient zapisu `Infrastructure/GoogleAds/Mutate/GoogleAdsMutateClient`.
+  Nigdy nie wysyłaj mutacji z kontrolera, widoku ani bez zatwierdzonego zestawu; nie włączaj `PP_GOOGLE_ADS_WRITE_MODE=write_enabled`
+  na prawdziwym koncie bez wyraźnej zgody właściciela; testy zapisu tylko na `tests/Support/FakeGoogleAdsAccount`. Tokeny tylko przez
   `ConnectionService` (szyfrowane `SecretBox`), nigdy w logach, komunikatach, URL-ach ani odpowiedziach. Nowe dane do
   synchronizacji: zapytanie w `Sync/Gaql`, zapis w `Sync/ApiSyncer` (metryki `source='api'`, zastępowanie okna w transakcji),
   krok w `ApiSyncer::STRUCTURE_STEPS/METRIC_STEPS`, scenariusz w `tests/Support/GoogleAdsMock`. Nie deklaruj, że integracja
@@ -50,21 +56,42 @@ Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac
   (pewność z `Statistics`, brak konwersji przy małej próbie ≠ strata, oszczędności tylko jako SZACUNEK i przez
   `SavingsEstimate` – bez sumowania nakładających się problemów). Rekomendacje: `RecommendationGenerator` (temat →
   odcisk niezależny od okresu) + `RecommendationService` (status, notatka, historia, nieaktualność – nigdy nie nadpisuj
-  decyzji użytkownika). Opportunity Score: wagi tylko w `OpportunityScore::WEIGHTS`, brak danych = 0 pkt, nigdy
-  wartości zastępcze. Konwersje: metryki Google i biznesowe (`ConversionBreakdown`) są osobne; nie wymyślaj potwierdzonych
+  decyzji użytkownika). Opportunity Score 2.0: wagi i kary tylko w `OpportunityScoreV2::WEIGHTS/PENALTIES`, przy zmianie
+  podbij `VERSION` (zapisywany w `score_version` – historii nie przeliczamy); brak danych = brak punktów i niższa pewność,
+  nigdy wartości zastępcze; niski CPC nie może sam podnosić wyniku. Synonimy i pojęcia – `Concepts`, ocena jakości frazy –
+  `PhraseQuality`, klastry – przez interfejs `PhraseSimilarity` (wyniki deterministyczne). Statusy fraz to decyzje
+  użytkownika w `pp_keyword_decisions` – analiza ich nie zmienia (wyjątek: „Wykorzystana” po pojawieniu się słowa na
+  koncie). Kwot w różnych walutach nie porównuj bez kursu z `ExchangeRateService` (kurs, data, źródło); brak kursu =
+  „porównanie niedostępne”. Konwersje: metryki Google i biznesowe (`ConversionBreakdown`) są osobne; nie wymyślaj potwierdzonych
   leadów, nie rozdzielaj konwersji proporcjonalnie, nie sumuj konta z kampaniami. Kontekst biznesowy to dane projektu
   (`BusinessContext`) – nigdy nie wpisuj danych konkretnego klienta do kodu.
 - DataForSEO (`docs/DATAFORSEO.md`): tylko przez `Infrastructure/DataForSeo` (hosty DataForSEO, Basic Auth z
   `PP_DATAFORSEO_LOGIN/PASSWORD`). Płatne zapytania wyłącznie jako zadania w `pp_dataforseo_tasks` zlecone po zgodzie
   użytkownika i w limicie – nigdy z widoku, testu ani automatycznie; w testach wyłącznie atrapa `pre_http_request`.
   Nowy endpoint: wpis w `DataForSeoClient::ESTIMATES`, parser, test; pola sprawdź w dokumentacji, nie zgaduj.
+  Zlecenie tylko przez `DataForSeoService::request` (blokada organizacji + ponowna kontrola limitu); frazy ręczne
+  dostają ostrzeżenia, nie są odrzucane.
+- Campaign Planner / Budget Planner (`docs/CAMPAIGN_PLANNER.md`, `docs/BUDGET_PLANNER.md`): plany istnieją wyłącznie
+  w aplikacji – nigdy nie twórz niczego w Google Ads. Dopasowania: nigdy automatycznie przybliżone (`MatchType::suggest`).
+  Wykluczenia – tylko ręcznie, z kontrolą `NegativeConflictChecker` (reguły Google: bez wariantów). Szablony reklam
+  wyłącznie z treści kontekstu (bez obietnic, których klient nie podał), walidacja `AdValidator`; nie obiecuj zgodności
+  z zasadami Google. Prognozy jako zakresy; konwersji/kosztu leada nie prognozuj bez wiarygodnego pomiaru
+  (`BudgetAllocator::NO_LEAD_FORECAST`). Eksport CSV: `PlanExporter::cell` (ochrona przed formułami), nie nazywaj go
+  formatem Google Ads Editor.
+- Action Plan i Monitoring (`docs/MONITORING.md`): status „Wykonane”/„Rozwiązany” ustawia wyłącznie użytkownik;
+  generatory (`ActionPlanBuilder`, `AlertDetector`) nie czytają bazy i nie zmieniają statusów użytkownika. Nowa reguła
+  alertu = typ w `AlertDetector::TYPES` + progi minimalnej próby + test fałszywego alarmu. Monitoring działa po
+  synchronizacji w workerze (bez osobnego crona), idempotentnie per przebieg; e-mail tylko opt-in (`AlertNotifier`).
+- Uprawnienia: nowe akcje przypisuj do `Domain\Access\Ability` (np. `EditPlans`, `ApprovePlans`, `ManageBudget`,
+  `RunPaidAnalysis`, `ManageAlerts`) i sprawdzaj w kontrolerze przez `AccessService::project($id, Ability::…)`.
 - Wdrożenie (`docs/DEPLOYMENT.md`): tylko `scripts/deploy.sh` (najpierw `--check`), wyłącznie za zgodą użytkownika; nigdy
   `deploy/deploy-db.sh` ani kopiowanie lokalnej bazy na produkcję; produkcja nie jest środowiskiem developerskim.
   Sekrety (`PP_*`, hasła) tylko w `wp-config.php` serwera / `scripts/deploy.env` (ignorowany) – nigdy w repozytorium ani czacie.
 - Testy: `wp eval-file tests/run.php` (wszystkie; integracyjne w wycofywanej transakcji) albo
   `php tests/run.php unit` (bez WordPressa); filtr: `tests/run.php all GoogleAds`. Komendy: `wp acorn pp:migrate`,
   `pp:organization:create`, `pp:import`, `pp:imports:prune`, `pp:sync:work`, `pp:sync {projekt}`, `pp:audit {projekt}`,
-  `pp:analyze {projekt} --period=`, `pp:key:generate`, `pp:google-ads:check`, `pp:google-ads:diagnose`, `pp:dataforseo:check`.
+  `pp:analyze {projekt} --period=`, `pp:monitor {projekt}`, `pp:fx:update`, `pp:key:generate`, `pp:google-ads:check`,
+  `pp:google-ads:diagnose`, `pp:dataforseo:check`.
 - Dla zadań dotyczących aplikacji `/app/` wolno uruchamiać `yarn build` i sprawdzać widoki w przeglądarce
   (wymaga tego definicja ukończenia etapów Penny Pincher). Commit nadal wykonuje użytkownik.
 
