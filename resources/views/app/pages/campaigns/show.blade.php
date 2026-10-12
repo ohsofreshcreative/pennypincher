@@ -57,7 +57,13 @@
           <tbody>
             @forelse ($sources as $source)
               <tr>
-                <td class="max-w-[220px]"><a href="{{ AppUrl::project($project->id, 'imports/' . $source['import_id']) }}" class="block truncate font-medium hover:text-mint">#{{ $source['import_id'] }} {{ $source['original_filename'] }}</a><span class="text-[12px] text-ink-mute">{{ $reportLabels[$source['report_type']] ?? '' }}</span></td>
+                <td class="max-w-[220px]">
+                  @if ($source['source'] === 'api')
+                    <a href="{{ AppUrl::project($project->id, 'google-ads') }}" class="block truncate font-medium hover:text-mint">Google Ads API</a><span class="text-[12px] text-ink-mute">Synchronizacja (źródło nadrzędne)</span>
+                  @else
+                    <a href="{{ AppUrl::project($project->id, 'imports/' . $source['import_id']) }}" class="block truncate font-medium hover:text-mint">#{{ $source['import_id'] }} {{ $source['original_filename'] }}</a><span class="text-[12px] text-ink-mute">{{ $reportLabels[$source['report_type']] ?? '' }}</span>
+                  @endif
+                </td>
                 <td class="whitespace-nowrap">{{ $source['granularity'] === 'day' ? 'Dzienne (' . $source['rows_count'] . ' dni)' : 'Okres' }}</td>
                 <td class="pp-num whitespace-nowrap">{{ Format::period($source['date_from'], $source['date_to']) }}</td>
                 <td class="pp-col-num">{{ Format::money($source['cost_micros'] !== null ? (int) $source['cost_micros'] : null, $currency) }}</td>

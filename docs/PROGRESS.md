@@ -1,6 +1,59 @@
 # Penny Pincher – postęp prac
 
-Stan na 12.10.2026 (etap 1 – Prompt 1 + poprawki Prompt 1.1).
+Stan na 12.10.2026 (etap 2 – Prompt 2; wcześniej Prompt 1 i 1.1).
+
+## Prompt 2 – Google Ads API, synchronizacja, audyt, produkcja
+
+### Definition of Done
+
+| # | Punkt | Stan |
+|---|---|---|
+| 1 | Aplikacja wdrożona na produkcję | **Nie** – przygotowane (`scripts/deploy.sh`, `docs/DEPLOYMENT.md`), wstrzymane do wymiany klucza SSH i Twojej zgody |
+| 2 | Produkcja zabezpieczona | Częściowo – mechanizmy w kodzie gotowe i przetestowane lokalnie (Hardening, `.htaccess`, HSTS, logowanie, izolacja); ustawienia serwera (wp-config, SSL, cron) do wykonania przy wdrożeniu |
+| 3 | Problem klucza SSH rozwiązany | **Nie** – zabezpieczone wdrożenie (blokada odcisku, `.gitignore`, klucz nie trafia do paczki); rotacja i usunięcie z repozytorium wymagają Twoich kroków (`docs/SECURITY.md`) |
+| 4 | OAuth Google Ads działa | Zaimplementowane, **zweryfikowane tylko na atrapie** – brak projektu Google Cloud i klienta OAuth |
+| 5 | Projekt łączy się z kontem reklamowym | Jak wyżej (wybór konta, MCC, statusy – testy na atrapie) |
+| 6 | Synchronizacja pobiera dane | Jak wyżej (backfill 12 mies., przyrostowa, ponowienia, wznowienie – testy na atrapie) |
+| 7 | Automatyczna synchronizacja | Kod i komendy gotowe (`pp:sync:work`); cron na Hostingerze – do ustawienia przy wdrożeniu |
+| 8 | Silnik audytu działa | **Tak** – 22 reguły, wynik, statusy, historia; działa na danych z importów, reguły ustawień kampanii/konwersji czekają na dane z API |
+| 9 | Audit Score | **Tak** – przejrzyste kary, brak wyniku przy braku danych |
+| 10 | UI i dashboard | **Tak** – strony Google Ads i Audyt, sekcja stanu konta na Przeglądzie (desktop/mobile sprawdzone) |
+| 11 | Testy i dokumentacja | **Tak** – 121 testów (w tym 25 z atrapą API), dokumentacja `GOOGLE_ADS.md`, `DEPLOYMENT.md` i aktualizacje |
+
+### Zrobione
+
+- Połączenie projektu z Google Ads (OAuth 2.0 + PKCE, jednorazowy state powiązany z użytkownikiem i projektem, uprawnienia przy starcie i powrocie), wybór konta (także pod MCC), odświeżanie tokenów, „Wymaga ponownej autoryzacji”, rozłączenie z unieważnieniem tokenu. Tokeny szyfrowane libsodium kluczem spoza repozytorium, rotacja klucza.
+- Synchronizacja przez REST API v25 (tylko odczyt): kampanie z ustawieniami (sieci, lokalizacje, kierowanie, budżet, strategia), grupy reklam, słowa kluczowe, wyszukiwane hasła, działania konwersji z ustawieniami, metryki dzienne. Kolejka `pp_sync_runs`: kroki wznawialne, idempotentne okna, ponowienia z wykładniczym opóźnieniem, blokada równoległych przebiegów, harmonogram dzienny, komendy CLI, strona z postępem, rekordami, błędami i „Ponów”.
+- Pierwszeństwo danych z API nad importami (bez podwójnego liczenia, komunikaty o pominiętych importach), pokrycie okien API (dzień bez wierszy = 0).
+- Silnik audytu z rozszerzalnym interfejsem reguł, 22 reguły (pomiar konwersji, ustawienia, budżet, jakość danych, skuteczność z progami próby), Audit Score 0–100 z rozbiciem na obszary, statusy Nowy/Przejrzany/Pominięty przenoszone między audytami, historia, audyt po każdej synchronizacji.
+- Dashboard: Google Ads (status, ostatnia synchronizacja), Audit Score i problemy krytyczne, tempo budżetu w miesiącu z prognozą (szacunek), ostrzeżenia jakości danych, najważniejsze wyniki audytu.
+- Produkcja: `Hardening` (rejestracja, XML-RPC 403, `/wp/v2/users`, `?author=`), HSTS, `.htaccess` motywu, blokada PHP w `uploads`, `scripts/deploy.sh` (kontrola tylko do odczytu, kopie, rsync, migracje, weryfikacja HTTP) i `scripts/rollback.sh`.
+- Poprawka błędu: `reset()` na właściwości readonly `ValidationFailed::$errors` dawał błąd 500 w `OrganizationsController` (np. przy błędzie dodawania członka).
+
+### Weryfikacja (Prompt 2)
+
+- Testy: 121/121 na pustej bazie i na bazie z danymi z etapu 1 (migracja 3 na istniejących tabelach); w tym `GoogleAdsOAuthTest` (13), `GoogleAdsSyncTest` (12), `AuditTest` (7), `AuditRulesTest` (15), `DeploymentConfigTest` (5).
+- Test HTTP (Python, serwer PHP): strony Przegląd/Google Ads/Audyt, uruchomienie audytu, zmiana statusu, odrzucenie złego statusu i cudzego problemu, połączenie bez konfiguracji, callback ze złym/nieznanym state, brak nonce → 419, anonimowy callback → logowanie; XML-RPC 403, `/wp-json/wp/v2/users` 401, `?author=1` → strona główna.
+- Zrzuty w Chromium (1440 px i 390 px) – bez poziomego przewijania.
+- Komendy `pp:google-ads:check`, `pp:sync:work`, `pp:sync`, `pp:audit` przez kernel Acorn.
+- `scripts/deploy.sh --check` – sprawdzony etap budowy paczki (composer `--no-dev`, `yarn build`); połączenia z serwerem nie nawiązywano.
+
+### Niezweryfikowane
+
+- Prawdziwe Google Ads API (OAuth, konta, GAQL, limity) – brak danych dostępowych. Pierwsze połączenie może ujawnić różnice w polach odpowiedzi.
+- LocalWP (`pennypincher.local`) i produkcja – testy w kopii środowiska.
+- Skrypt wdrożenia na serwerze (część po `--check` i sama kontrola serwera).
+
+### Kolejne kroki
+
+1. Wymiana klucza SSH (`docs/SECURITY.md`, kroki 1–5).
+2. Projekt Google Cloud, ekran zgody, klient OAuth, wniosek o poziom Explorer/Basic (`docs/GOOGLE_ADS.md`).
+3. `wp-config.php` produkcji, `scripts/deploy.sh --check`, po Twojej zgodzie `scripts/deploy.sh`, cron.
+4. Połączenie pierwszego konta (OhSoFresh), kontrola danych z API względem interfejsu Google Ads.
+
+---
+
+## Etap 1 (Prompt 1 i 1.1)
 
 ## Prompt 1.1 – poprawki
 

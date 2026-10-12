@@ -32,8 +32,9 @@ Konfiguracja pierwszego projektu (to ustawienia projektu, a nie stałe aplikacji
 | Fundament: organizacje, projekty, role, logowanie, `/app/` | 1 | gotowe |
 | Import raportów Google Ads (CSV/XLSX) | 1 | gotowe |
 | Przegląd (dashboard), Kampanie, Wyszukiwane hasła, Ustawienia | 1 | gotowe |
-| Google Ads Integration (API, synchronizacja) | 2+ | planowane |
-| Ads Audit | 2 | planowane |
+| Google Ads Integration (OAuth, wybór konta, synchronizacja 12 mies. + codzienna) | 2 | zaimplementowane, przetestowane tylko na atrapie API – wymaga konfiguracji Google Cloud |
+| Ads Audit (22 reguły deterministyczne, Audit Score, statusy problemów) | 2 | gotowe (na danych z importów; reguły ustawień wymagają danych z API) |
+| Wdrożenie produkcyjne (Hostinger) | 2 | przygotowane, niewykonane (blokada: klucz SSH) |
 | Budget Leaks | 2–3 | planowane |
 | Keyword Intelligence (m.in. propozycje wykluczeń) | 3 | planowane |
 | Conversion Intelligence | 3+ | planowane |
@@ -56,16 +57,29 @@ Niedziałające moduły są w nawigacji pokazane wyłącznie jako zablokowana li
 
 Poza zakresem etapu 1: Google Ads API, silnik audytowy, AI, automatyczne wykluczenia, alerty.
 
+## Zakres etapu 2
+
+- połączenie projektu z kontem Google Ads (OAuth 2.0, tylko odczyt), wybór konta (także pod MCC), status, ponowna autoryzacja, rozłączenie,
+- synchronizacja: kampanie z ustawieniami, lokalizacje, grupy reklam, słowa kluczowe, wyszukiwane hasła, działania konwersji z ustawieniami, metryki dzienne; historia 12 miesięcy, potem codziennie; ręcznie, z crona i z CLI; postęp, liczba rekordów, błędy, ponowienie,
+- dane z API mają pierwszeństwo przed importami za te same dni (bez podwójnego liczenia), importy dalej uzupełniają brakujące okresy,
+- audyt: 22 reguły w kategoriach pomiar konwersji, ustawienia kampanii, budżet, jakość danych, skuteczność; każdy problem z dowodami i rekomendacją; statusy Nowy/Przejrzany/Pominięty; historia audytów,
+- Audit Score 0–100 (higiena konta, nie ROAS) z rozbiciem na obszary i uzasadnieniem kar; brak wyniku, gdy danych jest za mało,
+- dashboard: stan połączenia, ostatnia synchronizacja, Audit Score, problemy krytyczne, tempo budżetu w miesiącu (z prognozą oznaczoną jako szacunek), ostrzeżenia o jakości danych, najważniejsze wyniki audytu,
+- przygotowanie produkcji: skrypt wdrożenia i wycofania, utwardzenie WordPressa, blokada plików motywu, cron.
+
+Penny Pincher nigdy nie zmienia kampanii na koncie Google Ads – rekomendacje wdraża użytkownik.
+
 ## Zasady dotyczące danych
 
 - Nie pokazujemy fikcyjnych wyników poza projektem demo.
 - Brak wartości w eksporcie to „—”, nigdy 0.
 - Nie dzielimy raportu okresowego na dni i nie sumujemy nakładających się eksportów.
 - Koszty z raportu wyszukiwanych haseł nie są dodawane do kosztów z raportu kampanii.
-- Każda metryka ma źródło (import), ziarnistość i zakres dat.
+- Każda metryka ma źródło (import lub API), ziarnistość i zakres dat; dla dni z danymi z API importy są pomijane.
+- Dzień bez wierszy w oknie zsynchronizowanym z API oznacza brak aktywności (0); poza takim oknem brak danych to „—”.
 
 ## Plan dalszego rozwoju
 
-1. **Prompt 2** – Ads Audit: reguły audytowe na zaimportowanych danych (struktura kampanii, budżety, stawki, jakość ruchu), raport wyników z priorytetami.
-2. **Prompt 3** – Keyword Intelligence i Budget Leaks: klasyfikacja wyszukiwanych haseł (intencja, dopasowanie do oferty i klienta docelowego z ustawień projektu), propozycje wykluczeń, wykrywanie wydatków bez konwersji.
-3. **Prompt 4** – Google Ads API, Conversion Intelligence, rekomendacje, planer kampanii i monitoring.
+1. ~~**Prompt 2** – Google Ads API, synchronizacja, silnik audytu, wdrożenie~~ (zrobione poza prawdziwym połączeniem z API i samym wdrożeniem – `docs/PROGRESS.md`).
+2. **Prompt 3** – Keyword Intelligence i Budget Leaks: klasyfikacja wyszukiwanych haseł (intencja, dopasowanie do oferty i klienta docelowego z ustawień projektu), propozycje wykluczeń, kolejne reguły audytu w istniejącym silniku.
+3. **Prompt 4** – Conversion Intelligence, rekomendacje, planer kampanii i monitoring z alertami.

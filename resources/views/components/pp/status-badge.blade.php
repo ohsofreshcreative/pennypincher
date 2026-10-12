@@ -14,6 +14,19 @@
     'failed' => ['danger', 'Błąd'],
     'pending' => ['info', 'Oczekująca'],
     'other' => ['neutral', 'Inny'],
+    'queued' => ['info', 'W kolejce'],
+    'running' => ['info', 'W toku'],
+    'pending_account' => ['info', 'Wybierz konto'],
+    'reauth_required' => ['danger', 'Wymaga ponownej autoryzacji'],
+    'disconnected' => ['neutral', 'Rozłączono'],
+    'error' => ['danger', 'Błąd'],
+    'critical' => ['danger', 'Krytyczny'],
+    'warning' => ['warn', 'Ostrzeżenie'],
+    'info' => ['info', 'Informacja'],
+    'new' => ['info', 'Nowy'],
+    'reviewed' => ['ok', 'Przejrzany'],
+    'dismissed' => ['neutral', 'Pominięty'],
+    'partial' => ['warn', 'Częściowy'],
   ];
   [$tone, $default] = $map[$status] ?? ['neutral', 'Brak danych'];
 @endphp

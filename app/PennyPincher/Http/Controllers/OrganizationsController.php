@@ -31,7 +31,7 @@ class OrganizationsController extends Controller
 		try {
 			$organizationId = $this->service->create((string) $request->input('organization_name'), $this->access->userId());
 		} catch (ValidationFailed $e) {
-			return $this->redirect(AppUrl::to('projects'), reset($e->errors), 'error');
+			return $this->redirect(AppUrl::to('projects'), (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
 		}
 
 		return $this->redirect(AppUrl::to('projects/new', ['organization' => $organizationId]), 'Organizacja została utworzona. Dodaj w niej pierwszy projekt.');

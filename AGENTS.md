@@ -35,9 +35,23 @@ Szczegóły: `docs/ARCHITECTURE.md`, zakres i plan: `docs/PRODUCT.md`, stan prac
   `Infrastructure/Import/Writers`, przypadek w `Jobs\ProcessImport::writer()`, plik w `tests/fixtures` i test.
 - UI: Tailwind w Blade + klasy komponentów `pp-*` z `pp-app.css`; tokeny kolorów `paper`, `ink`, `mint`, `copper`,
   `line` itd. (bez hexów w Blade). Teksty interfejsu po polsku. Niedziałających modułów nie pokazujemy jako gotowych.
+- Google Ads API (`docs/GOOGLE_ADS.md`): REST przez `Infrastructure/GoogleAds/GoogleHttp` (tylko hosty Google, HTTPS),
+  wyłącznie odczyt – **nigdy nie dodawaj operacji `mutate`** ani innych zmian na koncie reklamowym. Tokeny tylko przez
+  `ConnectionService` (szyfrowane `SecretBox`), nigdy w logach, komunikatach, URL-ach ani odpowiedziach. Nowe dane do
+  synchronizacji: zapytanie w `Sync/Gaql`, zapis w `Sync/ApiSyncer` (metryki `source='api'`, zastępowanie okna w transakcji),
+  krok w `ApiSyncer::STRUCTURE_STEPS/METRIC_STEPS`, scenariusz w `tests/Support/GoogleAdsMock`. Nie deklaruj, że integracja
+  działa z prawdziwym API, jeśli testowano ją tylko na atrapie.
+- Audyt (`docs/ARCHITECTURE.md` → „Silnik audytu”): reguła = klasa w `Domain/Audit/Rules/` (jedna klasa na plik, `BaseRule`
+  ze stałymi `ID/NAME/DESCRIPTION/CATEGORY/DIMENSION`), wpis w `RuleRegistry::RULES`, podbicie `RuleRegistry::VERSION`,
+  test w `tests/Unit/AuditRulesTest.php`. Reguły są deterministyczne i nie czytają bazy (dane dostarcza `AuditContextBuilder`).
+  Brak danych ≠ zero; przy niepewnych danych reguła milczy albo zgłasza problem jakości danych.
+- Wdrożenie (`docs/DEPLOYMENT.md`): tylko `scripts/deploy.sh` (najpierw `--check`), wyłącznie za zgodą użytkownika; nigdy
+  `deploy/deploy-db.sh` ani kopiowanie lokalnej bazy na produkcję; produkcja nie jest środowiskiem developerskim.
+  Sekrety (`PP_*`, hasła) tylko w `wp-config.php` serwera / `scripts/deploy.env` (ignorowany) – nigdy w repozytorium ani czacie.
 - Testy: `wp eval-file tests/run.php` (wszystkie; integracyjne w wycofywanej transakcji) albo
-  `php tests/run.php unit` (bez WordPressa). Komendy: `wp acorn pp:migrate`, `pp:organization:create`,
-  `pp:import`, `pp:imports:prune`.
+  `php tests/run.php unit` (bez WordPressa); filtr: `tests/run.php all GoogleAds`. Komendy: `wp acorn pp:migrate`,
+  `pp:organization:create`, `pp:import`, `pp:imports:prune`, `pp:sync:work`, `pp:sync {projekt}`, `pp:audit {projekt}`,
+  `pp:key:generate`, `pp:google-ads:check`.
 - Dla zadań dotyczących aplikacji `/app/` wolno uruchamiać `yarn build` i sprawdzać widoki w przeglądarce
   (wymaga tego definicja ukończenia etapów Penny Pincher). Commit nadal wykonuje użytkownik.
 
@@ -902,7 +916,8 @@ Treat existing secrets found in the repository as sensitive.
 W repozytorium są śledzone przez git pliki `key` i `key.pub` — `key` to prywatny klucz OpenSSH
 (prawdopodobnie klucz deploymentu). Plan usunięcia i wymiany klucza: `docs/SECURITY.md`. Nie odczytuj jego zawartości, nie wypisuj jej w odpowiedziach,
 nie kopiuj do innych plików i nie wysyłaj nigdzie. Jeśli zadanie dotyczy deploymentu — zgłoś to
-użytkownikowi zamiast korzystać z klucza.
+użytkownikowi zamiast korzystać z klucza. Klucz jest uznany za ujawniony: `scripts/deploy.sh` odrzuca go po odcisku,
+a od Prompt 2 `key`/`key.pub` są w `.gitignore` (usunięcie z indeksu i historii wykonuje użytkownik).
 
 ⸻
 

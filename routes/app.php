@@ -7,9 +7,11 @@
  * (/app/projects/{project}/…), a dostęp jest sprawdzany w kontrolerze przez AccessService.
  */
 
+use App\PennyPincher\Http\Controllers\AuditsController;
 use App\PennyPincher\Http\Controllers\AuthController;
 use App\PennyPincher\Http\Controllers\CampaignsController;
 use App\PennyPincher\Http\Controllers\DashboardController;
+use App\PennyPincher\Http\Controllers\GoogleAdsController;
 use App\PennyPincher\Http\Controllers\HomeController;
 use App\PennyPincher\Http\Controllers\ImportsController;
 use App\PennyPincher\Http\Controllers\OrganizationsController;
@@ -41,6 +43,9 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 		Route::post('organizations/{organization}/members', [OrganizationsController::class, 'addMember'])->whereNumber('organization');
 		Route::post('organizations/{organization}/members/{user}/remove', [OrganizationsController::class, 'removeMember'])->whereNumber(['organization', 'user']);
 
+		// Powrót z autoryzacji Google – projekt i użytkownik wynikają z jednorazowego parametru state.
+		Route::get('google-ads/callback', [GoogleAdsController::class, 'callback'])->name('pp.google-ads.callback');
+
 		Route::prefix('projects/{project}')->whereNumber('project')->group(function () {
 			Route::get('/', [DashboardController::class, 'show'])->name('pp.dashboard');
 			Route::get('campaigns', [CampaignsController::class, 'index'])->name('pp.campaigns');
@@ -51,12 +56,22 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::get('imports/{import}', [ImportsController::class, 'show'])->whereNumber('import');
 			Route::post('imports/{import}', [ImportsController::class, 'confirm'])->whereNumber('import');
 			Route::post('imports/{import}/cancel', [ImportsController::class, 'cancel'])->whereNumber('import');
+			Route::get('google-ads', [GoogleAdsController::class, 'show'])->name('pp.google-ads');
+			Route::post('google-ads/connect', [GoogleAdsController::class, 'connect']);
+			Route::post('google-ads/account', [GoogleAdsController::class, 'selectAccount']);
+			Route::post('google-ads/sync', [GoogleAdsController::class, 'syncNow']);
+			Route::post('google-ads/sync/{run}/retry', [GoogleAdsController::class, 'retry'])->whereNumber('run');
+			Route::post('google-ads/disconnect', [GoogleAdsController::class, 'disconnect']);
+			Route::get('audits', [AuditsController::class, 'index'])->name('pp.audits');
+			Route::post('audits', [AuditsController::class, 'store']);
+			Route::get('audits/{run}', [AuditsController::class, 'show'])->whereNumber('run');
+			Route::post('audits/findings/{finding}/status', [AuditsController::class, 'updateStatus'])->whereNumber('finding');
 			Route::get('settings', [SettingsController::class, 'edit'])->name('pp.settings');
 			Route::post('settings', [SettingsController::class, 'update']);
 		});
 
 		// Skróty bez identyfikatora projektu – przekierowują do bieżącego projektu.
-		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', ['campaigns', 'search-terms', 'imports', 'settings']);
+		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', ['campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits']);
 
 		Route::any('{any}', [HomeController::class, 'notFound'])->where('any', '.*');
 	});

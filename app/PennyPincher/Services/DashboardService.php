@@ -2,12 +2,17 @@
 
 namespace App\PennyPincher\Services;
 
+use App\PennyPincher\Domain\Audit\Rules\MonthlyPacingForecast;
 use App\PennyPincher\Domain\Metrics\BudgetCalculator;
 use App\PennyPincher\Domain\Metrics\DateRange;
 use App\PennyPincher\Domain\Metrics\MetricCalculator;
 use App\PennyPincher\Domain\Projects\Project;
+use App\PennyPincher\Repositories\AuditRepository;
+use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Repositories\ImportRepository;
 use App\PennyPincher\Repositories\MetricsRepository;
+use App\PennyPincher\Repositories\SyncRunRepository;
+use App\PennyPincher\Services\Audit\AuditContextBuilder;
 
 /**
  * Dane dashboardu. KPI i wykresy pochodzą wyłącznie z raportu kampanii; sekcja wyszukiwanych haseł
@@ -15,8 +20,58 @@ use App\PennyPincher\Repositories\MetricsRepository;
  */
 class DashboardService
 {
-	public function __construct(private MetricsRepository $metrics, private ImportRepository $imports)
+	public function __construct(
+		private MetricsRepository $metrics,
+		private ImportRepository $imports,
+		private GoogleAdsConnectionRepository $connections,
+		private SyncRunRepository $runs,
+		private AuditRepository $audits,
+		private AuditContextBuilder $auditContext,
+	) {
+	}
+
+	/**
+	 * Stan konta: połączenie z Google Ads, ostatni audyt i tempo wydatków w bieżącym miesiącu.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function health(Project $project): array
 	{
+		$connection = $this->connections->currentForProject($project->id);
+		$run = $this->audits->latestRun($project->id);
+		$findings = $run ? array_values(array_filter($this->audits->findings((int) $run['id']), fn ($f) => $f['status'] !== 'dismissed')) : [];
+
+		return [
+			'connection' => $connection,
+			'lastSync' => $connection ? $this->runs->lastCompleted((int) $connection['id']) : null,
+			'lastRun' => $connection ? ($this->runs->recentForProject($project->id, 1)[0] ?? null) : null,
+			'audit' => $run,
+			'auditCritical' => count(array_filter($findings, fn ($f) => $f['severity'] === 'critical')),
+			'auditTop' => array_slice(array_values(array_filter($findings, fn ($f) => $f['severity'] !== 'info' && $f['category'] !== 'data_quality')), 0, 5),
+			'dataQuality' => array_values(array_filter($findings, fn ($f) => $f['category'] === 'data_quality' && $f['severity'] !== 'info')),
+			'pacing' => self::pacing($project, $this->auditContext->monthToDate($project)),
+		];
+	}
+
+	/**
+	 * Tempo wydatków w bieżącym miesiącu. Prognoza to szacunek liniowy i liczymy ją tylko przy pełnych danych dziennych.
+	 */
+	public static function pacing(Project $project, array $mtd): array
+	{
+		$budget = $project->monthlyBudgetMicros;
+		$forecast = null;
+
+		if ($mtd['spend'] !== null && $mtd['complete'] && $mtd['covered_days'] >= MonthlyPacingForecast::MIN_DAYS) {
+			$forecast = (int) round($mtd['spend'] / $mtd['covered_days'] * $mtd['days_in_month']);
+		}
+
+		return $mtd + [
+			'budget' => $budget,
+			'used' => $budget && $mtd['spend'] !== null ? $mtd['spend'] / $budget * 100 : null,
+			'forecast' => $forecast,
+			'forecast_share' => $budget && $forecast !== null ? $forecast / $budget * 100 : null,
+			'expected_share' => $mtd['days_in_month'] > 0 ? $mtd['elapsed_days'] / $mtd['days_in_month'] * 100 : null,
+		];
 	}
 
 	/**

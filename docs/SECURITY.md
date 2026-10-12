@@ -1,6 +1,6 @@
 # Penny Pincher – bezpieczeństwo
 
-Stan kontroli: 12.10.2026 (Prompt 1.1).
+Stan kontroli: 12.10.2026 (Prompt 2 – Google Ads API, produkcja).
 
 ## Mechanizmy aplikacji `/app/`
 
@@ -15,7 +15,15 @@ Stan kontroli: 12.10.2026 (Prompt 1.1).
 | Import plików | Limit rozmiaru, biała lista rozszerzeń, kontrola sygnatury (XLSX = ZIP z `xl/workbook.xml`; CSV ≠ ZIP/PDF/ELF/PHP), wykrywanie danych binarnych, ochrona przed zip bombą i ścieżkami `..`, odrzucanie XML z `DOCTYPE`/`ENTITY` (XXE), `LIBXML_NONET`, limit 100 000 wierszy. Plik nie trafia do `uploads`. |
 | Walidacja danych | Ustawienia projektu (`ProjectValidator`), mapowanie kolumn (istnienie kolumny, brak duplikatów, wymagane pola), wartości w każdym wierszu (`RowNormalizer`) – błąd = nic nie jest zapisywane. |
 | Obsługa błędów | 403/404/419/429 z własnymi stronami; inne wyjątki w `/app/` przy wyłączonym debugu → ogólna strona 500 bez szczegółów (szczegóły w logu). Błędy bazy w imporcie są logowane, użytkownik widzi ogólny komunikat. |
-| Nagłówki | `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store`, `noindex`. |
+| Nagłówki | `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store`, `Permissions-Policy`, `noindex`; przez HTTPS także `Strict-Transport-Security`. |
+| Google Ads – OAuth | Autoryzacja kodem z PKCE (S256); `state` 256-bitowy, jednorazowy, 10 minut, powiązany z użytkownikiem i projektem; uprawnienie właściciela/administratora sprawdzane przy starcie i przy powrocie. Projekt demo nie może się połączyć. |
+| Google Ads – tokeny | Szyfrowane libsodium (`SecretBox`, `v1:` + nonce) kluczem `PP_ENCRYPTION_KEY` spoza repozytorium i bazy, z rotacją przez `PP_ENCRYPTION_KEY_PREVIOUS`. Tokeny nie są zwracane w danych połączenia, logach ani komunikatach. Rozłączenie unieważnia token w Google i usuwa go z bazy. |
+| Google Ads – ruch wychodzący | Tylko HTTPS do `oauth2.googleapis.com`, `googleads.googleapis.com`, `accounts.google.com` (biała lista w `GoogleHttp`); tylko odczyt (`searchStream`, `listAccessibleCustomers`) – brak operacji zmieniających konto. |
+| WordPress | `Hardening`: rejestracja zawsze wyłączona, XML-RPC → 403, `/wp/v2/users` i `?author=N` niedostępne anonimowo, bez wersji WP w nagłówkach. |
+| Pliki motywu | `.htaccess` motywu przepuszcza tylko `public/build/assets/*`, `resources/images|fonts` i `style.css`/`screenshot.png`; kod, `vendor`, `composer.*`, testy, dokumentacja, `key` → 403. |
+| Audyt | Wyłącznie odczyt danych; statusy problemów zmienia członek organizacji (nonce, izolacja projektu). |
+
+Konfiguracja produkcji (wp-config, HTTPS, cron, blokada PHP w `uploads`): `docs/DEPLOYMENT.md`.
 
 Uwagi poza kodem aplikacji:
 
@@ -31,7 +39,7 @@ Wynik sprawdzenia (bez odczytu zawartości klucza):
 | Czy plik istnieje? | Tak: `key` (prywatny klucz OpenSSH, ED25519) i `key.pub` w katalogu głównym motywu. |
 | Czy jest śledzony przez Git? | Tak, oba pliki. |
 | Czy jest w historii? | Tak – od commita `1cc3f31 Initial commit`; jest też na `origin/main` (GitHub `ohsofreshcreative/pennypincher`) oraz w lokalnych referencjach `refs/agents/*` (punkty kontrolne narzędzia agenta). |
-| Czy jest w `.gitignore`? | Nie. |
+| Czy jest w `.gitignore`? | Od Prompt 2 tak (`key`, `key.pub`, `*.pem`, `id_ed25519*`, `scripts/deploy.env`) – ale to nie usuwa już śledzonego pliku: potrzebne `git rm --cached key key.pub` i commit (krok 5). |
 | Odcisk klucza publicznego | `SHA256:G3BAf5zZ4Vff3QXCHmboFPmVKNlR5KSQ5Rlm8UlpVy0` (ED25519) – po nim znajdziesz klucz w GitHub/Hostinger. |
 | Czy kod motywu go używa? | Nie. Skrypty `deploy/*.sh` łączą się z serwerem bez `-i key`, czyli domyślnymi kluczami z `~/.ssh`. Klucz najpewniej służy jako *deploy key* (GitHub → serwer, „Automatyczny deploy”) albo był wygenerowany do takiego celu. |
 
@@ -52,3 +60,23 @@ Klucz należy traktować jako ujawniony: każdy, kto ma lub miał dostęp do rep
 7. **Sprawdź automatyczny deploy** po zmianach (Hostinger pobiera repo kluczem deploy – po wymianie musi mieć nowy klucz, inaczej wdrożenia przestaną działać).
 
 Kroki 4 i 6 są nieodwracalne – dlatego nie zostały wykonane automatycznie.
+
+### Blokada wdrożeń
+
+`scripts/deploy.sh` i `scripts/rollback.sh` odmawiają pracy kluczem o odcisku `SHA256:G3BAf5zZ4Vff3QXCHmboFPmVKNlR5KSQ5Rlm8UlpVy0`
+oraz kluczem leżącym w katalogu repozytorium. Paczka wdrożeniowa nigdy nie zawiera plików `key`/`key.pub`, a `rsync --delete`
+usuwa ich ewentualną starą kopię z katalogu motywu na serwerze. Wdrożenie produkcyjne jest wstrzymane do wykonania kroków 1–4.
+
+### Inne sekrety
+
+Przeszukano pliki śledzone i historię Git (Prompt 1.1 i 2): poza `key` nie znaleziono kluczy prywatnych, tokenów Google
+(`ya29.`, `1//`, `GOCSPX-`, `AIza…`), haseł ani plików `.env`. Hasła bazy są tylko w lokalnych, ignorowanych `deploy/*.sh`.
+Test `DeploymentConfigTest::testNoPrivateKeysInSourceFilesOtherThanKnownLeakedKey` pilnuje tego przy każdym uruchomieniu testów.
+
+### Rotacja klucza szyfrowania tokenów
+
+1. `wp acorn pp:key:generate` → nowa wartość.
+2. W `wp-config.php`: dotychczasowy `PP_ENCRYPTION_KEY` przenieś do `PP_ENCRYPTION_KEY_PREVIOUS`, nowy wpisz jako `PP_ENCRYPTION_KEY`.
+3. Tokeny są odszyfrowywane starym kluczem; przy najbliższym odświeżeniu (synchronizacja, maks. ok. 1 h) access i refresh
+   token zapisują się zaszyfrowane nowym kluczem. Po dobie z działającym cronem `PP_ENCRYPTION_KEY_PREVIOUS` można usunąć
+   (połączenia nieodświeżone w tym czasie trzeba będzie połączyć ponownie).

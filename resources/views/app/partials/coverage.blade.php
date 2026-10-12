@@ -20,7 +20,11 @@
 @else
   <p class="text-[13px] text-ink-mute">
     Dane z {{ $reportLabel }}:
-    @if ($source === 'day')
+    @if ($source === 'api')
+      wartości dzienne z Google Ads API.
+    @elseif ($source === 'api_mixed')
+      wartości dzienne z Google Ads API, uzupełnione importami za dni bez danych z API.
+    @elseif ($source === 'day')
       wartości dzienne.
     @elseif ($source === 'period')
       {{ count($resolved->periods) === 1 ? 'raport okresowy' : 'raporty okresowe' }}
@@ -35,6 +39,12 @@
 
   @if (! $resolved->isComplete())
     <x-pp.alert type="info">Dane pokrywają tylko część wybranego zakresu. Sumy dotyczą wyłącznie dni z danymi, a wykorzystanie budżetu liczymy względem budżetu dla tych samych dni. Brakujących dni nie traktujemy jak zera.</x-pp.alert>
+  @endif
+
+  @if ($resolved->overriddenByApi > 0)
+    <x-pp.alert type="info">
+      Część zaimportowanych danych (dni lub raportów okresowych: <span class="pp-num">{{ $resolved->overriddenByApi }}</span>) pokrywa się z danymi z Google Ads API. Używamy danych z API, a nakładających się importów nie doliczamy – wydatki nie są liczone dwa razy.
+    </x-pp.alert>
   @endif
 
   @if ($resolved->excludedPeriods !== [] || $resolved->excludedDays > 0)

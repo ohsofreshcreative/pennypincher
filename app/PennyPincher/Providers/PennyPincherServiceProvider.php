@@ -2,15 +2,21 @@
 
 namespace App\PennyPincher\Providers;
 
+use App\PennyPincher\Console\AuditCommand;
 use App\PennyPincher\Console\CreateOrganizationCommand;
+use App\PennyPincher\Console\GenerateKeyCommand;
+use App\PennyPincher\Console\GoogleAdsCheckCommand;
 use App\PennyPincher\Console\ImportFileCommand;
 use App\PennyPincher\Console\MigrateCommand;
 use App\PennyPincher\Console\PruneStagedImportsCommand;
+use App\PennyPincher\Console\SyncProjectCommand;
+use App\PennyPincher\Console\SyncWorkCommand;
 use App\PennyPincher\Domain\Access\AccessDenied;
 use App\PennyPincher\Domain\Import\ReportRegistry;
 use App\PennyPincher\Domain\Support\NotFound;
 use App\PennyPincher\Http\Responses;
 use App\PennyPincher\Infrastructure\Database\Db;
+use App\PennyPincher\Infrastructure\Security\Hardening;
 use App\PennyPincher\Repositories\OrganizationRepository;
 use App\PennyPincher\Services\ImportMaintenance;
 use App\PennyPincher\Services\LoginThrottle;
@@ -36,6 +42,8 @@ class PennyPincherServiceProvider extends ServiceProvider
 	{
 		$this->registerExceptionRendering();
 
+		Hardening::register();
+
 		$this->app->make(LoginThrottle::class)->register();
 
 		add_action('deleted_user', function (int $userId) {
@@ -60,6 +68,11 @@ class PennyPincherServiceProvider extends ServiceProvider
 				CreateOrganizationCommand::class,
 				ImportFileCommand::class,
 				PruneStagedImportsCommand::class,
+				SyncWorkCommand::class,
+				SyncProjectCommand::class,
+				AuditCommand::class,
+				GenerateKeyCommand::class,
+				GoogleAdsCheckCommand::class,
 			]);
 		}
 	}

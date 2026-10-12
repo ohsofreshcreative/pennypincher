@@ -1,0 +1,20 @@
+# Penny Pincher – katalog motywu.
+# WordPress ładuje pliki motywu przez PHP (include), więc z przeglądarki potrzebne są tylko zasoby statyczne:
+# zbudowane assety Vite, obrazy i fonty oraz style.css/screenshot.png. Wszystko inne (kod aplikacji, vendor,
+# testy, dokumentacja, composer/package, ewentualne klucze lub pliki deploy) jest niedostępne z sieci.
+# Działa na Apache i LiteSpeed (Hostinger). Szczegóły: docs/DEPLOYMENT.md, docs/SECURITY.md.
+
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	RewriteRule ^(public/build/assets/[^/]+\.(css|js|woff2?|svg|png|jpe?g|webp|avif|gif)|resources/(images|fonts)/.+\.(svg|png|jpe?g|webp|avif|gif|woff2?|ttf|otf)|style\.css|screenshot\.png)$ - [L]
+	RewriteRule ^ - [F,L]
+</IfModule>
+
+# Gdyby mod_rewrite był niedostępny: blokada najbardziej wrażliwych plików.
+<IfModule !mod_rewrite.c>
+	<FilesMatch "(^\.|\.(php|phtml|md|json|lock|ya?ml|log|sh|sql|env|dist|xml|txt|gz|zip|neon)$|^key$|^key\.pub$)">
+		Require all denied
+	</FilesMatch>
+</IfModule>
+
+Options -Indexes

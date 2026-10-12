@@ -14,25 +14,49 @@ namespace App\PennyPincher\Domain\Metrics;
  * 2. Nigdy nie sumujemy nakładających się danych (dzień zawarty w okresie, dwa nakładające się okresy).
  * 3. Liczymy dwa warianty: „najpierw dni” i „najpierw okresy” (okresy zachłannie od najdłuższego)
  *    i wybieramy ten, który pokrywa więcej dni zakresu; przy remisie wygrywają dane dzienne.
+ * 4. Pierwszeństwo źródeł: dni objęte kompletną synchronizacją z Google Ads API (`$apiCoverage`) są brane
+ *    wyłącznie z API. Importy uzupełniają tylko pozostałe dni; raport okresowy z importu nakładający się
+ *    choćby na jeden dzień z API jest pomijany (nie da się go podzielić) i raportowany jako konflikt źródeł.
  */
 final class PeriodResolver
 {
 	/**
-	 * @param array<int, array{granularity: string, date_from: string, date_to: string}> $available
+	 * @param array<int, array{granularity: string, date_from: string, date_to: string, source?: string}> $available
+	 * @param array<int, array{0: string, 1: string}> $apiCoverage zakresy dat zsynchronizowane z API
 	 */
-	public static function resolve(array $available, DateRange $range): ResolvedPeriods
+	public static function resolve(array $available, DateRange $range, array $apiCoverage = []): ResolvedPeriods
 	{
+		$apiRanges = self::clipAndMerge($apiCoverage, $range);
+		$apiDayCount = self::periodDays($apiRanges);
+
 		$days = [];
 		$periods = [];
 		$outside = [];
+		$overridden = 0;
 
 		foreach ($available as $row) {
+			if (($row['source'] ?? 'import') === 'api') {
+				continue;
+			}
+
 			$from = (string) $row['date_from'];
 			$to = (string) $row['date_to'];
 
 			if ($row['granularity'] === 'day') {
 				if ($range->contains($from)) {
-					$days[$from] = true;
+					if (self::dayInPeriods($from, $apiRanges)) {
+						$overridden++;
+					} else {
+						$days[$from] = true;
+					}
+				}
+
+				continue;
+			}
+
+			if (self::overlapsAny($from, $to, $apiRanges)) {
+				if ($from <= $range->toString() && $to >= $range->fromString()) {
+					$overridden++;
 				}
 
 				continue;
@@ -80,8 +104,10 @@ final class PeriodResolver
 			excludedPeriods: $excluded,
 			outsidePeriods: array_values($outside),
 			excludedDays: count($days) - count($chosenDays),
-			coveredDays: count($chosenDays) + self::periodDays($chosenPeriods),
+			coveredDays: $apiDayCount + count($chosenDays) + self::periodDays($chosenPeriods),
 			totalDays: $range->days(),
+			apiRanges: $apiRanges,
+			overriddenByApi: $overridden,
 		);
 	}
 
@@ -112,6 +138,53 @@ final class PeriodResolver
 		usort($chosen, fn (array $a, array $b) => strcmp($a[0], $b[0]));
 
 		return $chosen;
+	}
+
+	/**
+	 * Przycina zakresy do zakresu dat i scala nakładające się / sąsiadujące.
+	 *
+	 * @param array<int, array{0: string, 1: string}> $ranges
+	 * @return array<int, array{0: string, 1: string}>
+	 */
+	public static function clipAndMerge(array $ranges, DateRange $range): array
+	{
+		$clipped = [];
+
+		foreach ($ranges as [$from, $to]) {
+			$from = max((string) $from, $range->fromString());
+			$to = min((string) $to, $range->toString());
+
+			if ($from <= $to) {
+				$clipped[] = [$from, $to];
+			}
+		}
+
+		usort($clipped, fn ($a, $b) => strcmp($a[0], $b[0]));
+		$merged = [];
+
+		foreach ($clipped as [$from, $to]) {
+			$last = count($merged) - 1;
+			$dayAfterLast = $last >= 0 ? (new \DateTimeImmutable($merged[$last][1]))->modify('+1 day')->format('Y-m-d') : null;
+
+			if ($last >= 0 && $from <= $dayAfterLast) {
+				$merged[$last][1] = max($merged[$last][1], $to);
+			} else {
+				$merged[] = [$from, $to];
+			}
+		}
+
+		return $merged;
+	}
+
+	private static function overlapsAny(string $from, string $to, array $ranges): bool
+	{
+		foreach ($ranges as [$rangeFrom, $rangeTo]) {
+			if ($from <= $rangeTo && $to >= $rangeFrom) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static function dayInPeriods(string $day, array $periods): bool

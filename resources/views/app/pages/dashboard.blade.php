@@ -10,15 +10,18 @@
 @endphp
 
 @section('content')
+  @include('app.partials.dashboard-health')
+
   @if (! $hasAnyData)
     <section class="pp-card">
       <x-pp.empty-state title="Ten projekt nie ma jeszcze danych">
-        Zaimportuj raport kampanii z Google Ads (najlepiej z kolumną „Dzień”), a dashboard pokaże wydatki, kliknięcia, konwersje i wykorzystanie budżetu.
+        Połącz konto Google Ads albo zaimportuj raport kampanii (najlepiej z kolumną „Dzień”), a dashboard pokaże wydatki, kliknięcia, konwersje i wykorzystanie budżetu.
         @if ($project->monthlyBudgetMicros !== null)
           Budżet miesięczny projektu: <strong class="pp-num">{{ Format::money($project->monthlyBudgetMicros, $currency, 0) }}</strong>.
         @endif
         <x-slot:actions>
-          <x-pp.button :href="AppUrl::project($project->id, 'imports')" icon="import">Zaimportuj raport</x-pp.button>
+          <x-pp.button :href="AppUrl::project($project->id, 'google-ads')" icon="link">Połącz Google Ads</x-pp.button>
+          <x-pp.button :href="AppUrl::project($project->id, 'imports')" icon="import" variant="secondary">Zaimportuj raport</x-pp.button>
           <x-pp.button :href="AppUrl::project($project->id, 'settings')" variant="secondary">Uzupełnij ustawienia</x-pp.button>
         </x-slot:actions>
       </x-pp.empty-state>

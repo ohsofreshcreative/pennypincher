@@ -19,23 +19,31 @@ app/PennyPincher/
   Domain/Projects/Project.php            obiekt projektu (z rolą bieżącego użytkownika)
   Domain/Metrics/                        Money, MetricCalculator, DateRange, PeriodResolver, BudgetCalculator
   Domain/Import/                         definicje raportów, parsowanie liczb i dat, normalizacja wierszy
+  Domain/GoogleAds/Enums.php             mapowanie enumów Google Ads (statusy, kategorie konwersji, strategie)
+  Domain/Audit/                          Rule, Finding, AuditContext, Severity, Dimension, Category, AuditScore, RuleRegistry, Rules/*
   Domain/Support/                        NotFound, ValidationFailed
   Services/                              AccessService, ImportService, DashboardService, ProjectValidator, …
   Repositories/                          zapytania SQL (zawsze zawężone do projektu)
   Infrastructure/Database/               Db ($wpdb + transakcje), Migrator, Schema
   Infrastructure/Import/                 czytniki CSV/XLSX, FileInspector, TableAnalyzer, Writers
+  Infrastructure/GoogleAds/              Config, GoogleHttp (biała lista hostów), OAuthClient, GoogleAdsClient, Sync/Gaql, Sync/ApiSyncer
+  Infrastructure/Security/               SecretBox (szyfrowanie tokenów), Hardening (utwardzenie WordPressa)
+  Services/GoogleAds/                    ConnectionService (OAuth, tokeny, konta), SyncService (kolejka synchronizacji)
+  Services/Audit/AuditContextBuilder     dane wejściowe audytu; Services/AuditService – uruchamianie i statusy
   Jobs/ProcessImport.php                 walidacja + zapis importu (samodzielne zadanie)
   Console/                               komendy `wp acorn pp:*`
   Support/                               AppUrl, Flash, Format, Paginator, LineChart, DateRangeRequest
 resources/views/app/                     layouty, strony i partiale aplikacji
 resources/views/components/pp/           komponenty Blade (<x-pp.*>)
 resources/css/pp-app.css, resources/js/pp-app.js   osobny entry Vite aplikacji
-tests/                                   runner, testy jednostkowe i integracyjne, pliki przykładowe
+tests/                                   runner, testy jednostkowe i integracyjne, pliki przykładowe, Support/GoogleAdsMock
+scripts/deploy.sh, scripts/rollback.sh   wdrożenie na Hostinger i wycofanie (docs/DEPLOYMENT.md)
+.htaccess                                blokada dostępu z sieci do plików motywu poza assetami
 ```
 
 Zależności między warstwami: kontrolery → serwisy → repozytoria/domena. Domena nie zna kontrolerów, widoków ani bazy (wyjątek: `Project::timezone()` korzysta z `wp_timezone()` jako zapasowej strefy).
 
-Nowe moduły (Audit, Budget Leaks, Keyword Intelligence…) dostają własne serwisy i repozytoria w tej strukturze; czytają metryki przez `MetricsRepository` + `PeriodResolver`, żeby zachować zasady agregacji.
+Nowe moduły (Budget Leaks, Keyword Intelligence…) dostają własne serwisy i repozytoria w tej strukturze; czytają metryki przez `MetricsRepository` + `PeriodResolver`, żeby zachować zasady agregacji.
 
 ## Routing
 
@@ -52,8 +60,11 @@ Trasy rejestruje Acorn (`withRouting(using: …)` w `functions.php` → `routes/
 | `/app/projects/{id}/search-terms/` | wyszukiwane hasła |
 | `/app/projects/{id}/imports/` | import i historia, `/imports/{import}/` – podgląd lub podsumowanie |
 | `/app/projects/{id}/settings/` | ustawienia projektu |
+| `/app/projects/{id}/google-ads/` | połączenie, wybór konta, historia synchronizacji; POST `connect/`, `account/`, `sync/`, `sync/{run}/retry/`, `disconnect/` |
+| `/app/google-ads/callback/` | powrót z OAuth Google (projekt i użytkownik ze state) |
+| `/app/projects/{id}/audits/` | najnowszy audyt, `/audits/{run}/` – audyt z historii; POST `audits/` (uruchom), `audits/findings/{id}/status/` |
 | `/app/organizations/{id}/members/` | członkowie organizacji |
-| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/` | skróty → bieżący projekt |
+| `/app/campaigns/`, `/app/search-terms/`, `/app/imports/`, `/app/settings/`, `/app/google-ads/`, `/app/audits/` | skróty → bieżący projekt |
 | `/app/switch/?project=` | przełącznik projektu |
 | inne `/app/*` | 404 aplikacji |
 
@@ -73,7 +84,8 @@ Wymaga „ładnych” bezpośrednich odnośników (Ustawienia → Bezpośrednie 
 - **Przekierowania**: `redirect_to` tylko w obrębie `/app/` (`AppUrl::safeRedirect`).
 - **Pliki**: limit rozmiaru (filtr `pennypincher/import/max_bytes`, domyślnie 15 MB, nie więcej niż limit PHP), rozszerzenia csv/tsv/txt/xlsx, kontrola sygnatury (XLSX = ZIP z `xl/workbook.xml`, CSV ≠ ZIP/PDF/ELF/PHP), ochrona przed zip bombą i ścieżkami `..`, XML bez sieci (`LIBXML_NONET`). Plik jest czytany z katalogu tymczasowego PHP i nigdy nie trafia do `uploads`.
 - **Nagłówki**: `X-Frame-Options: SAMEORIGIN`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: same-origin`, `Cache-Control: no-store`, `noindex`.
-- **Sekrety**: aplikacja nie potrzebuje żadnych sekretów (nie używa APP_KEY ani sesji Laravel).
+- **Sekrety**: tylko integracja Google Ads – `PP_GOOGLE_ADS_CLIENT_ID/SECRET` i `PP_ENCRYPTION_KEY` w `wp-config.php`/zmiennych środowiskowych, nigdy w repozytorium ani bazie; tokeny OAuth w bazie są szyfrowane (`SecretBox`). Aplikacja nie używa APP_KEY ani sesji Laravel.
+- **WordPress i serwer**: `Hardening` (rejestracja, XML-RPC, wyliczanie użytkowników), `.htaccess` motywu, HSTS; pełna lista: `docs/SECURITY.md`, `docs/DEPLOYMENT.md`.
 
 ## Model danych
 
@@ -93,9 +105,14 @@ Tabele `{$wpdb->prefix}pp_*`, InnoDB, klucze obce (30), migracje w `Infrastructu
 | `pp_conversion_actions` | działania powodujące konwersję |
 | `pp_campaign_metrics`, `pp_keyword_metrics`, `pp_search_term_metrics` | metryki: `granularity` (day/period), `date_from`, `date_to`, wyświetlenia, kliknięcia, `cost_micros`, konwersje, wartość, `import_id` |
 | `pp_conversion_metrics` | metryki konwersji per działanie (i opcjonalnie kampania – `campaign_scope`, 0 = całe konto) |
+| `pp_google_ads_connections` | połączenie projektu z kontem: `customer_id`, `login_customer_id` (MCC), waluta, strefa, e-mail Google, zaszyfrowane tokeny, status (`pending_account`, `active`, `reauth_required`, `disconnected`, `error`) |
+| `pp_sync_runs` | przebiegi synchronizacji: typ, okno dat, kroki (JSON), `step_index/steps_total`, rekordy, próby, `next_attempt_at`, błąd, dziennik kroków |
+| `pp_data_coverage` | okna dat, za które dane z API są kompletne (per projekt, źródło, zbiór danych) |
+| `pp_audit_runs` | audyty: wynik (NULL = brak wyniku), rozbicie wyniku i jakość danych (JSON), zakres, wersja reguł, wyzwalacz |
+| `pp_audit_findings` | problemy: reguła, kategoria, ważność, opis, dowody (JSON), rekomendacja, encja, odcisk, kara, obszar wyniku, status |
 | `pp_schema_migrations` | zastosowane migracje |
 
-Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje).
+Migracje: `2026_10_12_000001_initial_schema`, `2026_10_12_000002_view_through_conversions` (kolumna `view_through_conversions` w tabelach metryk, dodawana tylko jeśli jej brakuje), `2026_10_12_000003_google_ads_sync_audit` (tabele wyżej; w tabelach metryk `source` (`import`/`api`), `sync_run_id`, `import_id` może być NULL, unikalny klucz rozszerzony o `source` – nowy klucz powstaje przed usunięciem starego; ustawienia kampanii (`settings` JSON), status grup reklam, ustawienia działań konwersji: `category_code`, `primary_for_goal`, `counting_type`, `type`, `settings`). Wszystkie zmiany są warunkowe (sprawdzenie `information_schema`).
 
 Zasady:
 
@@ -104,7 +121,7 @@ Zasady:
 - **Dane źródłowe vs obliczone**: w bazie są tylko wartości z eksportu; CTR, CPC, koszt konwersji i wykorzystanie budżetu są liczone w `MetricCalculator`/`BudgetCalculator` przy odczycie.
 - **Idempotencja**: encje mają `natural_key` (sha1 z identyfikatora Google Ads albo nazwy w kontekście), metryki unikalny klucz `(encja, granularity, date_from, date_to)` → ponowny import nadpisuje te same wiersze.
 - **Pochodzenie**: `import_id` w metrykach, `last_import_id` w encjach.
-- **Pod Google Ads API**: kolumny `external_id`, mikrojednostki i ziarnistość dzienna odpowiadają danym z API, więc synchronizacja może zapisywać do tych samych tabel.
+- **Google Ads API**: synchronizacja zapisuje do tych samych tabel (`source = 'api'`, dane dzienne); szczegóły w `docs/GOOGLE_ADS.md`.
 
 ### Migracje
 
@@ -133,9 +150,46 @@ Zadanie `ProcessImport` przyjmuje tylko identyfikatory, więc może działać sy
 2. bez nakładania się (dzień w okresie, dwa nakładające się okresy),
 3. dwa warianty – „najpierw dni” i „najpierw okresy” (zachłannie od najdłuższego) – wygrywa większe pokrycie dni; przy remisie dane dzienne.
 
+Dane z API mają pierwszeństwo: zakresy z `pp_data_coverage` są traktowane jako kompletne dane dzienne (dzień bez wiersza = 0), a importowane dni i okresy nachodzące na nie są pomijane i liczone w `overriddenByApi`. Kroki 1–3 dotyczą tylko dni poza zakresami API.
+
 Interfejs pokazuje źródło, pokrycie zakresu (np. 30 z 31 dni), pominięte nakładające się dane i okresy niemieszczące się w zakresie.
 
 Dashboard: KPI i wykresy wyłącznie z raportu kampanii; sekcja haseł z raportu wyszukiwanych haseł i sekcja działań powodujących konwersję z raportu konwersji – każda z osobnym rozstrzygnięciem okresów. Przy niepełnym pokryciu zakresu wykorzystanie budżetu jest liczone względem budżetu dla dni z danymi (`BudgetCalculator::budgetForCoverage`). „Wszystkie dane” to zakres od najwcześniejszej do najpóźniejszej daty we wszystkich zaimportowanych raportach. W raporcie konwersji dane dla całego konta mają pierwszeństwo przed sumą danych per kampania tego samego działania. Wykresy tylko z danych dziennych. Budżet zakresu = Σ budżet miesięczny × (dni zakresu w miesiącu / dni miesiąca).
+
+## Silnik audytu
+
+- **Reguła** (`Domain/Audit/Rule`): `id`, `name`, `description`, `category`, `evaluate(AuditContext): Finding[]`. Reguły są deterministyczne (bez AI), nie czytają bazy – dostają `AuditContext` zbudowany raz przez `Services/Audit/AuditContextBuilder` (ostatnie 30 zakończonych dni w strefie projektu, poprzednie 30 dni do porównań, tempo miesiąca, ustawienia z API, stan synchronizacji).
+- **Problem** (`Finding`): ważność (`critical`/`warning`/`info`), tytuł, opis, dowody (pary etykieta–wartość), rekomendacja, encja, obszar wyniku i kara; `fingerprint()` = reguła + encja + wariant – status „Przejrzany/Pominięty” przechodzi na kolejne audyty.
+- **Nowa reguła** (Prompt 3+): klasa w `Domain/Audit/Rules/` rozszerzająca `BaseRule` (stałe `ID`, `NAME`, `DESCRIPTION`, `CATEGORY`, `DIMENSION`), wpis w `RuleRegistry::RULES`, podbicie `RuleRegistry::VERSION`, test w `tests/Unit/AuditRulesTest.php`. Dane, których brakuje w kontekście, dodaje się w `AuditContextBuilder` (+ `AuditContext`).
+- **Audit Score** (`AuditScore`): pule – konfiguracja 25, pomiar konwersji 30, ryzyka i efektywność 30, kompletność danych 15. Kara: krytyczny 10, ostrzeżenie 4, informacja 1 (część informacji 0), w puli obszaru, nie więcej niż pula. Pominięte problemy nie liczą się (wynik przeliczany po zmianie statusu). Brak danych kampanii lub pokrycie < 50% → wynik `NULL` z powodem. To ocena higieny konta, nie ROAS.
+- **Uruchamianie**: ręcznie (`/audits/`, `wp acorn pp:audit`) i automatycznie po każdej zakończonej synchronizacji. Błąd jednej reguły jest logowany i zapisywany w `data_quality.rule_errors`, audyt dostaje status `partial`.
+
+Reguły (wersja 1.0):
+
+| ID | Kategoria | Warunek | Ważność |
+|---|---|---|---|
+| CT001 | Pomiar konwersji | Konwersja główna z kategorią mikrokonwersji (wyświetlenie strony, zaangażowanie, klik wychodzący, dojazd, pobranie, koszyk, rozpoczęcie płatności) – na podstawie ustawień z API; kategoria „domyślna” + nazwa sugerująca mikrozdarzenie = informacja | ostrzeżenie / krytyczny przy ≥ 30% konwersji głównych |
+| CT002 | Pomiar konwersji | Brak aktywnej głównej konwersji wartościowej (zakup, lead, telefon, rejestracja…) | krytyczny |
+| CT003 | Pomiar konwersji | Konwersja typu lead liczona „Wszystkie” | ostrzeżenie |
+| CS001 | Ustawienia kampanii | Partnerzy wyszukiwania włączeni | informacja |
+| CS002 | Ustawienia kampanii | Sieć reklamowa w kampanii w sieci wyszukiwania | ostrzeżenie |
+| CS003 | Ustawienia kampanii | Kierowanie „Obecność lub zainteresowanie” | ostrzeżenie |
+| CS004 | Ustawienia kampanii | Brak lokalizacji (po synchronizacji lokalizacji) | ostrzeżenie |
+| CS005 | Ustawienia kampanii | Inteligentne ustalanie stawek przy < 15 konwersjach w 30 dni | ostrzeżenie / krytyczny przy mikrokonwersjach |
+| BP001 | Budżet | Przekroczony budżet miesięczny / prognoza (szacunek liniowy, tylko przy pełnych danych dziennych, min. 3 dni) ≥ 110% (≥ 130% krytyczny) / ≤ 70% po 7 dniach (informacja); brak budżetu (informacja, bez kary) | wg warunku |
+| BP002 | Budżet | Suma budżetów dziennych × 30,4 ≥ 125% budżetu miesięcznego (≥ 200% ostrzeżenie) | informacja / ostrzeżenie |
+| DQ001 | Jakość danych | Brak danych kampanii w okresie | krytyczny (wynik = brak) |
+| DQ002 | Jakość danych | Brak połączenia z API | informacja |
+| DQ003 | Jakość danych | Ostatnia udana synchronizacja > 48 h (> 7 dni krytyczny) lub jeszcze brak | ostrzeżenie / krytyczny |
+| DQ004 | Jakość danych | Wymagana ponowna autoryzacja / ostatnia synchronizacja z błędem | krytyczny / ostrzeżenie |
+| DQ005 | Jakość danych | Dane pokrywają część okresu (< 80% ostrzeżenie) | informacja / ostrzeżenie |
+| DQ006 | Jakość danych | Nakładające się źródła (pominięte importy) | informacja, bez kary |
+| DQ007 | Jakość danych | Waluta konta ≠ waluta projektu | ostrzeżenie |
+| PF001 | Skuteczność | CPC +30% (≥ 100 kliknięć w obu okresach) | ostrzeżenie |
+| PF002 | Skuteczność | CTR −25% (≥ 1000 wyświetleń w obu okresach) | ostrzeżenie |
+| PF003 | Skuteczność | CPA +30% (≥ 10 konwersji w obu okresach; pomijane przy mikrokonwersjach) | ostrzeżenie |
+| PF004 | Skuteczność | Kampania bez konwersji z wydatkami ≥ max(100 jedn. waluty, 10% budżetu) (≥ 25% budżetu krytyczny); brak danych o konwersjach ≠ 0 | ostrzeżenie / krytyczny |
+| PF005 | Skuteczność | Hasła z ≥ 10 kliknięciami bez konwersji ≥ 10% wydatków na hasła (≥ 25% ostrzeżenie) | informacja / ostrzeżenie |
 
 ## Interfejs
 
@@ -156,3 +210,7 @@ Dashboard: KPI i wykresy wyłącznie z raportu kampanii; sekcja haseł z raportu
 | Mikrojednostki w BIGINT | Brak błędów precyzji i zgodność z Google Ads API. |
 | Transakcje z SAVEPOINT i wspólnym licznikiem | Zagnieżdżone operacje (np. projekt demo → importy) nie mogą zatwierdzić zewnętrznej transakcji. |
 | Synchroniczne przetwarzanie importów | Pliki eksportów są małe; zadanie jest gotowe do przeniesienia do kolejki. |
+| REST Google Ads API przez WP HTTP API zamiast biblioteki `googleads/google-ads-php` | Biblioteka wymaga gRPC/protobuf (rozszerzenia PHP niedostępne na hostingu współdzielonym) i dużych zależności; potrzebujemy tylko odczytu `searchStream`. Atrapy testów działają przez `pre_http_request`. |
+| Kolejka w tabeli `pp_sync_runs` + systemowy cron | Hosting współdzielony bez workerów; kroki są krótkie, wznawialne i chronione `GET_LOCK`, WP-Cron nie jest jedynym mechanizmem. |
+| Zastępowanie okna metryk API zamiast upsertu wierszy | Google koryguje dane wstecz (konwersje z opóźnieniem); usunięcie i wstawienie okna w transakcji usuwa też wiersze, które zniknęły. |
+| Libsodium secretbox z kluczem w `wp-config.php` | Wbudowane w PHP ≥ 7.2, uwierzytelnione szyfrowanie, prosta rotacja; klucz poza bazą chroni tokeny przy wycieku zrzutu bazy. |

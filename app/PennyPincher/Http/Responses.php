@@ -19,11 +19,19 @@ final class Responses
 	 */
 	public static function securityHeaders(): array
 	{
-		return [
+		$headers = [
 			'X-Frame-Options' => 'SAMEORIGIN',
 			'X-Content-Type-Options' => 'nosniff',
 			'Referrer-Policy' => 'same-origin',
 			'Cache-Control' => 'no-store, private',
+			'Permissions-Policy' => 'camera=(), microphone=(), geolocation=()',
 		];
+
+		// HSTS tylko przez HTTPS – przez HTTP przeglądarki i tak go ignorują, a lokalnie nie chcemy go utrwalać.
+		if (is_ssl()) {
+			$headers['Strict-Transport-Security'] = 'max-age=31536000';
+		}
+
+		return $headers;
 	}
 }

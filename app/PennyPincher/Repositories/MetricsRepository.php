@@ -49,19 +49,45 @@ class MetricsRepository
 	{
 	}
 
+	public const DATASETS = [
+		'campaign_metrics' => 'campaigns',
+		'search_term_metrics' => 'search_terms',
+		'keyword_metrics' => 'keywords',
+		'conversion_metrics' => 'conversions',
+	];
+
 	public function resolve(string $table, int $projectId, DateRange $range): ResolvedPeriods
 	{
 		$this->assertTable($table);
 
 		$available = $this->db->select(
 			sprintf(
-				'SELECT DISTINCT granularity, date_from, date_to FROM %s WHERE project_id = ? AND date_to >= ? AND date_from <= ?',
+				"SELECT DISTINCT granularity, date_from, date_to, source FROM %s WHERE project_id = ? AND source = 'import' AND date_to >= ? AND date_from <= ?",
 				$this->db->table($table)
 			),
 			[$projectId, $range->fromString(), $range->toString()]
 		);
 
-		return PeriodResolver::resolve($available, $range);
+		return PeriodResolver::resolve($available, $range, $this->apiCoverage($projectId, self::DATASETS[$table], $range));
+	}
+
+	/**
+	 * Zakresy dat zsynchronizowane z API dla zbioru danych (tylko zakończone kroki synchronizacji).
+	 *
+	 * @return array<int, array{0: string, 1: string}>
+	 */
+	public function apiCoverage(int $projectId, string $dataset, ?DateRange $range = null): array
+	{
+		$sql = "SELECT date_from, date_to FROM {$this->db->table('data_coverage')} WHERE project_id = ? AND source = 'api' AND dataset = ?";
+		$params = [$projectId, $dataset];
+
+		if ($range !== null) {
+			$sql .= ' AND date_to >= ? AND date_from <= ?';
+			$params[] = $range->fromString();
+			$params[] = $range->toString();
+		}
+
+		return array_map(fn ($row) => [$row['date_from'], $row['date_to']], $this->db->select($sql . ' ORDER BY date_from', $params));
 	}
 
 	/**
@@ -78,7 +104,13 @@ class MetricsRepository
 			[$projectId]
 		);
 
-		return $row && $row['date_from'] ? [$row['date_from'], $row['date_to']] : null;
+		$extent = $row && $row['date_from'] ? [$row['date_from'], $row['date_to']] : null;
+
+		foreach ($this->apiCoverage($projectId, self::DATASETS[$table]) as [$from, $to]) {
+			$extent = $extent === null ? [$from, $to] : [min($extent[0], $from), max($extent[1], $to)];
+		}
+
+		return $extent;
 	}
 
 	/**
@@ -93,9 +125,9 @@ class MetricsRepository
 		return $this->db->select(
 			sprintf(
 				"SELECT granularity, MIN(date_from) AS date_from, MAX(date_to) AS date_to, COUNT(DISTINCT date_from) AS days
-				FROM %s WHERE project_id = ? AND granularity = 'day' GROUP BY granularity
+				FROM %s WHERE project_id = ? AND source = 'import' AND granularity = 'day' GROUP BY granularity
 				UNION ALL
-				SELECT granularity, date_from, date_to, NULL AS days FROM %s WHERE project_id = ? AND granularity = 'period'
+				SELECT granularity, date_from, date_to, NULL AS days FROM %s WHERE project_id = ? AND source = 'import' AND granularity = 'period'
 				GROUP BY granularity, date_from, date_to ORDER BY date_from",
 				$this->db->table($table),
 				$this->db->table($table)
@@ -138,19 +170,19 @@ class MetricsRepository
 	{
 		$byDate = [];
 
-		if ($resolved->days !== []) {
-			$placeholders = implode(', ', array_fill(0, count($resolved->days), '?'));
-			$campaignSql = $campaignId !== null ? ' AND campaign_id = ?' : '';
+		if ($resolved->hasDaily()) {
+			[$condition, $params] = $this->condition($resolved, 'm');
+			$campaignSql = $campaignId !== null ? ' AND m.campaign_id = ?' : '';
 
 			$rows = $this->db->select(
 				sprintf(
-					"SELECT date_from AS date, SUM(cost_micros) AS cost_micros, SUM(clicks) AS clicks, SUM(conversions) AS conversions
-					FROM %s WHERE project_id = ? AND granularity = 'day' AND date_from IN (%s)%s GROUP BY date_from",
+					"SELECT m.date_from AS date, SUM(m.cost_micros) AS cost_micros, SUM(m.clicks) AS clicks, SUM(m.conversions) AS conversions
+					FROM %s m WHERE m.project_id = ? AND m.granularity = 'day' AND (%s)%s GROUP BY m.date_from",
 					$this->db->table('campaign_metrics'),
-					$placeholders,
+					$condition,
 					$campaignSql
 				),
-				[$projectId, ...$resolved->days, ...($campaignId !== null ? [$campaignId] : [])]
+				[$projectId, ...$params, ...($campaignId !== null ? [$campaignId] : [])]
 			);
 
 			foreach ($rows as $row) {
@@ -164,15 +196,29 @@ class MetricsRepository
 			$key = $day->format('Y-m-d');
 			$row = $byDate[$key] ?? null;
 
+			// Dzień objęty synchronizacją API bez wierszy = brak aktywności (0), a nie brak danych.
+			$apiDay = $row === null && $this->inRanges($key, $resolved->apiRanges);
+
 			$series[] = [
 				'date' => $key,
-				'cost_micros' => isset($row['cost_micros']) ? (int) $row['cost_micros'] : null,
-				'clicks' => isset($row['clicks']) ? (int) $row['clicks'] : null,
-				'conversions' => isset($row['conversions']) ? (float) $row['conversions'] : null,
+				'cost_micros' => isset($row['cost_micros']) ? (int) $row['cost_micros'] : ($apiDay ? 0 : null),
+				'clicks' => isset($row['clicks']) ? (int) $row['clicks'] : ($apiDay ? 0 : null),
+				'conversions' => isset($row['conversions']) ? (float) $row['conversions'] : ($apiDay ? 0.0 : null),
 			];
 		}
 
 		return $series;
+	}
+
+	private function inRanges(string $day, array $ranges): bool
+	{
+		foreach ($ranges as [$from, $to]) {
+			if ($day >= $from && $day <= $to) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -329,11 +375,11 @@ class MetricsRepository
 	{
 		return $this->db->select(
 			sprintf(
-				"SELECT m.granularity, MIN(m.date_from) AS date_from, MAX(m.date_to) AS date_to, COUNT(*) AS rows_count,
+				"SELECT m.source, m.granularity, MIN(m.date_from) AS date_from, MAX(m.date_to) AS date_to, COUNT(*) AS rows_count,
 					SUM(m.cost_micros) AS cost_micros, m.import_id, i.original_filename, i.report_type, i.completed_at
 				FROM %s m LEFT JOIN %s i ON i.id = m.import_id
 				WHERE m.project_id = ? AND m.campaign_id = ?
-				GROUP BY m.import_id, m.granularity, CASE WHEN m.granularity = 'period' THEN m.date_from END, CASE WHEN m.granularity = 'period' THEN m.date_to END,
+				GROUP BY m.source, m.import_id, m.granularity, CASE WHEN m.granularity = 'period' THEN m.date_from END, CASE WHEN m.granularity = 'period' THEN m.date_to END,
 					i.original_filename, i.report_type, i.completed_at
 				ORDER BY date_from DESC",
 				$this->db->table('campaign_metrics'),
@@ -385,6 +431,90 @@ class MetricsRepository
 		return $actions;
 	}
 
+	/**
+	 * Metryki każdej kampanii projektu w wybranych danych (do audytu).
+	 *
+	 * @return array<int, array<string, mixed>> klucz = id kampanii
+	 */
+	public function campaignMetricsByCampaign(int $projectId, ResolvedPeriods $resolved): array
+	{
+		if ($resolved->isEmpty()) {
+			return [];
+		}
+
+		[$condition, $params] = $this->condition($resolved, 'm');
+
+		$rows = $this->db->select(
+			sprintf(
+				'SELECT m.campaign_id, SUM(m.impressions) AS impressions, SUM(m.clicks) AS clicks, SUM(m.cost_micros) AS cost_micros,
+					SUM(m.conversions) AS conversions, SUM(m.conversions_value_micros) AS conversions_value_micros
+				FROM %s m WHERE m.project_id = ? AND (%s) GROUP BY m.campaign_id',
+				$this->db->table('campaign_metrics'),
+				$condition
+			),
+			[$projectId, ...$params]
+		);
+
+		$result = [];
+
+		foreach ($rows as $row) {
+			$metrics = self::castMetrics($row);
+			$metrics['conversions'] = $metrics['conversions'] === null ? null : (float) $metrics['conversions'];
+			$result[(int) $row['campaign_id']] = $metrics;
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Wyszukiwane hasła z co najmniej $minClicks kliknięciami i zerem konwersji (null = brak danych, nie zero)
+	 * oraz łączny koszt wszystkich haseł w tych samych danych.
+	 *
+	 * @return array{terms: array<int, array{term: string, campaign: string, clicks: int, cost_micros: int}>, total_cost_micros: ?int}
+	 */
+	public function searchTermsWithoutConversions(int $projectId, ResolvedPeriods $resolved, int $minClicks = 10, int $limit = 200): array
+	{
+		if ($resolved->isEmpty()) {
+			return ['terms' => [], 'total_cost_micros' => null];
+		}
+
+		[$condition, $params] = $this->condition($resolved, 'm');
+		$aggregate = sprintf(
+			'SELECT m.search_term_id, SUM(m.clicks) AS clicks, SUM(m.cost_micros) AS cost_micros, SUM(m.conversions) AS conversions
+			FROM %s m WHERE m.project_id = ? AND (%s) GROUP BY m.search_term_id',
+			$this->db->table('search_term_metrics'),
+			$condition
+		);
+
+		$total = $this->db->scalar('SELECT SUM(agg.cost_micros) FROM (' . $aggregate . ') agg', [$projectId, ...$params]);
+
+		$rows = $this->db->select(
+			sprintf(
+				'SELECT st.term, c.name AS campaign, agg.clicks, agg.cost_micros
+				FROM (%s) agg
+				INNER JOIN %s st ON st.id = agg.search_term_id AND st.project_id = ?
+				INNER JOIN %s c ON c.id = st.campaign_id
+				WHERE agg.clicks >= ? AND agg.conversions IS NOT NULL AND agg.conversions = 0 AND agg.cost_micros > 0
+				ORDER BY agg.cost_micros DESC LIMIT %d',
+				$aggregate,
+				$this->db->table('search_terms'),
+				$this->db->table('campaigns'),
+				$limit
+			),
+			[$projectId, ...$params, $projectId, $minClicks]
+		);
+
+		return [
+			'terms' => array_map(fn ($row) => [
+				'term' => (string) $row['term'],
+				'campaign' => (string) $row['campaign'],
+				'clicks' => (int) $row['clicks'],
+				'cost_micros' => (int) $row['cost_micros'],
+			], $rows),
+			'total_cost_micros' => $total === null ? null : (int) $total,
+		];
+	}
+
 	public function hasAnyData(int $projectId): bool
 	{
 		foreach (array_keys(self::METRIC_TABLES) as $table) {
@@ -406,13 +536,19 @@ class MetricsRepository
 		$parts = [];
 		$params = [];
 
+		foreach ($resolved->apiRanges as [$from, $to]) {
+			$parts[] = sprintf("(%1\$s.source = 'api' AND %1\$s.granularity = 'day' AND %1\$s.date_from BETWEEN ? AND ?)", $alias);
+			$params[] = $from;
+			$params[] = $to;
+		}
+
 		if ($resolved->days !== []) {
-			$parts[] = sprintf("(%s.granularity = 'day' AND %s.date_from IN (%s))", $alias, $alias, implode(', ', array_fill(0, count($resolved->days), '?')));
+			$parts[] = sprintf("(%1\$s.source = 'import' AND %1\$s.granularity = 'day' AND %1\$s.date_from IN (%2\$s))", $alias, implode(', ', array_fill(0, count($resolved->days), '?')));
 			array_push($params, ...$resolved->days);
 		}
 
 		foreach ($resolved->periods as [$from, $to]) {
-			$parts[] = sprintf("(%s.granularity = 'period' AND %s.date_from = ? AND %s.date_to = ?)", $alias, $alias, $alias);
+			$parts[] = sprintf("(%1\$s.source = 'import' AND %1\$s.granularity = 'period' AND %1\$s.date_from = ? AND %1\$s.date_to = ?)", $alias);
 			$params[] = $from;
 			$params[] = $to;
 		}

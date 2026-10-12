@@ -7,6 +7,8 @@
         ['overview', 'Przegląd', 'overview', AppUrl::project($project->id)],
         ['campaigns', 'Kampanie', 'campaigns', AppUrl::project($project->id, 'campaigns')],
         ['search-terms', 'Wyszukiwane hasła', 'search', AppUrl::project($project->id, 'search-terms')],
+        ['audits', 'Audyt', 'audit', AppUrl::project($project->id, 'audits')],
+        ['google-ads', 'Google Ads', 'link', AppUrl::project($project->id, 'google-ads')],
         ['imports', 'Importy', 'import', AppUrl::project($project->id, 'imports')],
       ]
     : [];
@@ -89,7 +91,6 @@
         <div class="mt-6 px-3 pb-6">
           <p class="text-[12px] font-medium text-sidebar-text/60">W kolejnych etapach</p>
           <ul class="mt-2 space-y-1.5 text-[13.5px] text-sidebar-text/45">
-            <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Audyty</li>
             <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Wycieki budżetu</li>
             <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Rekomendacje</li>
             <li class="flex items-center gap-2"><x-pp.icon name="lock" :size="14" />Planer kampanii</li>
