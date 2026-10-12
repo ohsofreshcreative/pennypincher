@@ -1,0 +1,74 @@
+.b-accordion {
+	input.acc-check {
+		position: absolute !important;
+		opacity: 0 !important;
+		z-index: -1 !important;
+	}
+
+	.accordion-wrapper {}
+
+	.accordion-wrapper:last-child {
+		border-bottom: none;
+	}
+
+	.accordion {
+		width: 100%;
+		overflow: hidden;
+		margin-bottom: 16px !important;
+	}
+
+	.accordion-label {
+		padding: 16px 16px;
+		margin-bottom: 0px !important;
+		cursor: pointer;
+		color: var(--body);
+
+		.__arrow {
+			transition: transform 0.3s ease-in-out;
+		}
+	}
+
+	.accordion-label:hover {}
+
+	.accordion-content {
+		max-height: 0;
+		-webkit-transition: all 0.3s;
+		transition: all 0.3s;
+		padding: 0;
+		overflow: hidden;
+	}
+
+	.accordion-content p {
+		margin: 0;
+		margin-bottom: 16px;
+		color: var(--body);
+		font-size: 14px;
+		display: inline-block;
+	}
+
+	.accordion-content p:last-child {
+		margin-bottom: 0;
+	}
+
+	.accordion-content ul {
+		list-style-type: disc;
+		padding-left: 16px;
+	}
+
+	input:checked {
+		border: 1px solid var(--primary);
+	}
+
+	input:checked+.accordion-label .__arrow {
+		transform: rotate(180deg);
+	}
+
+	.accordion:has(input:checked) {
+		padding-bottom: 0px;
+	}
+
+	input:checked~.accordion-content {
+		max-height: 1200px;
+		padding: 0 16px 24px 16px;
+	}
+}

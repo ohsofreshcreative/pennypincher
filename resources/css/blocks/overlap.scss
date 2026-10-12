@@ -1,0 +1,15 @@
+.b-overlap {
+  .gsap__cards:nth-child(odd) {
+    .__box {
+      margin-right: auto; 
+      margin-left: 0;
+    }
+  }
+
+  .gsap__cards:nth-child(even) {
+    .__box {
+      margin-left: auto;
+      margin-right: 0;
+    }
+  }
+}

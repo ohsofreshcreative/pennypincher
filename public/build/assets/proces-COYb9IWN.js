@@ -1,0 +1,1 @@
+import{r as e,t}from"./swiper-YgyDUnl3.js";/* empty css                   */(()=>{let n=document.querySelectorAll(`.b-proces`);n.length&&n.forEach(n=>{let r=n.querySelector(`.proces-swiper`);r&&new e(r,{modules:[t],loop:!1,grabCursor:!0,slidesPerView:`auto`,spaceBetween:24,navigation:{prevEl:n.querySelector(`.__prev`),nextEl:n.querySelector(`.__next`)}})})})();

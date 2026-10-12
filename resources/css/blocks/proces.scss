@@ -1,0 +1,24 @@
+.b-proces {
+
+	.proces-swiper.swiper {
+		width: 100%;
+	}
+
+	.swiper-button-disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.proces-swiper .swiper-slide {
+		width: 80%;
+		height: auto;
+
+		@media (min-width: 640px) {
+			width: 45%;
+		}
+
+		@media (min-width: 1024px) {
+			width: 24%;
+		}
+	}
+}

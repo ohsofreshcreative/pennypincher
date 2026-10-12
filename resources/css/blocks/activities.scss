@@ -1,0 +1,23 @@
+.b-activities {
+
+	.activities-swiper.swiper {
+		width: 100%;
+	}
+
+	.swiper-button-disabled {
+		opacity: 0.5;
+		pointer-events: none;
+	}
+
+	.activities-swiper .swiper-slide {
+		width: 80%;
+
+		@media (min-width: 640px) {
+			width: 45%;
+		}
+
+		@media (min-width: 1024px) {
+			width: 31%;
+		}
+	}
+}

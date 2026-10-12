@@ -1,0 +1,7 @@
+.b-attractions {
+}
+
+.attractions-popup::backdrop {
+  background: rgb(var(--p-100) / 0.75);
+  backdrop-filter: blur(8px);
+}

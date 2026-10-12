@@ -1,0 +1,13 @@
+.b-offers {
+	.__col:nth-child(even) {
+		@media (min-width: 1024px) {
+			figure {
+				order: 2;
+			}
+
+			.__content {
+				order: 1;
+			}
+		}
+	}
+}

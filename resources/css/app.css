@@ -1,0 +1,225 @@
+@import 'tailwindcss' theme(static);
+
+/* bardzo ważne dla Sage/Blade: skanowanie klas */
+@source "../views/**/*.blade.php";
+@source "../../app/**/*.php";
+@source "../js/**/*.{js,ts,jsx,tsx}";
+
+/* Twoje “źródłowe” zmienne RGB */
+:root {
+  /* base */
+  --body: 42 63 80; /* #2A3F50 */
+
+/* PRIMARY (granat) */
+.primary-check { color:#1A3955;}
+--primary: 26 57 85;      /* #1A3955 */
+--p-hover: 5 11 17;       /* #050B11 */
+
+--p-50: 207 230 254;      /* #CFE6FE */
+--p-100: 187 214 244;     /* #BBD6F4 */
+--p-200: 143 183 226;     /* #8FB7E2 */
+--p-300: 106 157 212;     /* #6A9DD4 */
+--p-400: 58 108 161;      /* #3A6CA1 */
+--p-500: 26 57 85;        /* #1A3955 */
+--p-600: 22 48 71;        /* #163047 */
+--p-700: 17 38 57;        /* #112639 */
+--p-800: 13 29 43;        /* #0D1D2B */
+--p-900: 9 19 28;         /* #09131C */
+--p-dark: 5 11 17;        /* #050B11 */
+--p-bg: 0 21 60; /* #00153C */
+
+--action: rgb(26, 57, 85);
+
+
+/* SECONDARY (brąz) */
+.secondary-check { color:#492D28;}
+--secondary: 73 45 40;    /* #492D28 */
+--s-hover: 61 38 33;        /* #0F0908 */
+
+--s-50: 227 207 203;      /* #E3CFCB */
+--s-100: 217 176 168;     /* #D9B0A8 */
+--s-200: 184 141 134;     /* #B88D86 */
+--s-300: 148 105 97;      /* #946961 */
+--s-400: 118 73 65;       /* #764941 */
+--s-500: 73 45 40;        /* #492D28 */
+--s-600: 61 38 33;        /* #3D2621 */
+--s-700: 49 30 27;        /* #311E1B */
+--s-800: 37 23 20;        /* #251714 */
+--s-900: 24 15 13;        /* #180F0D */
+--s-dark: 15 9 8;         /* #0F0908 */
+--s-accent: 148 105 97;         /* #946961 */
+
+
+/* THIRD (jasny niebieski) */
+.third-check { color:#BBD6F3;}
+--third: 187 214 243;     /* #BBD6F3 */
+--t-hover: 111 146 183;   /* #6F92B7 */
+
+--t-50: 241 247 253;      /* #F1F7FD */
+--t-100: 232 241 251;     /* #E8F1FB */
+--t-200: 221 235 249;     /* #DDEBF9 */
+--t-300: 210 228 247;     /* #D2E4F7 */
+--t-400: 198 221 245;     /* #C6DDF5 */
+--t-500: 187 214 243;     /* #BBD6F3 */
+--t-600: 156 178 203;     /* #9CB2CB */
+--t-700: 125 143 162;     /* #7D8FA2 */
+--t-800: 94 107 122;      /* #5E6B7A */
+--t-900: 62 71 81;        /* #3E4751 */
+--t-dark: 37 43 49;       /* #252B31 */
+
+  /* neutrals / fixed backgrounds */
+  --text-body: rgb(var(--p-800));
+  --gray: #2a3f50;
+  --bg: #F4F9FF;
+  --bg-light: rgb(var(--p-50));
+  --bg-lighter: rgb(var(--t-100));
+  --bg-brand: #002704;
+  --bg-dark: #071622;
+  --bg-navy: #001D51;
+}
+
+@theme {
+  /* base */
+  --color-body: rgb(var(--body));
+  --color-main: var(--bg-navy);
+  --color-main-light: #10377B;
+
+  /* primary */
+  --color-primary: rgb(var(--primary));
+  --color-primary-hover: rgb(var(--p-hover));
+  --color-primary-50: rgb(var(--p-50));
+  --color-primary-100: rgb(var(--p-100));
+  --color-primary-200: rgb(var(--p-200));
+  --color-primary-300: rgb(var(--p-300));
+  --color-primary-400: rgb(var(--p-400));
+  --color-primary-500: rgb(var(--p-500));
+  --color-primary-600: rgb(var(--p-600));
+  --color-primary-700: rgb(var(--p-700));
+  --color-primary-800: rgb(var(--p-800));
+  --color-primary-900: rgb(var(--p-900));
+  --color-primary-dark: rgb(var(--p-dark));
+  --color-primary-bg: rgb(var(--p-bg));
+
+  /* secondary */
+  --color-secondary: rgb(var(--secondary));
+  --color-secondary-hover: rgb(var(--s-hover));
+  --color-secondary-100: rgb(var(--s-100));
+  --color-secondary-200: rgb(var(--s-200));
+  --color-secondary-300: rgb(var(--s-300));
+  --color-secondary-400: rgb(var(--s-400));
+  --color-secondary-500: rgb(var(--s-500));
+  --color-secondary-600: rgb(var(--s-600));
+  --color-secondary-700: rgb(var(--s-700));
+  --color-secondary-800: rgb(var(--s-800));
+  --color-secondary-900: rgb(var(--s-900));
+  --color-secondary-dark: rgb(var(--s-dark));
+  --color-secondary-accent: rgb(var(--s-accent));
+
+  /* third */
+  --color-third: rgb(var(--third));
+  --color-third-hover: rgb(var(--t-hover));
+  --color-third-100: rgb(var(--t-100));
+  --color-third-200: rgb(var(--t-200));
+  --color-third-300: rgb(var(--t-300));
+  --color-third-400: rgb(var(--t-400));
+  --color-third-500: rgb(var(--t-500));
+  --color-third-600: rgb(var(--t-600));
+  --color-third-700: rgb(var(--t-700));
+  --color-third-800: rgb(var(--t-800));
+  --color-third-900: rgb(var(--t-900));
+  --color-third-dark: rgb(var(--t-dark));
+
+  --color-gray: var(--gray);
+  --color-action: var(--action);
+
+  --color-page: var(--bg);
+  --color-background-light: var(--bg-light);
+  --color-background-brand: var(--bg-brand);
+  --color-background-dark: var(--bg-dark);
+  --color-background-navy: var(--bg-navy);
+
+  --color-primary-light: var(--color-primary-100);
+  --color-primary-lighter: var(--color-primary-50);
+
+  --color-secondary-light: var(--color-secondary-200);
+  --color-secondary-lighter: var(--color-secondary-100);
+
+  --color-muted: var(--color-secondary-500);
+  --gradient: linear-gradient(90deg, #001D51 0%, #00276D 100%);
+
+}
+
+@utility m-header {
+  margin-bottom: var(--m-header);
+}
+@utility m-title {
+  padding-bottom: var(--m-title);
+}
+@utility m-btn {
+  margin-top: var(--m-btn);
+}
+@utility m-img {
+  margin-bottom: var(--m-img);
+}
+
+@import '../css/variables.scss';
+
+@import 'swiper/css';
+@import 'swiper/css/navigation';
+@import 'swiper/css/pagination';
+@import 'baguettebox.js/dist/baguetteBox.min.css';
+
+/*-- USED ---*/
+@import '../css/blocks/hero.scss';
+@import '../css/blocks/about.scss';
+@import '../css/blocks/values.scss';
+@import '../css/blocks/content.scss';
+@import '../css/blocks/cta.scss';
+@import '../css/blocks/whyus.scss';
+@import '../css/blocks/logos.scss';
+@import '../css/blocks/reviews.scss';
+@import '../css/blocks/banner.scss';
+@import '../css/blocks/product.scss';
+@import '../css/blocks/table.scss';
+@import '../css/blocks/products.scss';
+@import '../css/blocks/offers.scss';
+@import '../css/blocks/wysiwyg.scss';
+@import '../css/blocks/history.scss';
+@import '../css/blocks/checks.scss';
+@import '../css/blocks/slider.scss';
+@import '../css/blocks/map.scss';
+@import '../css/blocks/catalogues.scss';
+@import '../css/blocks/action.scss';
+@import '../css/blocks/plan.scss';
+@import '../css/blocks/offer.scss';
+@import '../css/blocks/everyone.scss';
+@import '../css/blocks/courses.scss';
+@import '../css/blocks/gastro.scss';
+@import '../css/blocks/news.scss';
+@import '../css/blocks/submenu.scss';
+@import '../css/blocks/pool.scss';
+@import '../css/blocks/attractions.scss';
+@import '../css/blocks/activities.scss';
+@import '../css/blocks/terms.scss';
+@import '../css/blocks/faq.scss';
+@import '../css/blocks/overlap.scss';
+@import '../css/blocks/proces.scss';
+@import '../css/blocks/events.scss';
+@import '../css/blocks/tiles.scss';
+@import '../css/blocks/zones.scss';
+@import '../css/blocks/linked.scss';
+@import '../css/blocks/classes.scss';
+@import '../css/blocks/groups.scss';
+@import '../css/blocks/choose.scss';
+@import '../css/blocks/contact.scss';
+@import '../css/blocks/reach.scss';
+@import '../css/blocks/possibilities.scss';
+@import '../css/blocks/how.scss';
+@import '../css/blocks/prices.scss';
+/*-- NOT USED ---*/
+@import '../css/blocks/accordion.scss';
+@import '../css/blocks/cards.scss';
+@import '../css/blocks/category-posts.scss';
+@import '../css/blocks/image.scss';
+@import '../css/blocks/numbers.scss';
+@import '../css/blocks/tabs.scss';

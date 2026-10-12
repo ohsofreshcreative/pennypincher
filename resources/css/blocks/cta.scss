@@ -1,0 +1,12 @@
+.b-cta {
+	/*--- Kształt z Figmy jako maska na pełnym, niewyciętym zdjęciu — tak edytor
+	      może podmienić zdjęcie w opcjach bez ponownego wycinania w Figmie. ---*/
+	.__image {
+		mask-image: url('@images/cta-mask.svg');
+		mask-repeat: no-repeat;
+		mask-size: 100% 100%;
+		-webkit-mask-image: url('@images/cta-mask.svg');
+		-webkit-mask-repeat: no-repeat;
+		-webkit-mask-size: 100% 100%;
+	}
+}

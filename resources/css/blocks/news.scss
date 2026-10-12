@@ -1,0 +1,28 @@
+.b-news {
+	.__card {
+		background-color: #fff;
+		transition: background-color 0.3s ease;
+	}
+
+	.__expand {
+		display: grid;
+		grid-template-rows: 0fr;
+		opacity: 0;
+		transition:
+			grid-template-rows 0.4s ease,
+			opacity 0.3s ease;
+
+		>* {
+			min-height: 0;
+		}
+	}
+
+	.__card.is-active {
+		background-color: var(--bg);
+
+		.__expand {
+			grid-template-rows: 1fr;
+			opacity: 1;
+		}
+	}
+}

@@ -1,0 +1,41 @@
+{
+  "name": "sage",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "translate": "npm run translate:pot && npm run translate:update",
+    "translate:pot": "wp i18n make-pot . ./resources/lang/sage.pot --include=\"theme.json,patterns,app,resources\"",
+    "translate:update": "for file in ./resources/lang/*.po; do wp i18n update-po ./resources/lang/sage.pot $file; done",
+    "translate:compile": "npm run translate:mo && npm run translate:js",
+    "translate:js": "wp i18n make-json ./resources/lang --pretty-print",
+    "translate:mo": "wp i18n make-mo ./resources/lang ./resources/lang"
+  },
+  "devDependencies": {
+    "@roots/vite-plugin": "^2.2.0",
+    "@tailwindcss/forms": "^0.5.11",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.3",
+    "@wordpress/dependency-extraction-webpack-plugin": "^6.36.0",
+    "autoprefixer": "^10.6.1",
+    "laravel-vite-plugin": "^3.2.0",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "alpinejs": "^3.14.9",
+    "baguettebox.js": "^1.13.0",
+    "gsap": "^3.13.0",
+    "jquery": "^3.7.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "swiper": "^11.2.6"
+  }
+}

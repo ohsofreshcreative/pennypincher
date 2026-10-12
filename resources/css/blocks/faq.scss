@@ -1,0 +1,80 @@
+.b-faq {
+	input.tab-check {
+		position: absolute !important;
+		opacity: 0 !important;
+		z-index: -1 !important;
+	}
+
+	.tabs-wrapper {}
+
+	.tabs-wrapper:last-child {
+		border-bottom: none;
+	}
+
+	.tabs {
+		width: 100%;
+		overflow: hidden;
+		margin-bottom: 16px !important;
+	}
+
+	.tabs-label {
+		padding: 16px 16px;
+		margin-bottom: 0px !important;
+		cursor: pointer;
+		color: var(--body);
+
+		.__arrow {
+			transition: transform 0.3s ease-in-out;
+		}
+	}
+
+	.tabs-label:hover {}
+
+	.tabs-content {
+		max-height: 0;
+		-webkit-transition: all 0.3s;
+		transition: all 0.3s;
+		padding: 0 24px;
+		overflow: hidden;
+
+		strong {
+			display: block;
+			padding-top: 24px;
+			padding-bottom: 8px;
+		}
+	}
+
+	.tabs-content p {
+		margin: 0;
+		margin-bottom: 16px;
+		color: var(--body);
+		font-size: 14px;
+		display: inline-block;
+	}
+
+	.tabs-content p:last-child {
+		margin-bottom: 0;
+	}
+
+	.tabs-content ul {
+		list-style-type: disc;
+		padding-left: 16px;
+	}
+
+	input:checked {
+		border: 1px solid var(--primary);
+	}
+
+	input:checked+.tabs-label .__arrow {
+		transform: rotate(45deg);
+	}
+
+	.tabs:has(input:checked) {
+		padding-bottom: 0px;
+	}
+
+	input:checked~.tabs-content {
+		max-height: 1200px;
+		padding: 0 24px 24px 24px;
+	}
+}

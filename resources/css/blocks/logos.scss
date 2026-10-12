@@ -1,0 +1,16 @@
+.b-logos {
+	/*--- Automatyczne przewijanie logotypów w lewo — nie do zapisania utility classes. ---*/
+	.animate-infinite-scroll {
+		animation: infinite-scroll 40s linear infinite;
+	}
+}
+
+@keyframes infinite-scroll {
+	0% {
+		transform: translateX(0);
+	}
+
+	100% {
+		transform: translateX(-25%);
+	}
+}

@@ -1,0 +1,9 @@
+.b-pool {
+	.__txt p:nth-of-type(1) {
+		font-weight:500;
+	}
+	.__txt p:nth-of-type(2) {
+		color: var(--color-primary-400);
+		margin-top:16px;
+	}
+}
