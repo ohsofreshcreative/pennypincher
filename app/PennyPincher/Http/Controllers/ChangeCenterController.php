@@ -8,6 +8,7 @@ use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
 use App\PennyPincher\Domain\Support\NotFound;
 use App\PennyPincher\Domain\Support\ValidationFailed;
+use App\PennyPincher\Infrastructure\GoogleAds\GoogleAdsApiException;
 use App\PennyPincher\Infrastructure\GoogleAds\Mutate\WriteBlockedException;
 use App\PennyPincher\Repositories\ActionItemRepository;
 use App\PennyPincher\Repositories\ChangeSetRepository;
@@ -224,6 +225,8 @@ class ChangeCenterController extends Controller
 			return $this->redirect($back . ($anchor ? '#' . $anchor : ''), (string) (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
 		} catch (WriteBlockedException $e) {
 			return $this->redirect($back, $e->getMessage(), 'error');
+		} catch (GoogleAdsApiException $e) {
+			return $this->redirect($back . ($anchor ? '#' . $anchor : ''), 'Google Ads: ' . $e->userMessage(), 'error');
 		}
 
 		[$text, $target] = is_array($result) ? $result : [$message, $result];

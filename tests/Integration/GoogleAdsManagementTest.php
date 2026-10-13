@@ -361,4 +361,13 @@ class GoogleAdsManagementTest extends ChangeCenterTestCase
 
 		return $planId;
 	}
+
+	public function testManualFormWithoutOperationsLeavesNoEmptyDraft(): void
+	{
+		$this->account('atomic');
+		$p = $this->proposals(); // ta sama instancja (jak w kontrolerze) – śledzi utworzone szkice
+		$this->assertThrows(ValidationFailed::class, fn () => $p->atomically($this->project, $this->owner, fn () => $p->keywordsAdd($this->project, $this->owner, $this->adGroupId(), [], 'PHRASE')), 'Nie przygotowano żadnej operacji');
+		$this->assertThrows(ValidationFailed::class, fn () => $p->atomically($this->project, $this->owner, fn () => $p->campaignCriterionAdd($this->project, $this->owner, $this->campaignId(), 'location', ['geo_id' => ''])), 'lokalizacji');
+		$this->assertSame(0, (int) $this->db->scalar('SELECT COUNT(*) FROM ' . $this->db->table('change_sets') . " WHERE project_id = ? AND status <> 'cancelled'", [$this->project->id]));
+	}
 }

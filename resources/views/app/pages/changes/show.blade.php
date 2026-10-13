@@ -8,7 +8,7 @@
   use App\PennyPincher\Support\Format;
 
   $currency = $project->currency;
-  $base = AppUrl::project($project->id, 'changes/' . $set['id']);
+  $base = rtrim(AppUrl::project($project->id, 'changes/' . $set['id']), '/');
   $status = $set['status'];
   $editable = in_array($status, ChangeStatus::EDITABLE, true) && $canPrepare;
   $micros = ['amount_micros', 'cpc_bid_micros', 'target_cpa_micros', 'cpc_bid_ceiling_micros'];
@@ -121,22 +121,83 @@
     </section>
   @endforeach
 
-  {{-- Walidacja --}}
-  @if (! $local['ok'] || $local['warnings'] !== [] || $staleOps !== [] || ! empty($set['validation']['api']))
-    <section class="pp-card p-5 text-[13px] leading-6" aria-label="Walidacja">
+  {{-- Walidacja: osobno brak danych, potwierdzenia, błędy konfiguracji i wynik Google Ads API --}}
+  @php
+    $opLabels = array_column($operations, 'label', 'id');
+    $confirmErrors = [];
+    $configErrors = [];
+    foreach ($local['errors'] as $opId => $messages) {
+        $confirm = array_values(array_intersect($messages, $local['confirmations'][$opId] ?? []));
+        $other = array_values(array_diff($messages, $confirm));
+        if ($confirm !== []) { $confirmErrors[$opId] = $confirm; }
+        if ($other !== []) { $configErrors[$opId] = $other; }
+    }
+    $apiOpErrors = array_filter($operations, fn ($op) => $op['error_code'] === 'VALIDATION' && $op['error_message']);
+    $api = $set['validation']['api'] ?? null;
+    $editableStatus = in_array($status, ChangeStatus::EDITABLE, true);
+    $localTone = $configErrors !== [] || $local['set_errors'] !== [] ? 'danger' : ($confirmErrors !== [] ? 'warn' : 'ok');
+    $localLabel = $configErrors !== [] || $local['set_errors'] !== [] ? 'błędy konfiguracji operacji' : ($confirmErrors !== [] ? 'wymaga potwierdzenia' : 'bez błędów');
+  @endphp
+  @if ($operations !== [] || $local['set_errors'] !== [])
+    <section class="pp-card p-5 text-[13px] leading-6" id="validation" aria-label="Walidacja">
       <h3 class="pp-card-title">Walidacja</h3>
-      <ul class="mt-2 space-y-1">
-        <li><span class="pp-badge pp-badge-{{ $local['ok'] ? 'ok' : 'danger' }}">Lokalna: {{ $local['ok'] ? 'bez błędów' : 'są błędy' }}</span> <span class="text-ink-mute">– sprawdzenie w Penny Pincher (to nie jest potwierdzenie Google Ads).</span></li>
-        @if (! empty($set['validation']['api']))
-          @php $api = $set['validation']['api']; @endphp
-          <li><span class="pp-badge pp-badge-{{ $api['status'] === 'ok' ? 'ok' : ($api['status'] === 'error' ? 'danger' : 'neutral') }}">Google Ads API: {{ $api['status'] === 'ok' ? 'potwierdzone (validateOnly)' : ($api['status'] === 'error' ? 'odrzucone' : 'pominięte') }}</span> <span class="text-ink-mute">{{ $api['message'] }} · {{ Format::datetime($api['at'] ?? null) }}</span></li>
-        @endif
+      <ul class="mt-2 space-y-1.5">
+        <li>
+          <span class="pp-badge pp-badge-{{ $staleOps === [] ? 'ok' : 'neutral' }}">Stan z Google Ads: {{ $staleOps === [] ? 'aktualny' : 'brak aktualnego odczytu' }}</span>
+          <span class="text-ink-mute">– to nie jest błąd: przed zatwierdzeniem Penny Pincher musi odczytać aktualne wartości z konta (tylko odczyt, maks. {{ ChangeCenterService::STATE_MAX_AGE_HOURS }} h).</span>
+        </li>
+        <li>
+          <span class="pp-badge pp-badge-{{ $localTone }}">Penny Pincher: {{ $localLabel }}</span>
+          <span class="text-ink-mute">– sprawdzenie w aplikacji (to nie jest potwierdzenie Google Ads).</span>
+        </li>
+        <li>
+          @if ($api)
+            <span class="pp-badge pp-badge-{{ $api['status'] === 'ok' ? 'ok' : ($api['status'] === 'error' ? 'danger' : 'neutral') }}">Google Ads API: {{ $api['status'] === 'ok' ? 'potwierdzone (validateOnly)' : ($api['status'] === 'error' ? 'odrzucone' : 'pominięte') }}</span>
+            <span class="text-ink-mute">{{ $api['message'] }} · {{ Format::datetime($api['at'] ?? null) }}</span>
+          @else
+            <span class="pp-badge pp-badge-neutral">Google Ads API: jeszcze nie sprawdzano</span>
+            <span class="text-ink-mute">– walidacja w Google (bez zapisu) odbywa się przy zatwierdzeniu, jeśli jest włączona na serwerze.</span>
+          @endif
+        </li>
       </ul>
-      @foreach ($local['set_errors'] as $error)
-        <p class="mt-1 text-danger">{{ $error }}</p>
-      @endforeach
-      @if ($staleOps !== [] && in_array($status, ChangeStatus::EDITABLE, true))
-        <p class="mt-2 text-warn">{{ count($staleOps) }} {{ Format::plural(count($staleOps), 'operacja nie ma', 'operacje nie mają', 'operacji nie ma') }} aktualnego stanu z Google Ads (maks. {{ ChangeCenterService::STATE_MAX_AGE_HOURS }} h). Przed zatwierdzeniem kliknij „Odczytaj stan z Google Ads”.</p>
+
+      @if ($staleOps !== [] && $editableStatus)
+        <div class="mt-3 rounded-[var(--radius-card)] border border-line bg-paper px-3 py-2">
+          <p class="font-semibold text-ink">Brak aktualnych danych ({{ count($staleOps) }})</p>
+          <p class="text-ink-soft">Kliknij „Odczytaj stan z Google Ads” w sekcji „Co dalej”. Dotyczy: {{ implode(', ', array_map(fn ($op) => '„' . $op['label'] . '”', array_slice(array_values($staleOps), 0, 5))) }}{{ count($staleOps) > 5 ? '…' : '' }}.</p>
+        </div>
+      @endif
+
+      @if ($confirmErrors !== [])
+        <div class="mt-3 rounded-[var(--radius-card)] border border-warn/30 bg-warn-soft px-3 py-2">
+          <p class="font-semibold text-ink">Wymaga Twojego potwierdzenia ({{ count($confirmErrors) }})</p>
+          <ul class="mt-1 space-y-1">
+            @foreach ($confirmErrors as $opId => $messages)
+              <li><a class="underline" href="#op-{{ $opId }}">{{ $opLabels[$opId] ?? '#' . $opId }}</a>: {{ implode(' ', $messages) }} <span class="text-ink-mute">Otwórz „Edytuj operację” i zaznacz potwierdzenie.</span></li>
+            @endforeach
+          </ul>
+        </div>
+      @endif
+
+      @if ($configErrors !== [] || $local['set_errors'] !== [])
+        <div class="mt-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-soft px-3 py-2">
+          <p class="font-semibold text-ink">Błędy konfiguracji operacji</p>
+          <ul class="mt-1 space-y-1">
+            @foreach ($local['set_errors'] as $error)<li>{{ $error }}</li>@endforeach
+            @foreach ($configErrors as $opId => $messages)
+              <li><a class="underline" href="#op-{{ $opId }}">{{ $opLabels[$opId] ?? '#' . $opId }}</a>: {{ implode(' ', $messages) }}</li>
+            @endforeach
+          </ul>
+        </div>
+      @endif
+
+      @if ($apiOpErrors !== [])
+        <div class="mt-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-soft px-3 py-2">
+          <p class="font-semibold text-ink">Błędy walidacji Google Ads API</p>
+          <ul class="mt-1 space-y-1">
+            @foreach ($apiOpErrors as $op)<li><a class="underline" href="#op-{{ $op['id'] }}">{{ $op['label'] }}</a>: {{ $op['error_message'] }}</li>@endforeach
+          </ul>
+        </div>
       @endif
     </section>
   @endif
@@ -289,7 +350,7 @@
                   @if ($op['atomic_group']) · grupa atomowa „{{ $op['atomic_group'] }}” (wszystko albo nic)@endif
                 </p>
                 <p class="mt-0.5 text-[12.5px] text-ink-mute">
-                  Stan „przed”: @if (OperationCatalog::action($op['type']) === 'create') nowy zasób @elseif ($op['before_source'] === 'api') odczyt z Google Ads {{ Format::datetime($op['before_read_at']) }} @else z synchronizacji – wymaga odczytu z Google Ads @endif
+                  Stan „przed”: @if (OperationCatalog::action($op['type']) === 'create') nowy zasób @elseif ($op['before_source'] === 'api' && ! empty($op['current_state']['context']['missing'])) <span class="text-danger">Google Ads nie zwrócił tego zasobu ({{ Format::datetime($op['before_read_at']) }})</span> @elseif ($op['before_source'] === 'api') odczyt z Google Ads {{ Format::datetime($op['before_read_at']) }} @else z synchronizacji – wymaga odczytu z Google Ads @endif
                 </p>
 
                 @if ($diff !== [])

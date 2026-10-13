@@ -465,4 +465,44 @@ class ChangeCenterTest extends ChangeCenterTestCase
 		$this->assertSame(50_000_000, (int) $op['payload']['amount_micros']);
 		$this->assertSame(70_000_000, (int) $this->fake->value('campaign_budget', $this->budgetName, 'amount_micros'), 'Przygotowanie cofnięcia niczego nie zmienia.');
 	}
+
+	public function testReadStateMarksMissingResourceAndReportsReadFailuresReadably(): void
+	{
+		$this->account('readstate', true);
+		$setId = $this->proposals()->keywordStatus($this->project, $this->owner, $this->keywordId(), 'PAUSED');
+		$validation = $this->center()->validateLocally($this->project, $this->set($setId), $this->ops($setId));
+		$this->assertTrue($validation['ok'], 'Brak odczytu stanu nie jest błędem walidacji – osobna kategoria.');
+
+		// Słowo usunięte w Google Ads poza aplikacją: odczyt się udaje, ale walidacja blokuje operację.
+		unset($this->fake->store['ad_group_criterion'][$this->fake->name('ad_group_criterion', '222~333')]);
+		$this->assertSame(1, $this->center()->refreshState($this->project, $setId, $this->owner));
+		$op = $this->ops($setId)[0];
+		$this->assertSame('api', $op['before_source']);
+		$this->assertNull($op['before_state']);
+		$this->assertTrue($op['current_state']['context']['missing']);
+		$this->assertTrue($op['verified_at'] === null && $op['status'] === ChangeStatus::OP_PENDING, 'Odczyt nie oznacza operacji jako zweryfikowanej.');
+		$validation = $this->center()->validateLocally($this->project, $this->set($setId), [$op]);
+		$this->assertFalse($validation['ok']);
+		$this->assertContains('nie zwrócił tego zasobu', implode(' ', $validation['errors'][$op['id']]));
+
+		// Błąd API przy odczycie: czytelny komunikat walidacji (nie wyjątek HTTP), próba zapisana w historii.
+		$this->mock->on('ad_group_criterion', [403, ['error' => ['code' => 403, 'status' => 'PERMISSION_DENIED', 'message' => 'The caller does not have permission']]]);
+		$this->assertThrows(ValidationFailed::class, fn () => $this->center()->refreshState($this->project, $setId, $this->owner), 'Nie udało się odczytać stanu konta Google Ads');
+		$this->assertSame('error', $this->sets()->attempts($this->project->id, $setId)[0]['outcome']);
+		$this->assertSame(0, $this->fake->sent());
+	}
+
+	public function testConfirmationsAreSeparatedFromConfigurationErrors(): void
+	{
+		$this->account('confirm');
+		$setId = $this->proposals()->conversionUpdate($this->project, $this->owner, $this->conversionId('901'), ['primary_for_goal' => false, 'confirm_goal_change' => false]);
+		$this->center()->refreshState($this->project, $setId, $this->owner);
+		$op = $this->ops($setId)[0];
+		$validation = $this->center()->validateLocally($this->project, $this->set($setId), [$op]);
+
+		$this->assertFalse($validation['ok']);
+		$this->assertSame($validation['errors'][$op['id']], $validation['confirmations'][$op['id']], 'Jedyny problem to brak potwierdzenia – nie błąd konfiguracji.');
+		$this->center()->updateOperation($this->project, $setId, (int) $op['id'], ['primary_for_goal' => false, 'confirm_goal_change' => true], $this->owner);
+		$this->assertTrue($this->center()->validateLocally($this->project, $this->set($setId), $this->ops($setId))['ok']);
+	}
 }

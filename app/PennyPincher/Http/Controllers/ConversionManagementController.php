@@ -6,6 +6,7 @@ use App\PennyPincher\Domain\Access\Ability;
 use App\PennyPincher\Domain\Access\Policy;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
 use App\PennyPincher\Domain\Support\ValidationFailed;
+use App\PennyPincher\Infrastructure\GoogleAds\GoogleAdsApiException;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\Changes\ChangeProposalService;
@@ -126,9 +127,11 @@ class ConversionManagementController extends Controller
 		$projectModel = $this->access->project($project, Ability::PrepareChanges);
 
 		try {
-			$id = $action($projectModel, $this->access->userId());
+			$id = $this->proposals->atomically($projectModel, $this->access->userId(), fn () => $action($projectModel, $this->access->userId()));
 		} catch (ValidationFailed $e) {
 			return $this->redirect(AppUrl::project($projectModel->id, 'conversion-management'), (string) (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
+		} catch (GoogleAdsApiException $e) {
+			return $this->redirect(AppUrl::project($projectModel->id, 'conversion-management'), 'Nie udało się odczytać danych z Google Ads: ' . $e->userMessage(), 'error');
 		}
 
 		return $this->redirect(AppUrl::project($projectModel->id, 'changes/' . $id), 'Przygotowano szkic zmiany konwersji. Zmiany celów wpływają na automatyczne strategie stawek – w Change Center potwierdź je osobno.');

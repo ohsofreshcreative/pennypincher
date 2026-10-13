@@ -271,9 +271,11 @@ class GoogleAdsManagementController extends Controller
 		$setId = ctype_digit((string) $request->input('change_set_id', '')) ? (int) $request->input('change_set_id') : null;
 
 		try {
-			$id = $action($projectModel, $this->access->userId(), $setId);
+			$id = $this->proposals->atomically($projectModel, $this->access->userId(), fn () => $action($projectModel, $this->access->userId(), $setId));
 		} catch (ValidationFailed $e) {
 			return $this->redirect(wp_get_referer() ? AppUrl::safeRedirect((string) wp_get_referer()) : AppUrl::project($projectModel->id, 'management'), (string) (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
+		} catch (GoogleAdsApiException $e) {
+			return $this->redirect(wp_get_referer() ? AppUrl::safeRedirect((string) wp_get_referer()) : AppUrl::project($projectModel->id, 'management'), 'Nie udało się odczytać danych z Google Ads: ' . $e->userMessage(), 'error');
 		}
 
 		return $this->redirect(AppUrl::project($projectModel->id, 'changes/' . $id), 'Dodano do szkicu zmian. Nic nie zostało wysłane do Google Ads – sprawdź podgląd, odczytaj aktualny stan i przekaż do zatwierdzenia.');

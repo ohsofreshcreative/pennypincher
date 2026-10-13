@@ -8,7 +8,7 @@
 
   $actions = $overview['actions'];
   $issues = $overview['issues'];
-  $base = AppUrl::project($project->id, 'conversion-management');
+  $base = rtrim(AppUrl::project($project->id, 'conversion-management'), '/');
   $severity = ['critical' => ['danger', 'Krytyczne'], 'warning' => ['warn', 'Ostrzeżenie'], 'info' => ['info', 'Informacja']];
   $yesNo = fn ($v) => $v === null ? '—' : ($v ? 'Tak' : 'Nie');
   $customerGoals = $overview['goals']['customer'] ?? null;

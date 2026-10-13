@@ -22,6 +22,14 @@ Stan na 12.10.2026 (etap 5 – Prompt 5; wcześniej Prompt 1, 1.1, 2, 3, 4 i pop
 - Zrzuty 1440 / 834 / 390 px: Change Center (lista, szczegóły), Management (lista, kampania, grupa), Conversion Management, moduły z przyciskami – bez poziomego przewijania.
 - Żadnej mutacji ani walidacji na prawdziwym koncie, żadnych zapytań DataForSEO.
 
+### Poprawki po wdrożeniu (Prompt 5, 12.10.2026)
+
+- **404 przy „Odczytaj stan z Google Ads” i formularzach Conversion Management**: adresy formularzy budowane jako `AppUrl::project(…)` (zawsze ze `/` na końcu) + `/akcja` dawały `…/changes/1//read-state` – trasa nie pasowała. Naprawione w `changes/show` (odczyt stanu, wyślij do przeglądu, zatwierdź, odrzuć, wdroż, anuluj, uzgodnij, ponów, cofnij, edycja i usuwanie operacji) i `conversion-management` (odczyt, Health Check, edycja, nowa konwersja, cel). Wcześniejsze testy HTTP budowały adresy samodzielnie zamiast brać `action` z HTML – dlatego błąd nie został wykryty.
+- Odczyt stanu: zasób nieistniejący w Google Ads jest oznaczany i blokuje operację z czytelnym komunikatem; błędy API, tokenu lub identyfikatora dają komunikat zamiast błędu serwera; odczyt nigdy nie oznacza operacji jako zweryfikowanej.
+- Walidacja w Change Center rozdzielona na: brak aktualnych danych (informacja), wymagane potwierdzenia, błędy konfiguracji operacji, błędy walidacji Google Ads API.
+- Formularze ręczne (Google Ads Management, Conversion Management) nie zostawiają pustych szkiców, gdy nie powstała żadna operacja albo wystąpił błąd.
+- Nowe testy HTTP formularzy: `tests/Http/run.sh` (jednorazowa kopia bazy, atrapa Google Ads jako tymczasowa wtyczka must-use, prawdziwe `action` i pola formularzy, wynik kontrolera, CSRF, uprawnienia członka).
+
 ### Znane ograniczenia (Prompt 5)
 
 - Zapis nie był uruchomiony na prawdziwym (ani testowym) koncie Google Ads – zachowanie API potwierdzone tylko dokumentacją v25 i atrapą.

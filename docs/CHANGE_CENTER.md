@@ -101,6 +101,11 @@ Przycisk „Przygotuj zmianę” w: Rekomendacjach, Budget Leaks, Action Plan, K
 
 Obsługiwane typy rekomendacji: `negatives`, `group_terms`, `group_keywords`, `keyword_opportunities`, `leak_bl101`, `leak_bl102`, `leak_bl201`, `leak_bl304`, `audit_cs001`, `audit_cs002`, `audit_ct001`, `audit_ct003`. Budget Leaks: BL101/BL102 (wykluczenie hasła, dopasowanie ścisłe), BL201 (wstrzymanie słowa), BL304 (sieci).
 
+## Testy
+
+- `tests/Unit/ChangeDomainTest.php`, `tests/Integration/ChangeCenterTest.php`, `tests/Integration/GoogleAdsManagementTest.php` – na atrapie konta (`tests/Support/FakeGoogleAdsAccount`).
+- `tests/Http/run.sh` – testy HTTP wszystkich formularzy Change Center, Google Ads Management, Conversion Management i przycisków „Przygotuj zmianę”/„Przygotuj wdrożenie” na lokalnym serwerze PHP: adresy i pola są brane z wyrenderowanego HTML, sprawdzany jest wynik kontrolera (przekierowanie, komunikat, stan zestawu), CSRF (419) i uprawnienia członka (403). Tylko lokalnie, na jednorazowej kopii bazy; nic nie wychodzi do Google.
+
 ## Zobacz też
 
 [GOOGLE_ADS_MANAGEMENT.md](GOOGLE_ADS_MANAGEMENT.md), [CONVERSION_MANAGEMENT.md](CONVERSION_MANAGEMENT.md), [SECURITY.md](SECURITY.md), [DEPLOYMENT.md](DEPLOYMENT.md).

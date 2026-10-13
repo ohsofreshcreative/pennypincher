@@ -113,6 +113,14 @@ final class GoogleAdsMock
 			], self::dates($request['gaql'])))]);
 	}
 
+	/**
+	 * Odpowiedź atrapy bez instalowania filtra (np. z filtra preinicjalizowanego w testach HTTP).
+	 */
+	public function respond(array $args, string $url): array|\WP_Error
+	{
+		return $this->handle($args, $url);
+	}
+
 	private function handle(array $args, string $url): array|\WP_Error
 	{
 		$body = $args['body'] ?? null;

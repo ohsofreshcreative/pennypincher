@@ -219,7 +219,13 @@ class ChangeCenterService
 		} catch (GoogleAdsApiException $e) {
 			$this->sets->addAttempt($setId, $project->id, 'read', 'error', [], ['customer_id' => $set['customer_id'], 'http_status' => $e->httpStatus, 'request_id' => $e->requestId, 'error_code' => $e->googleCode ?? $e->kind, 'message' => $e->getMessage(), 'user_id' => $userId]);
 
-			throw new ValidationFailed(['google_ads' => 'Nie udało się odczytać stanu konta: ' . $e->userMessage()]);
+			throw new ValidationFailed(['google_ads' => 'Nie udało się odczytać stanu konta Google Ads' . ($read > 0 ? " (odczytano {$read} z " . count($this->sets->operations($setId)) . ' operacji)' : '') . ': ' . $e->userMessage()]);
+		} catch (\InvalidArgumentException|\RuntimeException $e) {
+			// Np. nieprawidłowy identyfikator zasobu albo problem z tokenem – bez szczegółów technicznych w interfejsie.
+			error_log('[Penny Pincher] Odczyt stanu zestawu #' . $setId . ': ' . ChangeSetRepository::scrub($e->getMessage()));
+			$this->sets->addAttempt($setId, $project->id, 'read', 'error', [], ['customer_id' => $set['customer_id'], 'error_code' => 'LOCAL', 'message' => mb_substr(ChangeSetRepository::scrub($e->getMessage()), 0, 300), 'user_id' => $userId]);
+
+			throw new ValidationFailed(['google_ads' => 'Nie udało się odczytać stanu konta Google Ads – spróbuj ponownie. Jeśli problem się powtarza, sprawdź połączenie w zakładce Google Ads (może wymagać ponownej autoryzacji).']);
 		}
 
 		$this->sets->addAttempt($setId, $project->id, 'read', 'ok', [], ['customer_id' => $set['customer_id'], 'user_id' => $userId, 'message' => "Odczytano stan {$read} operacji."]);
@@ -251,6 +257,10 @@ class ChangeCenterService
 			}
 
 			$values['before_state'] = $state;
+
+			if ($state === null) {
+				$context['missing'] = true; // zasób nie istnieje albo jest niedostępny – walidacja zablokuje operację
+			}
 		}
 
 		// Dane do kontroli duplikatów – z Google Ads, gdy rodzic już istnieje.
@@ -289,6 +299,7 @@ class ChangeCenterService
 	{
 		$errors = [];
 		$warnings = [];
+		$confirmations = [];
 		$setErrors = [];
 		$temps = [];
 		$uuids = array_column($operations, 'op_uuid');
@@ -346,9 +357,13 @@ class ChangeCenterService
 			if ($result['warnings'] !== []) {
 				$warnings[$op['id']] = $result['warnings'];
 			}
+
+			if (($result['confirmations'] ?? []) !== []) {
+				$confirmations[$op['id']] = $result['confirmations'];
+			}
 		}
 
-		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors];
+		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors, 'confirmations' => $confirmations];
 	}
 
 	/**

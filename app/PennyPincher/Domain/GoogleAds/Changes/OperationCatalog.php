@@ -183,10 +183,12 @@ final class OperationCatalog
 	{
 		$errors = [];
 		$warnings = [];
+		// Błędy, które usuwa świadome potwierdzenie użytkownika (pole w „Edytuj operację”) – są też w $errors (blokują).
+		$confirmations = [];
 		$type = (string) ($op['type'] ?? '');
 
 		if (! self::exists($type)) {
-			return ['errors' => ['Nieobsługiwany typ operacji.'], 'warnings' => []];
+			return ['errors' => ['Nieobsługiwany typ operacji.'], 'warnings' => [], 'confirmations' => []];
 		}
 
 		$payload = (array) ($op['payload'] ?? []);
@@ -264,7 +266,7 @@ final class OperationCatalog
 					$shared = (bool) ($before['explicitly_shared'] ?? false) || (int) ($before['reference_count'] ?? 1) > 1;
 
 					if ($shared && empty($payload['shared_ack'])) {
-						$errors[] = sprintf('Budżet jest współdzielony przez %d kampanie – zmiana dotyczy ich wszystkich. Potwierdź, że to rozumiesz.', max(2, (int) ($before['reference_count'] ?? 2)));
+						$errors[] = $confirmations[] = sprintf('Budżet jest współdzielony przez %d kampanie – zmiana dotyczy ich wszystkich. Potwierdź, że to rozumiesz.', max(2, (int) ($before['reference_count'] ?? 2)));
 					}
 
 					if (($before['period'] ?? 'DAILY') !== 'DAILY') {
@@ -501,7 +503,7 @@ final class OperationCatalog
 				self::conversionFields($payload, $errors);
 
 				if (array_key_exists('primary_for_goal', $payload) && empty($payload['confirm_goal_change'])) {
-					$errors[] = 'Zmiana konwersji głównej wpływa na automatyczne strategie stawek – potwierdź, że rozumiesz skutki.';
+					$errors[] = $confirmations[] = 'Zmiana konwersji głównej wpływa na automatyczne strategie stawek – potwierdź, że rozumiesz skutki.';
 				}
 
 				if (array_key_exists('primary_for_goal', $payload)) {
@@ -517,7 +519,7 @@ final class OperationCatalog
 				}
 
 				if (empty($payload['confirm_goal_change'])) {
-					$errors[] = 'Zmiana celów konwersji wpływa na automatyczne strategie stawek – potwierdź, że rozumiesz skutki.';
+					$errors[] = $confirmations[] = 'Zmiana celów konwersji wpływa na automatyczne strategie stawek – potwierdź, że rozumiesz skutki.';
 				}
 
 				$warnings[] = 'Zmiana celu optymalizacji może na kilka dni lub tygodni zmienić wyniki kampanii z automatycznymi strategiami (Smart Bidding).';
@@ -525,7 +527,12 @@ final class OperationCatalog
 				break;
 		}
 
-		return ['errors' => array_values(array_unique($errors)), 'warnings' => array_values(array_unique($warnings))];
+		// Odczyt z Google Ads nie znalazł zasobu, którego dotyczy operacja (usunięty, inne konto, brak dostępu).
+		if ($action !== 'create' && ! empty($context['missing'])) {
+			$errors[] = 'Google Ads nie zwrócił tego zasobu (usunięty albo niedostępny dla połączonego konta) – operacji nie da się wykonać. Usuń ją z zestawu.';
+		}
+
+		return ['errors' => array_values(array_unique($errors)), 'warnings' => array_values(array_unique($warnings)), 'confirmations' => array_values(array_unique($confirmations))];
 	}
 
 	/**

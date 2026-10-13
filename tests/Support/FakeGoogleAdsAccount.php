@@ -62,6 +62,23 @@ final class FakeGoogleAdsAccount
 		return $this;
 	}
 
+	/**
+	 * Stan atrapy między żądaniami HTTP (testy formularzy na serwerze PHP).
+	 */
+	public function export(): array
+	{
+		return ['store' => $this->store, 'mutations' => $this->mutations, 'next_id' => $this->nextId];
+	}
+
+	public function import(array $state): self
+	{
+		$this->store = $state['store'] ?? $this->store;
+		$this->mutations = $state['mutations'] ?? [];
+		$this->nextId = (int) ($state['next_id'] ?? $this->nextId);
+
+		return $this;
+	}
+
 	// --- Dane startowe -------------------------------------------------------------------------------
 
 	public function budget(string $id, int $amountMicros, bool $shared = false): string

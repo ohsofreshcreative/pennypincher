@@ -818,6 +818,38 @@ class ChangeProposalService
 
 	// --- Pomocnicze -----------------------------------------------------------------------------
 
+	/**
+	 * Formularz ręczny jako jedna całość: jeśli przygotowanie się nie powiedzie albo nie powstała żadna operacja,
+	 * nowo utworzony pusty szkic jest anulowany (z powodem w historii) – w Change Center nie zostają puste zestawy.
+	 */
+	public function atomically(Project $project, int $userId, \Closure $build): int
+	{
+		$this->created = [];
+
+		try {
+			$id = $build();
+		} catch (\Throwable $e) {
+			foreach ($this->created as $created) {
+				$this->abandon($project, $created, $userId, $e instanceof ValidationFailed ? $e : null);
+			}
+
+			throw $e;
+		}
+
+		foreach ($this->created as $created) {
+			if ($this->sets->operations($created) === []) {
+				$this->abandon($project, $created, $userId, null);
+
+				throw new ValidationFailed(['change' => 'Nie przygotowano żadnej operacji – uzupełnij formularz (np. wpisz słowa lub wykluczenia).']);
+			}
+		}
+
+		return $id;
+	}
+
+	/** @var array<int, int> zestawy utworzone w bieżącym wywołaniu atomically() */
+	private array $created = [];
+
 	private function target(Project $project, int $userId, ?int $setId, string $title, string $sourceType = 'manual', ?int $sourceId = null, ?string $sourceLabel = null): int
 	{
 		if ($setId !== null) {
@@ -830,7 +862,10 @@ class ChangeProposalService
 			return $setId;
 		}
 
-		return $this->center->createSet($project, ['title' => mb_substr($title, 0, 255), 'source_type' => $sourceType, 'source_id' => $sourceId, 'source_label' => $sourceLabel], $userId);
+		$id = $this->center->createSet($project, ['title' => mb_substr($title, 0, 255), 'source_type' => $sourceType, 'source_id' => $sourceId, 'source_label' => $sourceLabel], $userId);
+		$this->created[] = $id;
+
+		return $id;
 	}
 
 	private function customer(Project $project): string
