@@ -101,9 +101,16 @@ Przycisk „Przygotuj zmianę” w: Rekomendacjach, Budget Leaks, Action Plan, K
 
 Obsługiwane typy rekomendacji: `negatives`, `group_terms`, `group_keywords`, `keyword_opportunities`, `leak_bl101`, `leak_bl102`, `leak_bl201`, `leak_bl304`, `audit_cs001`, `audit_cs002`, `audit_ct001`, `audit_ct003`. Budget Leaks: BL101/BL102 (wykluczenie hasła, dopasowanie ścisłe), BL201 (wstrzymanie słowa), BL304 (sieci).
 
+Rekomendacje konwersji (CT001 – konwersja główna, CT003 – zliczanie) są sprawdzane polityką pól `ConversionFieldPolicy` ([CONVERSION_MANAGEMENT.md](CONVERSION_MANAGEMENT.md)): działania, których pola API nie pozwala zmienić (np. `SMART_CAMPAIGN_AD_CLICKS_TO_CALL`), nie dostają operacji; gdy żadne działanie rekomendacji nie jest edytowalne, zamiast przycisku pokazywane jest „Działanie ręczne: …” (to samo w Action Plan).
+
+## Pola tylko do odczytu i operacje nieobsługiwane przez API
+
+Walidacja rozróżnia: brak aktualnego odczytu, **wymaga potwierdzenia** (`confirmations`), **operacje nieobsługiwane przez Google Ads API** (`unsupported` – np. zmiana zliczania w konwersji typu tylko do odczytu; jedyna droga: usunąć operację) i pozostałe błędy konfiguracji. `addOperation`/`updateOperation` odrzucają pola tylko do odczytu, formularz „Edytuj operację” ich nie pokazuje, a `OperationCatalog::build` nie zbuduje takiego żądania. Zestawy zapisane przed wprowadzeniem polityki nie są zmieniane automatycznie – widok wskazuje operacje do usunięcia.
+
 ## Testy
 
 - `tests/Unit/ChangeDomainTest.php`, `tests/Integration/ChangeCenterTest.php`, `tests/Integration/GoogleAdsManagementTest.php` – na atrapie konta (`tests/Support/FakeGoogleAdsAccount`).
+- `tests/Unit/ConversionFieldPolicyTest.php`, `tests/Integration/ConversionEditabilityTest.php` – edytowalność pól konwersji (wszystkie typy v25, konwersje Smart, rekomendacje, Action Plan, Change Center, odrzucenie przez atrapę jak `UPDATE_NOT_SUPPORTED`).
 - `tests/Http/run.sh` – testy HTTP wszystkich formularzy Change Center, Google Ads Management, Conversion Management i przycisków „Przygotuj zmianę”/„Przygotuj wdrożenie” na lokalnym serwerze PHP: adresy i pola są brane z wyrenderowanego HTML, sprawdzany jest wynik kontrolera (przekierowanie, komunikat, stan zestawu), CSRF (419) i uprawnienia członka (403). Tylko lokalnie, na jednorazowej kopii bazy; nic nie wychodzi do Google.
 
 ## Zobacz też

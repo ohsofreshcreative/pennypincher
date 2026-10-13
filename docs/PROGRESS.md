@@ -30,6 +30,14 @@ Stan na 12.10.2026 (etap 5 – Prompt 5; wcześniej Prompt 1, 1.1, 2, 3, 4 i pop
 - Formularze ręczne (Google Ads Management, Conversion Management) nie zostawiają pustych szkiców, gdy nie powstała żadna operacja albo wystąpił błąd.
 - Nowe testy HTTP formularzy: `tests/Http/run.sh` (jednorazowa kopia bazy, atrapa Google Ads jako tymczasowa wtyczka must-use, prawdziwe `action` i pola formularzy, wynik kontrolera, CSRF, uprawnienia członka).
 
+### Poprawka: pola konwersji tylko do odczytu (13.10.2026)
+
+- **Przyczyna**: reguła audytu CT003 („leady liczone jako każda”) zgłaszała m.in. konwersje kampanii inteligentnych (`SMART_CAMPAIGN_AD_CLICKS_TO_CALL`, `SMART_CAMPAIGN_MAP_CLICKS_TO_CALL` – kategoria „połączenie telefoniczne”, zliczanie „każda”). Rekomendacja `audit_ct003` była na liście `DEPLOYABLE`, a `ChangeProposalService::recommendationOperations` tworzył dla każdego działania z ustalenia operację `counting_type = ONE_PER_CLICK` **bez sprawdzenia, czy pole jest edytowalne** (ta sama ścieżka dla Action Plan i CT001). Tabela edytowalnych pól istniała, ale korzystały z niej tylko Conversion Management i Health Check; walidacja w Change Center wykrywała problem dopiero po utworzeniu operacji. Typy Smart są w `ConversionActionTypeEnum` v25 oznaczone jako „Read only”.
+- **Poprawka**: centralna `Domain/Conversions/ConversionFieldPolicy` (statusy: edytowalne, wymaga potwierdzenia, tylko do odczytu, nieobsługiwane; pełna lista typów v25) używana przez Conversion Management (formularze i powody blokady), Health Check, reguły CT001/CT003 (zalecenie „Działanie ręczne”), rekomendacje i Action Plan (brak przycisku, czytelny powód, pomijanie nieedytowalnych działań w zestawach mieszanych), generator `conversionUpdate`, Change Center (`addOperation`, `updateOperation`, walidacja z kategorią `unsupported`, widok z sekcją „Operacje nieobsługiwane przez Google Ads API” i zablokowanymi polami w edycji operacji) oraz `OperationCatalog::build` (ostatnia linia obrony).
+- **Dodatkowo wykryte**: `WEBPAGE_CODELESS` był traktowany jako edytowalny, a w API v25 jest „Read only” – teraz tylko do odczytu.
+- Istniejące zestawy nie są zmieniane automatycznie; walidacja wskazuje operacje do usunięcia, a wysłanie do przeglądu jest zablokowane do czasu ich usunięcia.
+- Testy: `tests/Unit/ConversionFieldPolicyTest.php`, `tests/Integration/ConversionEditabilityTest.php`, scenariusze HTTP dla konwersji Smart; atrapa konta odrzuca aktualizację typów „Read only” jak Google (`UPDATE_NOT_SUPPORTED`).
+
 ### Znane ograniczenia (Prompt 5)
 
 - Zapis nie był uruchomiony na prawdziwym (ani testowym) koncie Google Ads – zachowanie API potwierdzone tylko dokumentacją v25 i atrapą.

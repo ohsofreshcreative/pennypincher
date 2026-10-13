@@ -102,7 +102,7 @@
 
               <div x-show="open" x-cloak class="space-y-4 px-5 pb-5 text-sm leading-6 sm:pl-15">
                 <p class="text-ink-soft">{{ $item['description'] }}</p>
-                @include('app.partials.changes.source-change', ['sourceId' => $item['id'], 'action' => AppUrl::project($project->id, 'action-plan/' . $item['id'] . '/prepare-change'), 'blocker' => ($deployable[(int) $item['id']] ?? false) ? null : 'To działanie wymaga pracy poza Google Ads API (np. strona, pomiar, decyzja) – bez operacji do wdrożenia.'])
+                @include('app.partials.changes.source-change', ['sourceId' => $item['id'], 'action' => AppUrl::project($project->id, 'action-plan/' . $item['id'] . '/prepare-change'), 'blocker' => array_key_exists((int) $item['id'], $blockers) ? $blockers[(int) $item['id']] : \App\PennyPincher\Services\Changes\ChangeLinkService::OUTSIDE_API])
                 @if ($item['details']['action'] ?? null)
                   <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5"><h4 class="text-[13px] font-semibold text-mint-dark">Co zrobić</h4><p class="mt-0.5 text-ink">{{ $item['details']['action'] }}</p></div>
                 @endif

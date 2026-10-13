@@ -7,8 +7,9 @@
  *   PP_GOOGLE_ADS_CLIENT_ID=… PP_GOOGLE_ADS_CLIENT_SECRET=… PP_ENCRYPTION_KEY=… php tests/Http/setup.php
  *
  * Łączy projekt z atrapą konta Google Ads (OAuth na atrapie), synchronizuje dane z atrapy, zapisuje stan atrapy
- * konta (budżet, kampania, grupa, słowo, konwersje), tworzy zatwierdzony plan kampanii i wdrożony zestaw zmian
- * (do testu „Przygotuj cofnięcie”). NIGDY nie uruchamiaj na bazie produkcyjnej – skrypt odmawia pracy, jeśli
+ * konta (budżet, kampania, grupa, słowo, konwersje), tworzy zatwierdzony plan kampanii, wdrożony zestaw zmian
+ * (do testu „Przygotuj cofnięcie”) oraz konwersje Smart (typy tylko do odczytu) z zestawem sprzed poprawki
+ * i rekomendacją CT003. NIGDY nie uruchamiaj na bazie produkcyjnej – skrypt odmawia pracy, jeśli
  * WP_ENVIRONMENT_TYPE = production albo nazwa bazy nie zawiera „test”.
  */
 
@@ -70,6 +71,10 @@ $fake->campaignNegative('111', '501', 'darmowe', 'PHRASE');
 $fake->conversionAction('901', 'Wyświetlenie strony kontakt', ['category' => 'PAGE_VIEW']);
 $fake->conversionAction('902', 'Formularz', ['primary_for_goal' => false, 'counting_type' => 'MANY_PER_CLICK']);
 $fake->customerGoal('PAGE_VIEW', 'WEBSITE', true);
+// Konwersje kampanii inteligentnych – typy „Read only” w Google Ads API v25 (zgłoszenie z produkcji).
+$smartLead = ['category' => 'PHONE_CALL_LEAD', 'counting_type' => 'MANY_PER_CLICK', 'origin' => 'CALL_FROM_ADS'];
+$fake->conversionAction('903', 'Kliknięcia przycisku połączenia w reklamach inteligentnych', ['type' => 'SMART_CAMPAIGN_AD_CLICKS_TO_CALL'] + $smartLead);
+$fake->conversionAction('904', 'Kliknięcia przycisku połączenia w reklamach inteligentnych wyświetlanych w Mapach', ['type' => 'SMART_CAMPAIGN_MAP_CLICKS_TO_CALL', 'origin' => 'GOOGLE_HOSTED'] + $smartLead);
 file_put_contents((string) getenv('PP_FAKE_GOOGLE_ADS_STATE'), json_encode($fake->export()));
 
 // 3. Zatwierdzony plan kampanii (przycisk „Przygotuj wdrożenie do Google Ads”).
@@ -98,7 +103,52 @@ $sets->insertOperation([
 ]);
 
 $db = $app->make(\App\PennyPincher\Infrastructure\Database\Db::class);
+
+// 5. Konwersje Smart w bazie, zestaw sprzed poprawki (operacje zliczania zapisane bez kontroli) i rekomendacja CT003.
+$smart = [];
+
+foreach (['903' => ['Kliknięcia przycisku połączenia w reklamach inteligentnych', 'SMART_CAMPAIGN_AD_CLICKS_TO_CALL'], '904' => ['Kliknięcia przycisku połączenia w reklamach inteligentnych wyświetlanych w Mapach', 'SMART_CAMPAIGN_MAP_CLICKS_TO_CALL']] as $external => [$name, $type]) {
+	$smart[$external] = (int) ($db->scalar('SELECT id FROM ' . $db->table('conversion_actions') . ' WHERE project_id = ? AND external_id = ?', [$project->id, $external]) ?: $db->insert('conversion_actions', [
+		'project_id' => $project->id, 'natural_key' => 'id:' . $external, 'external_id' => $external, 'name' => $name, 'category' => 'Połączenie telefoniczne', 'category_code' => 'PHONE_CALL_LEAD',
+		'status' => 'enabled', 'status_raw' => 'ENABLED', 'type' => $type, 'primary_for_goal' => 1, 'counting_type' => 'MANY_PER_CLICK', 'include_in_conversions' => 1, 'created_at' => $now, 'updated_at' => $now,
+	]));
+}
+
+$smartSet = $sets->create([
+	'project_id' => $project->id, 'organization_id' => $project->organizationId, 'connection_id' => (int) $connection['id'], 'customer_id' => GoogleAdsMock::CUSTOMER,
+	'title' => 'Test HTTP: pomiar konwersji (zestaw sprzed poprawki)', 'source_type' => 'action_item', 'status' => ChangeStatus::DRAFT, 'risk_level' => 'high', 'created_by' => $owner,
+]);
+$smartOps = [];
+
+foreach (['903', '904'] as $i => $external) {
+	$smartOps[$external] = $sets->insertOperation([
+		'change_set_id' => $smartSet, 'project_id' => $project->id, 'position' => $i + 1, 'op_uuid' => wp_generate_uuid4(), 'type' => 'conversion_action.update',
+		'resource_type' => 'conversion_action', 'resource_name' => 'customers/' . GoogleAdsMock::CUSTOMER . '/conversionActions/' . $external, 'label' => 'Zmień zliczanie (Smart ' . $external . ')',
+		'payload' => ['counting_type' => 'ONE_PER_CLICK'], 'before_state' => null, 'before_source' => 'sync', 'risk' => 'high', 'status' => ChangeStatus::OP_PENDING, 'depends_on' => [],
+	]);
+}
+
+$auditRun = $db->insert('audit_runs', ['project_id' => $project->id, 'status' => 'completed', 'date_from' => '2026-09-01', 'date_to' => '2026-09-30', 'rules_version' => 'http-test', 'trigger_type' => 'manual', 'created_at' => $now]);
+$smartTitle = 'Test HTTP: połączenia Smart liczone jako „każda”';
+
+foreach ($smart as $external => $actionId) {
+	$db->insert('audit_findings', [
+		'audit_run_id' => $auditRun, 'project_id' => $project->id, 'rule_id' => 'CT003', 'category' => 'conversion_tracking', 'severity' => 'warning', 'title' => $smartTitle,
+		'description' => $smartTitle, 'evidence' => '[]', 'recommendation' => 'Zmień zliczanie', 'entity_type' => 'conversion_action', 'entity_id' => $actionId,
+		'fingerprint' => sha1('http-ct003-' . $external), 'penalty' => 2, 'score_dimension' => 'measurement', 'status' => 'open', 'detected_at' => $now,
+	]);
+}
+
+$smartRec = $db->insert('recommendations', [
+	'project_id' => $project->id, 'fingerprint' => sha1('http-ct003-rec-' . microtime()), 'source' => 'audit', 'type' => 'audit_ct003', 'title' => $smartTitle,
+	'description' => $smartTitle, 'rationale' => '', 'evidence' => '[]', 'action' => 'Zmień zliczanie na „Jedna”', 'campaign_id' => null, 'ad_group_id' => null,
+	'priority' => 'high', 'priority_score' => 99, 'confidence' => 'high', 'status' => 'new', 'is_obsolete' => 0, 'first_seen_at' => $now, 'last_seen_at' => $now, 'updated_at' => $now,
+]);
+
 $campaign = (int) $db->scalar('SELECT id FROM ' . $db->table('campaigns') . ' WHERE project_id = ? AND external_id = ?', [$project->id, '111']);
 $adGroup = (int) $db->scalar('SELECT id FROM ' . $db->table('ad_groups') . ' WHERE project_id = ? AND external_id = ?', [$project->id, '222']);
 
-echo json_encode(['project' => $project->id, 'plan' => $planId, 'applied_set' => $applied, 'connection' => (int) $connection['id'], 'campaign' => $campaign, 'ad_group' => $adGroup]), "\n";
+echo json_encode([
+	'project' => $project->id, 'plan' => $planId, 'applied_set' => $applied, 'connection' => (int) $connection['id'], 'campaign' => $campaign, 'ad_group' => $adGroup,
+	'smart_conversion' => $smart['903'], 'smart_set' => $smartSet, 'smart_op' => $smartOps['903'], 'smart_recommendation' => $smartRec,
+]), "\n";

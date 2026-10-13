@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Services\Changes;
 
+use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
 use App\PennyPincher\Domain\GoogleAds\Changes\ResourceName;
@@ -27,6 +28,9 @@ use App\PennyPincher\Services\GoogleAds\StateReader;
 class ChangeProposalService
 {
 	/** Typy rekomendacji z obsługiwanym przygotowaniem zmiany. */
+	/** Rekomendacje konwersji → pole działania konwersji, które zmieniają. */
+	public const CONVERSION_REC_FIELDS = ['audit_ct001' => 'primary_for_goal', 'audit_ct003' => 'counting_type'];
+
 	public const DEPLOYABLE = ['negatives', 'keyword_opportunities', 'group_terms', 'group_keywords', 'leak_bl101', 'leak_bl102', 'leak_bl201', 'leak_bl304', 'audit_cs001', 'audit_cs002', 'audit_ct001', 'audit_ct003'];
 
 	public function __construct(
@@ -407,17 +411,92 @@ class ChangeProposalService
 	public function conversionUpdate(Project $project, int $userId, int $actionId, array $payload, ?int $setId = null, string $sourceType = 'manual', ?string $label = null): int
 	{
 		$action = $this->conversionAction($project, $actionId);
+		$state = $this->conversionState($project, $action);
+
+		// Centralna polityka pól: nie przygotowujemy operacji, której Google Ads API nie wykona.
+		if (($violations = ConversionFieldPolicy::violations($state, $payload)) !== []) {
+			throw new ValidationFailed(['conversion' => '„' . $action['name'] . '”: ' . ConversionFieldPolicy::message($violations)]);
+		}
+
 		$setId = $this->target($project, $userId, $setId, 'Konwersja „' . $action['name'] . '”', $sourceType);
 		$this->center->addOperation($project, $setId, [
 			'type' => 'conversion_action.update', 'resource_name' => $action['resource_name'], 'payload' => $payload,
 			'label' => $label ?? 'Zmień ustawienia działania konwersji „' . $action['name'] . '”',
 			'before_state' => array_filter([
-				'name' => $action['name'], 'type' => $action['type'], 'category' => $action['category_code'], 'counting_type' => $action['counting_type'],
-				'primary_for_goal' => $action['primary_for_goal'] === null ? null : (bool) $action['primary_for_goal'],
-			], fn ($v) => $v !== null),
+				'name' => $state['name'] ?? $action['name'], 'type' => $state['type'] ?? $action['type'], 'status' => $state['status'] ?? null,
+				'category' => $state['category'] ?? $action['category_code'], 'counting_type' => $state['counting_type'] ?? $action['counting_type'],
+				'primary_for_goal' => array_key_exists('primary_for_goal', $state) ? (bool) $state['primary_for_goal'] : ($action['primary_for_goal'] === null ? null : (bool) $action['primary_for_goal']),
+			], fn ($v) => $v !== null) + (array_key_exists('owner_customer', $state) ? ['owner_customer' => $state['owner_customer']] : []),
 		], $userId);
 
 		return $setId;
+	}
+
+	/**
+	 * Najlepiej znany stan działania konwersji: odczyt z Google Ads (Conversion Management → „Odczytaj z Google Ads”),
+	 * a bez niego – dane z synchronizacji (typ, status).
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function conversionState(Project $project, array $action): array
+	{
+		$state = array_filter(['type' => $action['type'] ?? null, 'status' => $action['status_raw'] ?? (isset($action['status']) ? strtoupper((string) $action['status']) : null)], fn ($v) => $v !== null && $v !== '');
+		$connection = $this->connections->currentForProject($project->id);
+
+		if (! empty($action['external_id']) && $connection !== null && $connection['customer_id']) {
+			$snapshot = $this->sets->snapshot($project->id, (string) $connection['customer_id'], ConversionManagementService::SNAPSHOT_ACTIONS, 'all');
+
+			foreach ((array) ($snapshot['data'] ?? []) as $row) {
+				if ((string) ($row['id'] ?? '') === (string) $action['external_id']) {
+					return $row + $state;
+				}
+			}
+		}
+
+		return $state;
+	}
+
+	/**
+	 * Powód, dla którego rekomendacji nie da się zamienić na operacje Google Ads API (null – da się).
+	 * Dla rekomendacji konwersji (CT001, CT003) sprawdza każde działanie wg ConversionFieldPolicy – jeśli żadnego
+	 * nie można zmienić przez API, rekomendacja jest działaniem ręcznym/informacyjnym.
+	 */
+	public function recommendationBlocker(Project $project, array $recommendation): ?string
+	{
+		if (($reason = self::deployable($recommendation)) !== null) {
+			return $reason;
+		}
+
+		$field = self::CONVERSION_REC_FIELDS[$recommendation['type']] ?? null;
+
+		if ($field === null) {
+			return null;
+		}
+
+		$reasons = [];
+
+		foreach ($this->findingEntities($project, $recommendation, 'conversion_action') as $actionId) {
+			$row = $this->db->first('SELECT * FROM ' . $this->db->table('conversion_actions') . ' WHERE project_id = ? AND id = ?', [$project->id, $actionId]);
+
+			if ($row === null) {
+				continue;
+			}
+
+			if (empty($row['external_id'])) {
+				$reasons[] = 'Działanie pochodzi z importu (brak identyfikatora Google Ads) – zsynchronizuj konto przez API.';
+				continue;
+			}
+
+			$result = ConversionFieldPolicy::field($this->conversionState($project, $row), $field);
+
+			if (in_array($result['status'], [ConversionFieldPolicy::EDITABLE, ConversionFieldPolicy::CONFIRM], true)) {
+				return null;
+			}
+
+			$reasons[] = (string) $result['reason'];
+		}
+
+		return $reasons === [] ? null : 'Działanie ręczne: ' . implode(' ', array_values(array_unique($reasons)));
 	}
 
 	public function goalUpdate(Project $project, int $userId, string $resourceName, bool $biddable, ?int $setId = null): int
@@ -471,7 +550,7 @@ class ChangeProposalService
 	{
 		$rec = $this->recommendations->find($project->id, $recommendationId) ?? throw new ValidationFailed(['recommendation' => 'Nie znaleziono rekomendacji.']);
 
-		if (($reason = self::deployable($rec)) !== null) {
+		if (($reason = $this->recommendationBlocker($project, $rec)) !== null) {
 			throw new ValidationFailed(['recommendation' => $reason]);
 		}
 
@@ -573,10 +652,22 @@ class ChangeProposalService
 
 			case 'audit_ct001':
 			case 'audit_ct003':
+				$blocked = [];
+
 				foreach ($this->findingEntities($project, $rec, 'conversion_action') as $actionId) {
 					$payload = $rec['type'] === 'audit_ct001' ? ['primary_for_goal' => false, 'confirm_goal_change' => false] : ['counting_type' => 'ONE_PER_CLICK'];
-					$this->conversionUpdate($project, $userId, $actionId, $payload, $setId, $sourceType);
-					$added++;
+
+					try {
+						$this->conversionUpdate($project, $userId, $actionId, $payload, $setId, $sourceType);
+						$added++;
+					} catch (ValidationFailed $e) {
+						// Działanie, którego pola API nie pozwala zmienić (np. typ Smart, systemowe) – bez operacji, zostaje działaniem ręcznym.
+						$blocked[] = (string) (array_values($e->errors)[0] ?? $e->getMessage());
+					}
+				}
+
+				if ($added === 0 && $blocked !== []) {
+					throw new ValidationFailed(['recommendation' => 'Tej rekomendacji nie da się wdrożyć przez Google Ads API – to działanie ręczne. ' . implode(' ', array_values(array_unique($blocked)))]);
 				}
 
 				break;
@@ -668,28 +759,41 @@ class ChangeProposalService
 			return (int) $existing['id'];
 		}
 
-		$recs = array_values(array_filter(array_map(fn ($id) => $this->recommendations->find($project->id, (int) $id), (array) $item['recommendation_ids']), fn ($r) => $r !== null && self::deployable($r) === null));
+		$all = array_values(array_filter(array_map(fn ($id) => $this->recommendations->find($project->id, (int) $id), (array) $item['recommendation_ids'])));
+		$blockers = [];
+		$recs = [];
+
+		foreach ($all as $rec) {
+			if (($blocker = $this->recommendationBlocker($project, $rec)) === null) {
+				$recs[] = $rec;
+			} elseif (self::deployable($rec) === null) {
+				$blockers[] = $blocker;
+			}
+		}
 
 		if ($recs === []) {
-			throw new ValidationFailed(['action' => 'To działanie wymaga pracy poza Google Ads API – Penny Pincher nie tworzy dla niego operacji.']);
+			throw new ValidationFailed(['action' => $blockers !== [] ? implode(' ', array_values(array_unique($blockers))) : 'To działanie wymaga pracy poza Google Ads API – Penny Pincher nie tworzy dla niego operacji.']);
 		}
 
 		$setId = $this->center->createSet($project, ['title' => 'Action Plan: ' . mb_substr($item['title'], 0, 230), 'description' => $item['description'], 'source_type' => 'action_item', 'source_id' => (int) $item['id'], 'source_label' => $item['title']], $userId);
 		$ok = 0;
 
+		$failures = [];
+
 		foreach ($recs as $rec) {
 			try {
 				$this->fromRecommendation($project, $userId, (int) $rec['id'], $setId, 'action_item', (int) $item['id']);
 				$ok++;
-			} catch (ValidationFailed) {
-				// pomijamy rekomendację bez danych API; pozostałe zostają w szkicu
+			} catch (ValidationFailed $e) {
+				// pomijamy rekomendację bez danych API lub nieobsługiwaną przez API; pozostałe zostają w szkicu
+				$failures[] = (string) (array_values($e->errors)[0] ?? $e->getMessage());
 			}
 		}
 
 		if ($ok === 0) {
 			$this->abandon($project, $setId, $userId, null);
 
-			throw new ValidationFailed(['action' => 'Brak danych z Google Ads do przygotowania operacji – zsynchronizuj konto przez API.']);
+			throw new ValidationFailed(['action' => $failures !== [] ? implode(' ', array_values(array_unique($failures))) : 'Brak danych z Google Ads do przygotowania operacji – zsynchronizuj konto przez API.']);
 		}
 
 		return $setId;

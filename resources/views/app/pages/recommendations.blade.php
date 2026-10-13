@@ -163,7 +163,7 @@
                   <h4 class="text-[13px] font-semibold text-mint-dark">Działanie</h4>
                   <p class="mt-0.5 text-ink">{{ $rec['action'] }}</p>
                 </div>
-                @include('app.partials.changes.source-change', ['sourceId' => $rec['id'], 'action' => AppUrl::project($project->id, 'recommendations/' . $rec['id'] . '/prepare-change'), 'blocker' => \App\PennyPincher\Services\Changes\ChangeProposalService::deployable($rec) !== null ? 'Wymaga działań poza Google Ads API (np. na stronie) – bez operacji do wdrożenia.' : null])
+                @include('app.partials.changes.source-change', ['sourceId' => $rec['id'], 'action' => AppUrl::project($project->id, 'recommendations/' . $rec['id'] . '/prepare-change'), 'blocker' => \App\PennyPincher\Services\Changes\ChangeProposalService::deployable($rec) !== null ? 'Wymaga działań poza Google Ads API (np. na stronie) – bez operacji do wdrożenia.' : ($blockers[(int) $rec['id']] ?? null)])
                 <dl class="grid gap-x-6 gap-y-1 text-[12.5px] text-ink-mute sm:grid-cols-2 lg:grid-cols-4">
                   <div><dt class="inline">Szacowany wpływ:</dt> <dd class="inline text-ink-soft">{{ $rec['impact_label'] ?? 'brak danych' }}</dd></div>
                   <div><dt class="inline">Pierwsze wykrycie:</dt> <dd class="pp-num inline text-ink-soft">{{ Format::datetime($rec['first_seen_at']) }}</dd></div>

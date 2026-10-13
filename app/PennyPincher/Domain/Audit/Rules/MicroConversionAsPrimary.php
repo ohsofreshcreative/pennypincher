@@ -6,6 +6,7 @@ use App\PennyPincher\Domain\Audit\AuditContext;
 use App\PennyPincher\Domain\Audit\Category;
 use App\PennyPincher\Domain\Audit\Dimension;
 use App\PennyPincher\Domain\Audit\Severity;
+use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\GoogleAds\Enums;
 
 /**
@@ -86,7 +87,9 @@ final class MicroConversionAsPrimary extends BaseRule
 					['Konwersje w okresie', number_format($conversions, 1, ',', ' ')],
 					['Udział w konwersjach głównych', self::percent($share)],
 				],
-				'Ustaw to działanie jako dodatkowe (secondary) i pozostaw jako główne tylko konwersje oznaczające kontakt lub sprzedaż (formularz, telefon, e-mail).',
+				empty($action['type']) || in_array(($policy = ConversionFieldPolicy::field(['type' => $action['type'], 'status' => strtoupper((string) ($action['status'] ?? ''))], 'primary_for_goal'))['status'], [ConversionFieldPolicy::EDITABLE, ConversionFieldPolicy::CONFIRM], true)
+					? 'Ustaw to działanie jako dodatkowe (secondary) i pozostaw jako główne tylko konwersje oznaczające kontakt lub sprzedaż (formularz, telefon, e-mail).'
+					: 'Działanie ręczne: ' . $policy['reason'] . ' Jeśli interfejs Google Ads na to pozwala, ustaw działanie jako dodatkowe (secondary) albo wyłącz jego cel z optymalizacji kampanii.',
 				'conversion_action',
 				(int) $action['id'],
 			);

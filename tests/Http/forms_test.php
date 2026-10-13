@@ -320,6 +320,40 @@ $goal = form($page['body'], '/goal');
 $r = $admin->submit($goal['action'], $goal['fields']);
 check('Cel konta → szkic', setId($r['post']['location']) !== null, (string) $r['post']['location']);
 
+// --- 3b. Konwersje tylko do odczytu (SMART_CAMPAIGN_*_CLICKS_TO_CALL) ----------------------------------------
+
+$smartConv = (int) ($setup['smart_conversion'] ?? 0);
+$smartSet = (int) ($setup['smart_set'] ?? 0);
+$smartOp = (int) ($setup['smart_op'] ?? 0);
+$smartRec = (int) ($setup['smart_recommendation'] ?? 0);
+$page = $admin->get("/app/projects/{$project}/conversion-management/");
+$nonce = (string) (array_values(array_filter(array_map(fn ($f) => $f['fields']['_pp_nonce'] ?? null, forms($page['body']))))[0] ?? '');
+$smartForms = array_filter(forms($page['body']), fn ($f) => preg_match('#/conversion-management/' . $smartConv . '/update/?$#', (string) parse_url($f['action'], PHP_URL_PATH)));
+check('Conversion Management: konwersja Smart bez formularza edycji', $smartConv > 0 && $smartForms === []);
+check('  powód blokady z typem konwersji', str_contains($page['body'], 'Tylko odczyt: Google Ads API (v25) nie pozwala edytować działań konwersji typu SMART_CAMPAIGN_AD_CLICKS_TO_CALL'));
+check('  Health Check: zliczanie Smart jako działanie ręczne', str_contains($page['body'], 'Działanie ręczne: Google Ads API (v25) nie pozwala edytować działań konwersji typu SMART_CAMPAIGN_MAP_CLICKS_TO_CALL'));
+$r = $admin->submit("/app/projects/{$project}/conversion-management/{$smartConv}/update/", ['_pp_nonce' => $nonce, 'counting_type' => 'ONE_PER_CLICK']);
+check('Spreparowana edycja zliczania Smart → odmowa, bez szkicu', $r['post']['status'] === 302 && setId($r['post']['location']) === null && str_contains(flash($r['page']['body']), 'tylko do odczytu'), $r['post']['status'] . ' ' . flash($r['page']['body']));
+
+$page = $admin->get("/app/projects/{$project}/changes/{$smartSet}/");
+$read = form($page['body'], '/read-state');
+$r = $admin->submit($read['action'], $read['fields']);
+$body = $r['page']['body'];
+check('Zestaw sprzed poprawki: sekcja „Operacje nieobsługiwane przez Google Ads API”', str_contains($body, 'Operacje nieobsługiwane przez Google Ads API (2)') && str_contains($body, 'Usuń tę operację'), flash($body));
+check('  status walidacji wskazuje operacje nieobsługiwane (nie brak potwierdzenia)', str_contains($body, 'Penny Pincher: operacje nieobsługiwane przez Google Ads API') && ! str_contains($body, 'Wymaga Twojego potwierdzenia'));
+check('  pole „Sposób zliczania” zablokowane w edycji operacji', form($body, '/operations/' . $smartOp) === null && str_contains($body, 'Pola tylko do odczytu w Google Ads API (bez edycji): Sposób zliczania'));
+$r = $admin->submit("/app/projects/{$project}/changes/{$smartSet}/operations/{$smartOp}/", ['_pp_nonce' => $nonce, 'payload[counting_type]' => 'MANY_PER_CLICK']);
+check('Spreparowana edycja operacji Smart → odmowa', str_contains(flash($r['page']['body']), 'tylko do odczytu'), flash($r['page']['body']));
+$submit = form($body, '/submit');
+$r = $admin->submit($submit['action'], $submit['fields']);
+check('Wyślij do przeglądu z operacjami nieobsługiwanymi → odmowa', str_contains(flash($r['page']['body']), 'SMART_CAMPAIGN_AD_CLICKS_TO_CALL') && str_contains($r['page']['body'], 'Szkic'), flash($r['page']['body']));
+check('  zestaw nie zmieniony automatycznie (2 operacje)', substr_count($r['page']['body'], 'Zmień zliczanie (Smart') >= 2);
+
+$page = $admin->get("/app/projects/{$project}/recommendations/?status=new");
+check('Rekomendacja CT003 dla Smart: działanie ręczne zamiast przycisku', str_contains($page['body'], 'Działanie ręczne: Google Ads API (v25)') && form($page['body'], "/recommendations/{$smartRec}/prepare-change") === null);
+$r = $admin->submit("/app/projects/{$project}/recommendations/{$smartRec}/prepare-change/", ['_pp_nonce' => $nonce]);
+check('Spreparowane „Przygotuj zmianę” dla rekomendacji Smart → komunikat, bez szkicu', setId($r['post']['location']) === null && str_contains(flash($r['page']['body']), 'Działanie ręczne'), (string) $r['post']['location'] . ' ' . flash($r['page']['body']));
+
 // --- 4. Moduły: „Przygotuj zmianę” -------------------------------------------------------------------------
 
 foreach (['recommendations' => '/prepare-change', 'budget-leaks' => '/prepare-change', 'action-plan' => '/prepare-change'] as $module => $suffix) {

@@ -180,11 +180,20 @@ class GoogleAdsManagementTest extends ChangeCenterTestCase
 		$this->assertSame([], $rows['902']['editable'], 'Działanie systemowe – tylko odczyt.');
 		$this->assertTrue($rows['901']['editable'] !== []);
 
-		$setId = $this->proposals()->conversionUpdate($this->project, $this->owner, $this->conversionId('902'), ['counting_type' => 'ONE_PER_CLICK']);
+		// Generator odmawia od razu (ConversionFieldPolicy) – nie powstaje operacja, której Google Ads API nie wykona.
+		$this->assertThrows(ValidationFailed::class, fn () => $this->proposals()->conversionUpdate($this->project, $this->owner, $this->conversionId('902'), ['counting_type' => 'ONE_PER_CLICK']), 'systemowe');
+
+		// Operacja zapisana wcześniej (przed poprawką) – walidacja po odczycie z Google Ads ją blokuje.
+		$setId = $this->center()->createSet($this->project, ['title' => 'Stary zestaw', 'source_type' => 'manual'], $this->owner);
+		$opId = $this->sets()->insertOperation([
+			'change_set_id' => $setId, 'project_id' => $this->project->id, 'position' => 1, 'op_uuid' => wp_generate_uuid4(), 'type' => 'conversion_action.update',
+			'resource_type' => 'conversion_action', 'resource_name' => $this->fake->name('conversion_action', '902'), 'label' => 'Zliczanie', 'payload' => ['counting_type' => 'ONE_PER_CLICK'],
+			'before_state' => null, 'risk' => 'high', 'status' => ChangeStatus::OP_PENDING, 'depends_on' => [],
+		]);
 		$this->center()->refreshState($this->project, $setId, $this->owner);
 		$local = $this->center()->validateLocally($this->project, $this->set($setId), $this->ops($setId));
 		$this->assertFalse($local['ok']);
-		$this->assertContains('tylko do odczytu', implode(' ', array_merge(...array_values($local['errors']))));
+		$this->assertContains('systemowe', implode(' ', $local['unsupported'][$opId] ?? []));
 
 		// Klasyfikacja Penny Pincher (moduł Konwersje) nie tworzy żadnych zmian Google Ads.
 		$before = count($this->fake->mutations);

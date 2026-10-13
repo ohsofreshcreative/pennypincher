@@ -2,6 +2,7 @@
 
 @php
   use App\PennyPincher\Domain\Conversions\ConversionClass;
+  use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
   use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
   use App\PennyPincher\Support\AppUrl;
   use App\PennyPincher\Support\Format;
@@ -106,8 +107,9 @@
                 <td class="text-[12.5px] whitespace-nowrap">{{ ConversionClass::tryFrom($a['effective_class'])?->label() ?? '—' }}<span class="block text-ink-mute">{{ $a['effective_goal'] ? 'cel biznesowy' : 'nie cel' }} · {{ $a['classification_source'] === 'manual' ? 'ręcznie' : 'sugestia' }}</span></td>
                 <td class="pp-col-num">{{ $a['conversions_90'] !== null ? Format::conversions($a['conversions_90']) : '—' }}</td>
                 <td class="min-w-[10rem] text-[12.5px]">
+                  @php $readOnly = array_keys(array_filter($a['field_policy'] ?? [], fn ($p) => ! in_array($p['status'], [ConversionFieldPolicy::EDITABLE, ConversionFieldPolicy::CONFIRM], true))); @endphp
                   @if ($a['editable'] === [])
-                    <span class="text-ink-mute">{{ $a['external_id'] ? 'tylko odczyt (' . ($a['api'] ? 'typ systemowy lub zarządzany poza kontem' : 'odczytaj z Google Ads') . ')' : 'brak ID Google Ads' }}</span>
+                    <span class="text-ink-mute"><x-pp.icon name="lock" :size="14" class="inline" /> Tylko odczyt: {{ $a['locked_reason'] ?? 'Google Ads API nie pozwala edytować tego działania.' }}</span>
                   @elseif ($canPrepare)
                     <details>
                       <summary class="cursor-pointer font-semibold text-mint">Przygotuj zmianę</summary>
@@ -133,6 +135,9 @@
                         @if (in_array('default_value', $a['editable'], true))
                           <label class="pp-label" for="dv-{{ $a['id'] }}">Wartość domyślna</label>
                           <input id="dv-{{ $a['id'] }}" name="default_value" inputmode="decimal" class="pp-input pp-input-sm" placeholder="bez zmian">
+                        @endif
+                        @if ($readOnly !== [])
+                          <p class="text-[12px] text-ink-mute">Tylko do odczytu dla typu {{ $a['type'] }}: {{ implode(', ', array_map(fn ($f) => ConversionFieldPolicy::LABELS[$f] ?? $f, $readOnly)) }}.</p>
                         @endif
                         <x-pp.button variant="secondary" size="sm">Dodaj do szkicu</x-pp.button>
                       </form>

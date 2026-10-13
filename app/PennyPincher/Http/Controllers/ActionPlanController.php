@@ -50,7 +50,7 @@ class ActionPlanController extends Controller
 		return $this->render('app.pages.action-plan', [
 			'project' => $project,
 			'changes' => $this->changeLinks->forSources($project, 'action_item', array_column($items, 'id')),
-			'deployable' => $this->changeLinks->deployableActionItems($project, $items),
+			'blockers' => $this->changeLinks->actionItemBlockers($project, $items),
 			'period' => $period,
 			'items' => $items,
 			'all' => $all,

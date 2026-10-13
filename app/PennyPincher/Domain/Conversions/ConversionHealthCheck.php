@@ -50,7 +50,7 @@ final class ConversionHealthCheck
 				'proposal' => 'Ustaw to działanie jako dodatkowe (secondary): nadal będzie mierzone w kolumnie „Wszystkie konwersje”, ale przestanie sterować stawkami. Jako główne zostaw zgłoszenia (formularz, telefon, e-mail).',
 				'action_id' => (int) $action['id'],
 				'operations' => self::editable($action, 'primary_for_goal') ? [['type' => 'conversion_action.update', 'action_id' => (int) $action['id'], 'payload' => ['primary_for_goal' => false]]] : [],
-				'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action),
+				'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action, 'primary_for_goal'),
 				'campaigns' => $action['campaigns'] ?? [],
 				'bidding' => true,
 			];
@@ -68,7 +68,7 @@ final class ConversionHealthCheck
 					'proposal' => 'Zmień sposób zliczania na „Jedna”.',
 					'action_id' => (int) $action['id'],
 					'operations' => self::editable($action, 'counting_type') ? [['type' => 'conversion_action.update', 'action_id' => (int) $action['id'], 'payload' => ['counting_type' => 'ONE_PER_CLICK']]] : [],
-					'not_editable' => self::editable($action, 'counting_type') ? null : self::readOnlyReason($action),
+					'not_editable' => self::editable($action, 'counting_type') ? null : self::readOnlyReason($action, 'counting_type'),
 					'campaigns' => $action['campaigns'] ?? [],
 					'bidding' => (bool) ($action['primary_for_goal'] ?? false),
 				];
@@ -113,7 +113,7 @@ final class ConversionHealthCheck
 					'proposal' => 'Sprawdź tag na stronie (Google Tag Assistant). Jeśli działanie nie jest już używane – ustaw je jako dodatkowe.',
 					'action_id' => (int) $action['id'],
 					'operations' => self::editable($action, 'primary_for_goal') ? [['type' => 'conversion_action.update', 'action_id' => (int) $action['id'], 'payload' => ['primary_for_goal' => false]]] : [],
-					'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action),
+					'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action, 'primary_for_goal'),
 					'campaigns' => $action['campaigns'] ?? [],
 					'bidding' => true,
 				];
@@ -133,7 +133,7 @@ final class ConversionHealthCheck
 						'proposal' => 'Ustaw działanie jako dodatkowe albo popraw kontekst biznesowy, jeśli projekt sprzedaje online.',
 						'action_id' => (int) $action['id'],
 						'operations' => self::editable($action, 'primary_for_goal') ? [['type' => 'conversion_action.update', 'action_id' => (int) $action['id'], 'payload' => ['primary_for_goal' => false]]] : [],
-						'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action),
+						'not_editable' => self::editable($action, 'primary_for_goal') ? null : self::readOnlyReason($action, 'primary_for_goal'),
 						'campaigns' => $action['campaigns'] ?? [],
 						'bidding' => true,
 					];
@@ -211,11 +211,18 @@ final class ConversionHealthCheck
 		return in_array($field, (array) ($action['editable'] ?? []), true);
 	}
 
-	private static function readOnlyReason(array $action): string
+	/**
+	 * Dlaczego propozycja jest działaniem ręcznym – powód z ConversionFieldPolicy (jedno źródło prawdy).
+	 */
+	private static function readOnlyReason(array $action, string $field): string
 	{
-		return ($action['external_id'] ?? null) === null
-			? 'Działanie pochodzi z importu (brak identyfikatora Google Ads) – połącz konto i zsynchronizuj dane, aby przygotować zmianę.'
-			: 'Tego pola nie można zmienić przez API dla działania typu ' . ($action['type'] ?? 'nieznanego') . ' – zmień je w Google Ads.';
+		if (($action['external_id'] ?? null) === null) {
+			return 'Działanie pochodzi z importu (brak identyfikatora Google Ads) – połącz konto i zsynchronizuj dane, aby przygotować zmianę.';
+		}
+
+		$reason = $action['field_policy'][$field]['reason'] ?? $action['locked_reason'] ?? ConversionFieldPolicy::field(is_array($action['api'] ?? null) ? $action['api'] : ['type' => $action['type'] ?? null], $field)['reason'];
+
+		return 'Działanie ręczne: ' . ($reason ?? 'tego pola nie można zmienić przez API – zmień je w Google Ads.');
 	}
 
 	private static function similarNames(string $a, string $b): bool

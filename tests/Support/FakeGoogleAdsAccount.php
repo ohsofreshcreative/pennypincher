@@ -15,6 +15,13 @@ namespace Tests\Support;
  */
 final class FakeGoogleAdsAccount
 {
+	/** Typy oznaczone w ConversionActionTypeEnum v25 jako „Read only” (niezależna kopia – atrapa nie korzysta z kodu aplikacji). */
+	public const READ_ONLY_CONVERSION_TYPES = [
+		'STORE_SALES', 'ANDROID_APP_PRE_REGISTRATION', 'ANDROID_INSTALLS_ALL_OTHER_APPS', 'FLOODLIGHT_ACTION', 'FLOODLIGHT_TRANSACTION', 'GOOGLE_HOSTED',
+		'LEAD_FORM_SUBMIT', 'SEARCH_ADS_360', 'SMART_CAMPAIGN_AD_CLICKS_TO_CALL', 'SMART_CAMPAIGN_MAP_CLICKS_TO_CALL', 'SMART_CAMPAIGN_MAP_DIRECTIONS',
+		'SMART_CAMPAIGN_TRACKED_CALLS', 'STORE_VISITS', 'WEBPAGE_CODELESS',
+	];
+
 	public const CUSTOMER = GoogleAdsMock::CUSTOMER;
 
 	private const OPERATIONS = [
@@ -415,6 +422,16 @@ final class FakeGoogleAdsAccount
 
 		if (! isset($this->store[$resource][$name]) || ($this->store[$resource][$name][$resource . '.status'] ?? '') === 'REMOVED') {
 			throw new \DomainException('Atrapa: zasób nie istnieje (RESOURCE_NOT_FOUND): ' . $name);
+		}
+
+		// Jak Google Ads API v25: działań systemowych i typów „Read only” nie da się aktualizować (UPDATE_NOT_SUPPORTED).
+		if ($resource === 'conversion_action') {
+			$current = $this->store[$resource][$name];
+
+			if (array_key_exists('conversion_action.owner_customer', $current) && $current['conversion_action.owner_customer'] === null
+				|| in_array($current['conversion_action.type'] ?? '', self::READ_ONLY_CONVERSION_TYPES, true)) {
+				throw new \DomainException('Atrapa: Update of this conversion action isn\'t supported by Google Ads API (UPDATE_NOT_SUPPORTED).');
+			}
 		}
 
 		foreach (array_filter(explode(',', $mask)) as $path) {

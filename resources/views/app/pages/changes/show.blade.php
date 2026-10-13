@@ -1,6 +1,7 @@
 @extends('app.layouts.app')
 
 @php
+  use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
   use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
   use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
   use App\PennyPincher\Services\Changes\ChangeCenterService;
@@ -126,17 +127,25 @@
     $opLabels = array_column($operations, 'label', 'id');
     $confirmErrors = [];
     $configErrors = [];
+    $unsupportedOps = [];
     foreach ($local['errors'] as $opId => $messages) {
         $confirm = array_values(array_intersect($messages, $local['confirmations'][$opId] ?? []));
-        $other = array_values(array_diff($messages, $confirm));
+        $unsupported = array_values(array_diff(array_intersect($messages, $local['unsupported'][$opId] ?? []), [OperationCatalog::UNSUPPORTED_HINT]));
+        $other = array_values(array_diff($messages, $confirm, $local['unsupported'][$opId] ?? []));
         if ($confirm !== []) { $confirmErrors[$opId] = $confirm; }
+        if ($unsupported !== []) { $unsupportedOps[$opId] = $unsupported; }
         if ($other !== []) { $configErrors[$opId] = $other; }
     }
     $apiOpErrors = array_filter($operations, fn ($op) => $op['error_code'] === 'VALIDATION' && $op['error_message']);
     $api = $set['validation']['api'] ?? null;
     $editableStatus = in_array($status, ChangeStatus::EDITABLE, true);
-    $localTone = $configErrors !== [] || $local['set_errors'] !== [] ? 'danger' : ($confirmErrors !== [] ? 'warn' : 'ok');
-    $localLabel = $configErrors !== [] || $local['set_errors'] !== [] ? 'błędy konfiguracji operacji' : ($confirmErrors !== [] ? 'wymaga potwierdzenia' : 'bez błędów');
+    $localTone = $configErrors !== [] || $unsupportedOps !== [] || $local['set_errors'] !== [] ? 'danger' : ($confirmErrors !== [] ? 'warn' : 'ok');
+    $localLabel = match (true) {
+        $unsupportedOps !== [] => 'operacje nieobsługiwane przez Google Ads API',
+        $configErrors !== [] || $local['set_errors'] !== [] => 'błędy konfiguracji operacji',
+        $confirmErrors !== [] => 'wymaga potwierdzenia',
+        default => 'bez błędów',
+    };
   @endphp
   @if ($operations !== [] || $local['set_errors'] !== [])
     <section class="pp-card p-5 text-[13px] leading-6" id="validation" aria-label="Walidacja">
@@ -165,6 +174,18 @@
         <div class="mt-3 rounded-[var(--radius-card)] border border-line bg-paper px-3 py-2">
           <p class="font-semibold text-ink">Brak aktualnych danych ({{ count($staleOps) }})</p>
           <p class="text-ink-soft">Kliknij „Odczytaj stan z Google Ads” w sekcji „Co dalej”. Dotyczy: {{ implode(', ', array_map(fn ($op) => '„' . $op['label'] . '”', array_slice(array_values($staleOps), 0, 5))) }}{{ count($staleOps) > 5 ? '…' : '' }}.</p>
+        </div>
+      @endif
+
+      @if ($unsupportedOps !== [])
+        <div class="mt-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-soft px-3 py-2">
+          <p class="font-semibold text-ink">Operacje nieobsługiwane przez Google Ads API ({{ count($unsupportedOps) }})</p>
+          <p class="text-ink-soft">Google Ads API nie pozwala zmienić tych ustawień – takiej operacji nie da się zatwierdzić ani wdrożyć. Penny Pincher nie zmienia istniejących zestawów automatycznie: usuń wskazane operacje (ikona ×) i, jeśli trzeba, zmień ustawienie ręcznie w Google Ads albo przygotuj zmianę ponownie w Conversion Management.</p>
+          <ul class="mt-1 space-y-1">
+            @foreach ($unsupportedOps as $opId => $messages)
+              <li><a class="underline" href="#op-{{ $opId }}">{{ $opLabels[$opId] ?? '#' . $opId }}</a>: {{ implode(' ', $messages) }} <span class="font-semibold text-danger">Usuń tę operację.</span></li>
+            @endforeach
+          </ul>
         </div>
       @endif
 
@@ -333,6 +354,12 @@
             $errors = $local['errors'][$op['id']] ?? [];
             $warnings = array_values(array_unique(array_merge($op['warnings'], $local['warnings'][$op['id']] ?? [])));
             $fields = array_values(array_filter($editableFields, fn ($f) => array_key_exists($f, $op['payload'])));
+            // Działanie konwersji: tylko pola, które Google Ads API pozwala zmienić dla tego typu (ConversionFieldPolicy).
+            $lockedFields = [];
+            if ($op['type'] === 'conversion_action.update' && is_array($op['before_state'])) {
+                $lockedFields = array_keys(ConversionFieldPolicy::violations($op['before_state'], $op['payload']));
+                $fields = array_values(array_diff($fields, $lockedFields));
+            }
           @endphp
           <li id="op-{{ $op['id'] }}" class="px-5 py-4">
             <div class="flex flex-wrap items-start gap-3">
@@ -382,6 +409,9 @@
                   <p class="mt-1 text-[13px] text-warn">Weryfikacja niemożliwa: {{ $op['verification']['error'] }}</p>
                 @endif
 
+                @if ($editable && $lockedFields !== [])
+                  <p class="mt-1 text-[12.5px] text-ink-mute"><x-pp.icon name="lock" :size="14" class="inline" /> Pola tylko do odczytu w Google Ads API (bez edycji): {{ implode(', ', array_map(fn ($f) => OperationCatalog::FIELD_LABELS[$f] ?? $f, $lockedFields)) }}.</p>
+                @endif
                 @if ($editable && ($fields !== []))
                   <details class="mt-2">
                     <summary class="cursor-pointer text-[13px] font-semibold text-mint">Edytuj operację</summary>

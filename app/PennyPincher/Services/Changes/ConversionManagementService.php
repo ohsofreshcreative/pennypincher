@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Services\Changes;
 
+use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Domain\Conversions\ConversionHealthCheck;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
@@ -92,7 +93,9 @@ class ConversionManagementService
 			$state = $action['external_id'] !== null ? ($api[(string) $action['external_id']] ?? null) : null;
 			$settings = json_decode((string) ($this->db->scalar('SELECT settings FROM ' . $this->db->table('conversion_actions') . ' WHERE id = ?', [$action['id']]) ?? ''), true) ?: [];
 			$type = $state['type'] ?? $action['type'];
-			$editableBase = $state !== null ? $state : ['type' => $type];
+			// Stan do polityki pól: odczyt z Google Ads (typ, status, właściciel) albo dane z synchronizacji.
+			$editableBase = $state !== null ? $state : array_filter(['type' => $type, 'status' => $action['status_raw'] ?? strtoupper((string) $action['status'])], fn ($v) => $v !== null && $v !== '');
+			$canEditApi = $action['external_id'] !== null && $customer !== null;
 
 			// Wartości z Google Ads (odczyt na żądanie) mają pierwszeństwo przed danymi z synchronizacji/importu.
 			$rows[] = [
@@ -107,7 +110,13 @@ class ConversionManagementService
 				'default_value' => $state['default_value'] ?? ($settings['default_value'] ?? null),
 				'always_use_default_value' => $state['always_use_default_value'] ?? ($settings['always_use_default_value'] ?? null),
 				'attribution_model' => $state['attribution_model'] ?? null,
-				'editable' => $action['external_id'] !== null && $customer !== null ? OperationCatalog::conversionEditable($editableBase) : [],
+				'editable' => $canEditApi ? ConversionFieldPolicy::editableFields($editableBase) : [],
+				'locked_reason' => match (true) {
+					$action['external_id'] === null => 'Brak identyfikatora Google Ads (dane z importu) – zsynchronizuj konto przez API.',
+					$customer === null => 'Połącz projekt z kontem Google Ads.',
+					default => ConversionFieldPolicy::actionBlock($editableBase)['reason'] ?? null,
+				},
+				'field_policy' => $canEditApi ? array_combine(ConversionFieldPolicy::API_FIELDS, array_map(fn ($f) => ConversionFieldPolicy::field($editableBase, $f), ConversionFieldPolicy::API_FIELDS)) : [],
 				'conversions_90' => $counts[$action['id']]['conversions'] ?? ($resolved->isEmpty() ? null : 0.0),
 				'all_conversions_90' => $counts[$action['id']]['all'] ?? ($resolved->isEmpty() ? null : 0.0),
 				'campaigns' => $byCampaign[$action['id']] ?? [],

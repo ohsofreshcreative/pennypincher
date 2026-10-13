@@ -5,6 +5,7 @@ namespace App\PennyPincher\Services\Changes;
 use App\PennyPincher\Domain\Access\Ability;
 use App\PennyPincher\Domain\Access\Policy;
 use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
+use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
 use App\PennyPincher\Domain\GoogleAds\Changes\ResourceName;
 use App\PennyPincher\Domain\Planner\NegativeConflictChecker;
@@ -129,6 +130,7 @@ class ChangeCenterService
 		}
 
 		$payload = self::cleanPayload((array) ($op['payload'] ?? []));
+		self::guardConversionFields($type, is_array($op['before_state'] ?? null) ? $op['before_state'] : null, $payload);
 		$record = [
 			'type' => $type,
 			'resource_type' => $resource,
@@ -172,6 +174,8 @@ class ChangeCenterService
 		$set = $this->editable($project, $setId);
 		$op = $this->sets->findOperation($setId, $operationId) ?? throw new ValidationFailed(['operation' => 'Nie znaleziono operacji.']);
 		$merged = self::cleanPayload(array_replace($op['payload'], $payload));
+		// Sprawdzamy tylko pola zmieniane teraz – istniejąca, nieprawidłowa operacja jest opisana w walidacji (do usunięcia).
+		self::guardConversionFields($op['type'], is_array($op['before_state'] ?? null) ? $op['before_state'] : null, array_intersect_key($merged, self::cleanPayload($payload)));
 		$op['payload'] = $merged;
 
 		$this->sets->updateOperation($operationId, array_filter([
@@ -180,6 +184,21 @@ class ChangeCenterService
 			'label' => $label !== null ? mb_substr(wp_strip_all_tags($label), 0, 255) : null,
 		], fn ($v) => $v !== null));
 		$this->invalidate($project, $set, $userId, 'operation_edited', 'Zmieniono operację: ' . $op['label'], $operationId);
+	}
+
+	/**
+	 * Operacja zmiany działania konwersji nie może zawierać pól, których Google Ads API nie pozwala zmienić
+	 * (ConversionFieldPolicy). Bez znanego stanu działania kontrolę wykona walidacja po odczycie z Google Ads.
+	 */
+	private static function guardConversionFields(string $type, ?array $state, array $payload): void
+	{
+		if ($type !== 'conversion_action.update' || $state === null) {
+			return;
+		}
+
+		if (($violations = ConversionFieldPolicy::violations($state, $payload)) !== []) {
+			throw new ValidationFailed(['payload' => ConversionFieldPolicy::message($violations)]);
+		}
 	}
 
 	public function removeOperation(Project $project, int $setId, int $operationId, int $userId): void
@@ -300,6 +319,7 @@ class ChangeCenterService
 		$errors = [];
 		$warnings = [];
 		$confirmations = [];
+		$unsupported = [];
 		$setErrors = [];
 		$temps = [];
 		$uuids = array_column($operations, 'op_uuid');
@@ -361,9 +381,13 @@ class ChangeCenterService
 			if (($result['confirmations'] ?? []) !== []) {
 				$confirmations[$op['id']] = $result['confirmations'];
 			}
+
+			if (($result['unsupported'] ?? []) !== []) {
+				$unsupported[$op['id']] = $result['unsupported'];
+			}
 		}
 
-		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors, 'confirmations' => $confirmations];
+		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors, 'confirmations' => $confirmations, 'unsupported' => $unsupported];
 	}
 
 	/**

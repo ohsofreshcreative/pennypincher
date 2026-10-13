@@ -59,6 +59,7 @@ class RecommendationsController extends Controller
 		return $this->render('app.pages.recommendations', [
 			'project' => $project,
 			'changes' => $this->changeLinks->forSources($project, 'recommendation', array_column($recommendations->items, 'id')),
+			'blockers' => $this->changeLinks->recommendationBlockers($project, $recommendations->items),
 			'period' => $period,
 			'filters' => $filters,
 			'scope' => $only ? 'period' : 'all',

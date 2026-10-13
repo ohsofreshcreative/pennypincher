@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Domain\GoogleAds\Changes;
 
+use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\Planner\AdValidator;
 
 /**
@@ -112,26 +113,15 @@ final class OperationCatalog
 		'DEFAULT' => 'Inna',
 	];
 
+	/** Wskazówka dla operacji, której Google Ads API nie wykona (istniejące zestawy nie są zmieniane automatycznie). */
+	public const UNSUPPORTED_HINT = 'Google Ads API nie wykona tej operacji – usuń ją z zestawu (ikona ×), a ustawienie zmień ręcznie w Google Ads albo przygotuj zmianę ponownie.';
+
 	public const COUNTING = ['ONE_PER_CLICK' => 'Jedna na kliknięcie (zalecane dla leadów)', 'MANY_PER_CLICK' => 'Każda (zalecane dla sprzedaży)'];
 
 	/**
-	 * Pola działania konwersji edytowalne przez Penny Pincher wg typu (konserwatywnie: tylko typy i pola, których
-	 * zmiana przez API jest typowa; reszta – tylko do odczytu, zmiana w interfejsie Google Ads).
+	 * Pola działania konwersji edytowalne przez Penny Pincher wg typu – zob. ConversionFieldPolicy (jedno źródło prawdy).
 	 */
-	public const CONVERSION_EDITABLE = [
-		'WEBPAGE' => ['name', 'category', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'view_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'WEBPAGE_CODELESS' => ['name', 'category', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'view_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'UPLOAD_CLICKS' => ['name', 'category', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'UPLOAD_CALLS' => ['name', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'AD_CALL' => ['name', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'WEBSITE_CALL' => ['name', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'CLICK_TO_CALL' => ['name', 'counting_type', 'primary_for_goal', 'click_through_lookback_window_days', 'default_value', 'always_use_default_value'],
-		'GOOGLE_ANALYTICS_4_CUSTOM' => ['primary_for_goal', 'counting_type', 'click_through_lookback_window_days', 'view_through_lookback_window_days'],
-		'GOOGLE_ANALYTICS_4_PURCHASE' => ['primary_for_goal', 'counting_type', 'click_through_lookback_window_days', 'view_through_lookback_window_days'],
-		'GOOGLE_ANALYTICS_4_GENERATE_LEAD' => ['primary_for_goal', 'counting_type', 'click_through_lookback_window_days', 'view_through_lookback_window_days'],
-		'GOOGLE_ANALYTICS_4_QUALIFY_LEAD' => ['primary_for_goal', 'counting_type', 'click_through_lookback_window_days', 'view_through_lookback_window_days'],
-		'GOOGLE_ANALYTICS_4_CLOSE_CONVERT_LEAD' => ['primary_for_goal', 'counting_type', 'click_through_lookback_window_days', 'view_through_lookback_window_days'],
-	];
+	public const CONVERSION_EDITABLE = ConversionFieldPolicy::BY_TYPE;
 
 	/** Znaki niedozwolone w słowach kluczowych Google Ads. */
 	private const KEYWORD_INVALID = ['!', '@', '%', '^', '*', '(', ')', '=', '{', '}', ';', '~', '`', '<', '>', '?', '\\', '|', ','];
@@ -185,10 +175,11 @@ final class OperationCatalog
 		$warnings = [];
 		// Błędy, które usuwa świadome potwierdzenie użytkownika (pole w „Edytuj operację”) – są też w $errors (blokują).
 		$confirmations = [];
+		$unsupported = [];
 		$type = (string) ($op['type'] ?? '');
 
 		if (! self::exists($type)) {
-			return ['errors' => ['Nieobsługiwany typ operacji.'], 'warnings' => [], 'confirmations' => []];
+			return ['errors' => ['Nieobsługiwany typ operacji.'], 'warnings' => [], 'confirmations' => [], 'unsupported' => ['Nieobsługiwany typ operacji.']];
 		}
 
 		$payload = (array) ($op['payload'] ?? []);
@@ -486,14 +477,13 @@ final class OperationCatalog
 				break;
 
 			case 'conversion_action.update':
-				if ($before !== null) {
-					$editable = self::conversionEditable($before);
-
-					foreach (array_keys(array_intersect_key($payload, self::UPDATE_PATHS['conversion_action'])) as $field) {
-						if (! in_array($field, $editable, true)) {
-							$errors[] = sprintf('Pole „%s” jest tylko do odczytu dla działania typu %s.', self::FIELD_LABELS[$field] ?? $field, $before['type'] ?? '—');
-						}
+				// Pola, których Google Ads API nie pozwala zmienić dla tego działania – operacji nie da się wykonać.
+				if ($before !== null && ($violations = ConversionFieldPolicy::violations($before, $payload)) !== []) {
+					foreach ($violations as $reason) {
+						$errors[] = $unsupported[] = $reason;
 					}
+
+					$errors[] = $unsupported[] = self::UNSUPPORTED_HINT;
 				}
 
 				if (array_key_exists('category', $payload) && ! array_key_exists($payload['category'], self::CONVERSION_CATEGORIES)) {
@@ -532,7 +522,10 @@ final class OperationCatalog
 			$errors[] = 'Google Ads nie zwrócił tego zasobu (usunięty albo niedostępny dla połączonego konta) – operacji nie da się wykonać. Usuń ją z zestawu.';
 		}
 
-		return ['errors' => array_values(array_unique($errors)), 'warnings' => array_values(array_unique($warnings)), 'confirmations' => array_values(array_unique($confirmations))];
+		return [
+			'errors' => array_values(array_unique($errors)), 'warnings' => array_values(array_unique($warnings)),
+			'confirmations' => array_values(array_unique($confirmations)), 'unsupported' => array_values(array_unique($unsupported)),
+		];
 	}
 
 	/**
@@ -540,12 +533,7 @@ final class OperationCatalog
 	 */
 	public static function conversionEditable(array $state): array
 	{
-		// Działania systemowe (bez właściciela) są tylko do odczytu.
-		if ((array_key_exists('owner_customer', $state) && $state['owner_customer'] === null) || ($state['system'] ?? false)) {
-			return [];
-		}
-
-		return self::CONVERSION_EDITABLE[$state['type'] ?? ''] ?? [];
+		return ConversionFieldPolicy::editableFields($state);
 	}
 
 	// --- Ryzyko i wpływ na budżet --------------------------------------------------------------------
@@ -626,6 +614,11 @@ final class OperationCatalog
 				[$object, $mask] = self::biddingUpdate($payload);
 
 				return [$field => ['update' => ['resourceName' => (string) $op['resource_name']] + $object, 'updateMask' => $mask]];
+			}
+
+			// Ostatnia linia obrony: pola tylko do odczytu nie trafią do żądania mutate, nawet gdyby ominęły walidację.
+			if ($type === 'conversion_action.update' && is_array($op['before_state'] ?? null) && ($violations = ConversionFieldPolicy::violations($op['before_state'], $payload)) !== []) {
+				throw new \InvalidArgumentException(ConversionFieldPolicy::message($violations));
 			}
 
 			$update = ['resourceName' => (string) $op['resource_name']];
