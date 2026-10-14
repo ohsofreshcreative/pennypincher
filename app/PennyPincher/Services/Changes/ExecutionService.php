@@ -4,6 +4,7 @@ namespace App\PennyPincher\Services\Changes;
 
 use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
+use App\PennyPincher\Domain\GoogleAds\Changes\ServingGuard;
 use App\PennyPincher\Domain\Projects\Project;
 use App\PennyPincher\Domain\Support\ValidationFailed;
 use App\PennyPincher\Infrastructure\Database\Db;
@@ -118,6 +119,21 @@ class ExecutionService
 			return $this->execute($set);
 		} catch (Throwable $e) {
 			error_log('[Penny Pincher] Wdrożenie zestawu #' . $setId . ': ' . ChangeSetRepository::scrub($e->getMessage()));
+			$touched = false;
+
+			// Błąd po wysłaniu części żądań: nie udajemy, że nic nie wysłano – wynik ustala uzgodnienie stanu.
+			foreach ($this->sets->operations($setId) as $op) {
+				if ($op['status'] === ChangeStatus::OP_SENDING) {
+					$this->sets->updateOperation($op['id'], ['status' => ChangeStatus::OP_RECONCILE, 'error_message' => 'Przetwarzanie przerwane błędem – wynik nieznany.']);
+				}
+
+				$touched = $touched || in_array($op['status'], [ChangeStatus::OP_SENDING, ...ChangeStatus::OP_DONE], true);
+			}
+
+			if ($touched) {
+				return $this->stop($set, ChangeStatus::RECONCILE, 'Nieoczekiwany błąd w trakcie wdrożenia – część zmian mogła zostać wysłana. Użyj „Uzgodnij stan”. Szczegóły w logu serwera.');
+			}
+
 			$this->stop($set, ChangeStatus::READY, 'Nieoczekiwany błąd przed wysłaniem zmian – nic nie zostało wysłane. Szczegóły w logu serwera.');
 
 			return ChangeStatus::READY;
@@ -132,6 +148,12 @@ class ExecutionService
 		$projectId = (int) $set['project_id'];
 		$connection = $this->connections->currentForProject($projectId);
 		$requester = (int) $set['deploy_requested_by'];
+		// MANUAL APPROVAL: worker wykonuje wyłącznie zestaw z ręcznym poleceniem wdrożenia (deploy_key, osoba, czas)
+		// wydanym PO zatwierdzeniu tej wersji. Worker nigdy sam nie zatwierdza ani nie tworzy polecenia.
+		if (empty($set['deploy_key']) || $requester <= 0 || empty($set['deploy_requested_at']) || empty($set['approved_at']) || (string) $set['deploy_requested_at'] < (string) $set['approved_at']) {
+			return $this->stop($set, ChangeStatus::READY, 'Brak ważnego, ręcznego polecenia wdrożenia dla zatwierdzonej wersji zestawu – nic nie wysłano.');
+		}
+
 		// Uprawnienia sprawdzamy ponownie w imieniu osoby, która zleciła wdrożenie (rola mogła się zmienić od kliknięcia).
 		$project = $this->projects->findForUser($requester, $projectId);
 
@@ -169,15 +191,52 @@ class ExecutionService
 
 			$this->sets->update($setId, ['approved_hash' => null, 'approved_version' => null, 'approved_by' => null, 'approved_at' => null]);
 
-			return $this->stop($set, ChangeStatus::REVIEW, 'Stan zasobów w Google Ads zmienił się od przygotowania zmian (' . count($conflicts) . ' ' . ($conflicts === 1 ? 'operacja' : 'operacje') . ') – nic nie wysłano, wymagany ponowny przegląd.');
+			return $this->stop($set, ChangeStatus::REVIEW, 'Stan zasobów w Google Ads zmienił się od przygotowania zmian (' . count($conflicts) . ' ' . (count($conflicts) === 1 ? 'operacja' : 'operacje') . ') – nic nie wysłano, wymagany ponowny przegląd.');
+		}
+
+		// Blokada emisji reklam: sprawdzenie z aktualnym stanem Google Ads (rodzice słów, kampanie budżetów).
+		if (! $this->guard->servingAllowed()) {
+			try {
+				$serving = $this->servingViolations($connection, $pending);
+			} catch (GoogleAdsApiException $e) {
+				return $this->retryLater($set, $e, 'Nie udało się sprawdzić blokady emisji reklam');
+			}
+
+			if ($serving !== []) {
+				foreach ($serving as $opId => $message) {
+					$this->sets->updateOperation($opId, ['error_message' => $message]);
+				}
+
+				return $this->stop($set, ChangeStatus::READY, 'Wdrożenie zablokowane przed wysłaniem – ' . implode(' ', array_values(array_unique($serving))) . ' Nic nie wysłano.');
+			}
 		}
 
 		$applied = $this->appliedRefs($operations);
 		$token = $this->connectionService->accessToken($connection);
 		$ambiguous = false;
+		$sent = false;
 
 		foreach ($this->center->requests($set, $this->ready($pending, $operations), $applied) as $request) {
 			$ids = array_map(fn ($op) => (int) $op['id'], $request['ops']);
+
+			// Przed KAŻDYM żądaniem: zgoda, allowlista, wykonawca, tryb – wyłączenie zapisu działa od razu.
+			$connection = $this->connections->currentForProject($projectId);
+
+			if (($blocker = $this->guard->executeBlocker($project, $connection, $requester, $set)) !== null) {
+				if (! $sent) {
+					return $this->stop($set, ChangeStatus::READY, 'Wdrożenie wstrzymane przed wysłaniem: ' . $blocker);
+				}
+
+				foreach ($this->sets->operations($setId) as $left) {
+					if ($left['status'] === ChangeStatus::OP_PENDING) {
+						$this->sets->updateOperation($left['id'], ['status' => ChangeStatus::OP_SKIPPED, 'error_message' => 'Nie wysłano – zapis został wyłączony w trakcie wdrożenia: ' . $blocker]);
+					}
+				}
+
+				break;
+			}
+
+			$sent = true;
 
 			foreach ($request['ops'] as $op) {
 				$this->sets->updateOperation((int) $op['id'], ['status' => ChangeStatus::OP_SENDING, 'attempts' => (int) $op['attempts'] + 1]);
@@ -374,6 +433,49 @@ class ExecutionService
 	}
 
 	// --- Pomocnicze -----------------------------------------------------------------------------
+
+	/**
+	 * Naruszenia blokady emisji dla operacji do wysłania – z odczytem stanu Google Ads (bez zapisu).
+	 *
+	 * @param array<int, array<string, mixed>> $pending
+	 * @return array<int, string> id operacji => powód
+	 */
+	private function servingViolations(array $connection, array $pending): array
+	{
+		$out = [];
+		$cache = [];
+		$read = function (string $resource, ?string $name) use ($connection, &$cache): ?array {
+			if ($name === null || $name === '' || str_starts_with($name, 'ref:')) {
+				return null;
+			}
+
+			return $cache[$resource . '|' . $name] ??= ($this->reader->read($connection, $resource, $name) ?? []);
+		};
+
+		foreach ($pending as $op) {
+			$reason = ServingGuard::operationViolation($op);
+
+			if ($reason === null && $op['type'] === 'campaign_budget.update') {
+				$campaigns = $this->reader->campaignsUsingBudget($connection, (string) $op['resource_name']);
+				$reason = ServingGuard::budgetViolation($op, array_map(fn ($c) => ['name' => $c['name'] ?? null, 'status' => $c['status'] ?? null], $campaigns));
+			}
+
+			if ($reason === null && ServingGuard::activatesKeyword($op)) {
+				$groupName = $op['type'] === 'ad_group_criterion.create'
+					? (string) ($op['payload']['ad_group'] ?? '')
+					: (string) (($read('ad_group_criterion', (string) $op['resource_name']) ?: [])['ad_group'] ?? '');
+				$group = $read('ad_group', $groupName) ?: null;
+				$campaign = $group !== null ? ($read('campaign', (string) ($group['campaign'] ?? '')) ?: null) : null;
+				$reason = ServingGuard::keywordViolation($op, $group, $campaign);
+			}
+
+			if ($reason !== null) {
+				$out[(int) $op['id']] = $reason;
+			}
+		}
+
+		return $out;
+	}
 
 	/**
 	 * @return array<int, string> id operacji => opis konfliktu

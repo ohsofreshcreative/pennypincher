@@ -38,6 +38,10 @@ Uwagi poza kodem aplikacji:
 - Zatwierdzana jest konkretna wersja (odcisk SHA-256 operacji); każda zmiana unieważnia zatwierdzenie. Przed wysłaniem: ponowny odczyt stanu (dryf → stop), blokada `claim` + `GET_LOCK`, jednorazowy `deploy_key`.
 - Wynik nieznany (timeout, 5xx) nigdy nie jest automatycznie ponawiany – wymaga uzgodnienia stanu odczytem.
 - Historia (`change_events`, `change_attempts`) bez tokenów i pełnych odpowiedzi API (`scrub`).
+- **MANUAL APPROVAL**: żadna rekomendacja, szkic ani zatwierdzenie nie wysyła zmian; worker wykonuje tylko zestaw z ręcznym poleceniem wdrożenia wydanym po zatwierdzeniu tej wersji.
+- **Allowlista kont** `PP_GOOGLE_ADS_WRITE_CUSTOMERS` (pusta = brak zapisu; sam wpis nie włącza zapisu) i opcjonalna **lista blokad** `PP_GOOGLE_ADS_BLOCKED_CUSTOMERS` (bez niekonfigurowalnych blokad w kodzie) – sprawdzane w kliencie mutate przy każdym żądaniu (konto z listy blokad nie dostaje nawet żądań `validate_only`), w `WriteGuard` i przy udzielaniu zgody. Wszystkie resource name w operacjach muszą należeć do konta żądania.
+- **Blokada emisji reklam** (domyślna, `PP_GOOGLE_ADS_ALLOW_SERVING` ≠ 1): nowe kampanie, grupy i reklamy tylko wstrzymane; włączenie istniejących zasobów, aktywne słowa w aktywnych grupach i zmiany budżetów aktywnych kampanii można przygotować i zatwierdzić, ale wdrożenie blokują: Change Center (brak przycisku, odmowa polecenia), worker (z odczytem stanu przed wysłaniem) i klient mutate. Szczegóły: [GOOGLE_ADS_WRITE_TESTING.md](GOOGLE_ADS_WRITE_TESTING.md).
+- Wyłączenie zgody zdejmuje zestawy z kolejki; worker sprawdza zgodę, allowlistę i tryb przed każdym żądaniem.
 
 ## Klucz SSH `key` w repozytorium
 

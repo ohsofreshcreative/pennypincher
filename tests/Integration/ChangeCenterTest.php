@@ -113,6 +113,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testBudgetChangeFlowFromDraftToVerifiedDeployment(): void
 	{
 		$this->account('budget', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 70_000_000, false);
 		$ops = $this->ops($setId);
 
@@ -191,6 +192,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testDriftDetectedBeforeDeployStopsWithoutMutation(): void
 	{
 		$this->account('drift', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 70_000_000, false);
 		$this->approve($setId);
 		$this->center()->requestDeploy($this->project, $setId, $this->owner, wp_generate_uuid4(), $this->confirmation($setId));
@@ -210,6 +212,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testChangedOperationsAfterApprovalAreNotDeployed(): void
 	{
 		$this->account('hash', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 70_000_000, false);
 		$this->approve($setId);
 		$op = $this->ops($setId)[0];
@@ -220,7 +223,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 		$this->assertSame(0, $this->fake->executedMutations());
 
 		// Nawet gdyby zestaw trafił do kolejki – worker sprawdza odcisk zatwierdzonej wersji.
-		$this->sets()->transition($setId, [ChangeStatus::READY], ChangeStatus::DEPLOYING, ['deploy_requested_by' => $this->owner, 'deploy_requested_at' => $this->db->now()]);
+		$this->sets()->transition($setId, [ChangeStatus::READY], ChangeStatus::DEPLOYING, ['deploy_key' => wp_generate_uuid4(), 'deploy_requested_by' => $this->owner, 'deploy_requested_at' => $this->db->now()]);
 		$this->execution()->work(30);
 		$this->assertSame(0, $this->fake->executedMutations());
 		$this->assertTrue(in_array($this->set($setId)['status'], [ChangeStatus::FAILED, ChangeStatus::REVIEW, ChangeStatus::DRAFT], true), $this->set($setId)['status']);
@@ -229,6 +232,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testTimeoutAfterGoogleAppliedNeedsReconciliationAndIsNeverResent(): void
 	{
 		$this->account('timeout', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 70_000_000, false);
 		$this->fake->failNext = ['mode' => 'timeout', 'apply' => true];
 		$set = $this->deploy($setId);
@@ -329,6 +333,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testMatchTypeChangeIsAtomicReplacement(): void
 	{
 		$this->account('match', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->keywordReplaceMatch($this->project, $this->owner, $this->keywordId(), 'EXACT');
 		$ops = $this->ops($setId);
 
@@ -452,6 +457,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testRollbackIsANewDraftWithInverseOperation(): void
 	{
 		$this->account('rollback', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiany tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 70_000_000, false);
 		$this->deploy($setId);
 		$rollback = $this->center()->prepareRollback($this->project, $setId, $this->owner);

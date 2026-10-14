@@ -68,11 +68,31 @@ abstract class ChangeCenterTestCase extends GoogleAdsTestCase
 	}
 
 	/**
+	 * Kampania testowa 111 wstrzymana w atrapie – zmiany budżetu i słów są wtedy dozwolone przy blokadzie emisji
+	 * (domyślna konfiguracja), więc test sprawdza przepływ w trybie, w jakim działa konto Development.
+	 */
+	protected function pauseTestCampaign(): void
+	{
+		$this->fake->set('campaign', $this->fake->name('campaign', '111'), 'status', 'PAUSED');
+	}
+
+	/**
+	 * Tryb produkcyjny z dozwoloną emisją (PP_GOOGLE_ADS_ALLOW_SERVING=1) – tylko dla testów, które sprawdzają
+	 * świadome włączanie zasobów; domyślnie blokada emisji jest włączona.
+	 */
+	protected function allowServing(): void
+	{
+		putenv('PP_GOOGLE_ADS_ALLOW_SERVING=1');
+	}
+
+	/**
 	 * Zapis na atrapie: tryb serwera write_enabled (zmienna środowiskowa tylko na czas testu), zgoda dla konta, wykonawca.
 	 */
 	protected function enableWrites(?int $executor = null): void
 	{
 		putenv('PP_GOOGLE_ADS_WRITE_MODE=write_enabled');
+		// Atrapa konta (123-456-7890) na allowliście zapisu – jak konto „Penny Pincher – Development”.
+		putenv('PP_GOOGLE_ADS_WRITE_CUSTOMERS=' . \Tests\Support\GoogleAdsMock::CUSTOMER);
 		$this->db->update('google_ads_connections', ['write_enabled' => 1, 'write_enabled_by' => $this->owner, 'write_enabled_at' => $this->db->now()], ['id' => (int) $this->connection['id']]);
 		$this->make(OrganizationRepository::class)->setExecutor($this->organization, $executor ?? $this->owner, true);
 		$this->connection = $this->make(\App\PennyPincher\Repositories\GoogleAdsConnectionRepository::class)->currentForProject($this->connection['project_id']);

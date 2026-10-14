@@ -14,6 +14,7 @@ use App\PennyPincher\Repositories\OrganizationRepository;
 /**
  * Bramka zapisu do Google Ads. Wdrożenie jest możliwe tylko, gdy jednocześnie:
  * 1. serwer ma PP_GOOGLE_ADS_WRITE_MODE = write_enabled (konfiguracja poza aplikacją),
+ *    a konto jest na allowliście PP_GOOGLE_ADS_WRITE_CUSTOMERS i nie ma go na liście blokad (PP_GOOGLE_ADS_BLOCKED_CUSTOMERS),
  * 2. właściciel organizacji włączył zapis dla tego połączenia (konto Google Ads),
  * 3. użytkownik jest administratorem z flagą „wykonawca zmian” (nadaje właściciel),
  * 4. połączenie jest aktywne i jest tym samym połączeniem/kontem, dla którego przygotowano i zatwierdzono zmiany.
@@ -40,7 +41,8 @@ class WriteGuard
 			return WriteMode::ReadOnly;
 		}
 
-		$connectionAllows = $connection !== null && (int) ($connection['write_enabled'] ?? 0) === 1 && ($connection['status'] ?? '') === GoogleAdsConnectionRepository::STATUS_ACTIVE;
+		$connectionAllows = $connection !== null && (int) ($connection['write_enabled'] ?? 0) === 1 && ($connection['status'] ?? '') === GoogleAdsConnectionRepository::STATUS_ACTIVE
+			&& $this->config->writeCustomerBlocker($connection['customer_id'] ?? null) === null;
 
 		return WriteMode::min($server, $connectionAllows ? WriteMode::WriteEnabled : WriteMode::PrepareOnly);
 	}
@@ -53,6 +55,7 @@ class WriteGuard
 	public function apiValidationAvailable(?array $connection): bool
 	{
 		return $connection !== null && ($connection['status'] ?? '') === GoogleAdsConnectionRepository::STATUS_ACTIVE
+			&& ! $this->config->isWriteBlockedCustomer((string) ($connection['customer_id'] ?? ''))
 			&& ($this->mode($connection)->canWrite() || ($this->mode($connection)->canPrepare() && $this->config->apiValidationEnabled()));
 	}
 
@@ -76,6 +79,11 @@ class WriteGuard
 			return 'Projekt nie ma aktywnego połączenia z Google Ads.';
 		}
 
+		// Allowlista i lista blokad kont – po stronie serwera, niezależnie od zgody w aplikacji.
+		if (($accountBlocker = $this->config->writeCustomerBlocker($connection['customer_id'] ?? null)) !== null) {
+			return $accountBlocker;
+		}
+
 		if ((int) ($connection['write_enabled'] ?? 0) !== 1) {
 			return 'Właściciel organizacji nie włączył zapisu dla tego konta Google Ads.';
 		}
@@ -89,6 +97,30 @@ class WriteGuard
 		}
 
 		return null;
+	}
+
+	public function servingAllowed(): bool
+	{
+		return $this->config->servingAllowed();
+	}
+
+	/**
+	 * Stan konta wobec zapisu (do sekcji „Uprawnienia do zapisu”): allowlista, blokada, powód.
+	 *
+	 * @return array{customer_id: ?string, allowlisted: bool, blocked: bool, blocker: ?string, allowlist_empty: bool, serving_allowed: bool}
+	 */
+	public function accountStatus(?array $connection): array
+	{
+		$customer = $connection['customer_id'] ?? null;
+
+		return [
+			'customer_id' => $customer,
+			'allowlisted' => $customer !== null && $this->config->isWriteAllowedCustomer((string) $customer),
+			'blocked' => $customer !== null && $this->config->isWriteBlockedCustomer((string) $customer),
+			'blocker' => $this->config->writeCustomerBlocker($customer),
+			'allowlist_empty' => $this->config->writeCustomerAllowlist() === [],
+			'serving_allowed' => $this->config->servingAllowed(),
+		];
 	}
 
 	public function assertCanExecute(Project $project, ?array $connection, int $userId, ?array $changeSet = null): void

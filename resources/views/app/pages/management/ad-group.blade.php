@@ -52,7 +52,8 @@
           @if ($group['status'] === 'enabled')
             <x-pp.button variant="secondary" size="sm" name="action" value="pause">Wstrzymaj grupę</x-pp.button>
           @else
-            <x-pp.button variant="secondary" size="sm" name="action" value="enable">Włącz grupę</x-pp.button>
+            <x-pp.button variant="secondary" size="sm" name="action" value="enable">Przygotuj włączenie grupy</x-pp.button>
+            @unless ($servingAllowed ?? false)<span class="text-[12.5px] text-ink-mute" title="Zmianę można przygotować i zatwierdzić; wdrożenie czeka na zdjęcie blokady emisji.">wdrożenie zablokowane (blokada emisji)</span>@endunless
           @endif
           @include('app.partials.changes.draft-select', ['id' => 'f-set-gs'])
         </form>
@@ -194,7 +195,11 @@
               @if ($editable && $ad['status'] !== 'REMOVED')
                 <form method="post" action="{{ $action }}">
                   <x-pp.nonce /><input type="hidden" name="resource_name" value="{{ $ad['resource_name'] }}">
-                  <x-pp.button variant="ghost" size="sm" name="action" :value="$ad['status'] === 'ENABLED' ? 'ad_pause' : 'ad_enable'">{{ $ad['status'] === 'ENABLED' ? 'Wstrzymaj' : 'Włącz' }}</x-pp.button>
+                  <x-pp.button variant="ghost" size="sm" name="action" :value="$ad['status'] === 'ENABLED' ? 'ad_pause' : 'ad_enable'">{{ $ad['status'] === 'ENABLED' ? 'Przygotuj wstrzymanie' : 'Przygotuj włączenie' }}</x-pp.button>
+                </form>
+                <form method="post" action="{{ $action }}" data-confirm="Przygotować usunięcie reklamy? Usunięcie jest nieodwracalne – zamiast tego możesz ją wstrzymać. Nic nie zostanie wysłane bez zatwierdzenia i wdrożenia.">
+                  <x-pp.nonce /><input type="hidden" name="resource_name" value="{{ $ad['resource_name'] }}">
+                  <x-pp.button variant="ghost" size="sm" name="action" value="ad_remove">Przygotuj usunięcie</x-pp.button>
                 </form>
               @endif
             </div>

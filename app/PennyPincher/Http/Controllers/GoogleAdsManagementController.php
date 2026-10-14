@@ -21,6 +21,7 @@ use App\PennyPincher\Repositories\OrganizationRepository;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\Changes\ChangeProposalService;
 use App\PennyPincher\Services\GoogleAds\StateReader;
+use App\PennyPincher\Services\GoogleAds\WriteAccessService;
 use App\PennyPincher\Services\GoogleAds\WriteGuard;
 use App\PennyPincher\Support\AppUrl;
 use Closure;
@@ -43,6 +44,7 @@ class GoogleAdsManagementController extends Controller
 		private MetricsRepository $metrics,
 		private StateReader $reader,
 		private WriteGuard $guard,
+		private WriteAccessService $writeAccess,
 	) {
 		parent::__construct($access);
 	}
@@ -60,6 +62,7 @@ class GoogleAdsManagementController extends Controller
 			'metrics' => $this->metrics->campaignMetricsByCampaign($project->id, $resolved),
 			'period' => $period,
 			'members' => Policy::allows($project->role, Ability::ManageWriteAccess) ? $this->organizations->members($project->organizationId) : [],
+			'writeStatus' => $this->writeAccess->overview($project, $connection, $this->access->userId()),
 			'pageTitle' => 'Google Ads Management',
 			'section' => 'management',
 		]);
@@ -193,6 +196,7 @@ class GoogleAdsManagementController extends Controller
 				'remove_criterion' => $this->proposals->criterionRemove($p, $userId, $group, (string) $request->input('resource_name'), $setId),
 				'ad' => $this->proposals->adCreate($p, $userId, $group, ['headlines' => preg_split('/\r?\n/', (string) $request->input('headlines')) ?: [], 'descriptions' => preg_split('/\r?\n/', (string) $request->input('descriptions')) ?: [], 'final_url' => $request->input('final_url'), 'path1' => $request->input('path1'), 'path2' => $request->input('path2'), 'status' => $request->input('status')], $setId, $request->input('replace') ? (string) $request->input('replace') : null),
 				'ad_pause' => $this->proposals->adStatus($p, $userId, $group, (string) $request->input('resource_name'), 'PAUSED', $setId),
+				'ad_remove' => $this->proposals->adRemove($p, $userId, $group, (string) $request->input('resource_name'), $setId),
 				'ad_enable' => $this->proposals->adStatus($p, $userId, $group, (string) $request->input('resource_name'), 'ENABLED', $setId),
 				default => throw new ValidationFailed(['action' => 'Nieznana akcja.']),
 			};
@@ -232,13 +236,42 @@ class GoogleAdsManagementController extends Controller
 			return $this->redirect($back, 'Serwer ma wyłączony zapis (PP_GOOGLE_ADS_WRITE_MODE ≠ write_enabled) – zgody nie można włączyć z poziomu aplikacji.', 'error');
 		}
 
-		if ($enable && trim((string) $request->input('confirm_customer')) !== (string) $connection['customer_id']) {
+		// Allowlista i lista blokad kont (konfiguracja serwera) – zgody nie da się udzielić dla innego konta.
+		if ($enable && ($accountBlocker = $this->guard->accountStatus($connection)['blocker']) !== null) {
+			return $this->redirect($back, $accountBlocker . ' Zgody na zapis nie można włączyć.', 'error');
+		}
+
+		if ($enable && preg_replace('/\D/', '', (string) $request->input('confirm_customer')) !== (string) $connection['customer_id']) {
 			return $this->redirect($back, 'Wpisz identyfikator konta Google Ads, aby potwierdzić włączenie zapisu.', 'error');
 		}
 
 		$this->connections->update((int) $connection['id'], ['write_enabled' => $enable ? 1 : 0, 'write_enabled_by' => $enable ? $this->access->userId() : null, 'write_enabled_at' => $enable ? gmdate('Y-m-d H:i:s') : null]);
 
-		return $this->redirect($back, $enable ? 'Włączono zapis dla konta ' . $connection['customer_id'] . '. Wdrożenia nadal wymagają zatwierdzenia i świadomego uruchomienia przez wykonawcę.' : 'Wyłączono zapis dla tego konta.');
+		if (! $enable) {
+			// Wyłączenie zapisu natychmiast zdejmuje z kolejki zestawy, których worker jeszcze nie przejął.
+			$stopped = $this->sets->stopQueued($project->id, (int) $connection['id'], $this->access->userId(), 'Zapis wyłączony przez właściciela – zestaw zdjęty z kolejki, nic nie wysłano.');
+
+			return $this->redirect($back, 'Wyłączono zapis dla tego konta.' . ($stopped > 0 ? ' Zdjęto z kolejki wdrożeń: ' . $stopped . '.' : ''));
+		}
+
+		return $this->redirect($back, 'Włączono zapis dla konta ' . $connection['customer_id'] . '. Wdrożenia nadal wymagają zatwierdzenia i świadomego uruchomienia przez wykonawcę.');
+	}
+
+	/**
+	 * Odczyt danych konta (nazwa, konto testowe czy produkcyjne) – tylko GAQL, bez zapisu.
+	 */
+	public function accountCheck(int $project)
+	{
+		$project = $this->access->project($project, Ability::ManageWriteAccess);
+		$back = AppUrl::project($project->id, 'management') . '#write-access';
+
+		try {
+			$account = $this->writeAccess->readAccount($project);
+		} catch (ValidationFailed $e) {
+			return $this->redirect($back, (string) array_values($e->errors)[0], 'error');
+		}
+
+		return $this->redirect($back, 'Odczytano dane konta „' . $account['name'] . '” (' . ($account['test_account'] ? 'konto testowe' : 'konto produkcyjne') . '). Nic nie zostało zmienione.');
 	}
 
 	public function executor(int $project, Request $request)
@@ -261,6 +294,7 @@ class GoogleAdsManagementController extends Controller
 			'isExecutor' => $this->guard->isExecutor($project, $this->access->userId()),
 			'canPrepare' => Policy::allows($project->role, Ability::PrepareChanges) && $this->guard->mode($connection)->canPrepare(),
 			'canManageWrite' => Policy::allows($project->role, Ability::ManageWriteAccess),
+			'servingAllowed' => $this->guard->servingAllowed(),
 			'drafts' => array_values(array_filter($this->sets->paginate($project->id, ['status' => ChangeStatus::DRAFT], 1, 20)->items, fn ($s) => (int) $s['created_by'] === $this->access->userId() || Policy::allows($project->role, Ability::ApproveChanges))),
 		];
 	}

@@ -177,6 +177,18 @@
         </div>
       @endif
 
+      @if (($local['serving'] ?? []) !== [])
+        <div class="mt-3 rounded-[var(--radius-card)] border border-warn/30 bg-warn-soft px-3 py-2">
+          <p class="font-semibold text-ink">Wdrożenie zablokowane w trybie bezpieczeństwa ({{ count($local['serving']) }})</p>
+          <p class="text-ink-soft">Blokada emisji reklam jest włączona. Te operacje możesz przygotować, przejrzeć i zatwierdzić, ale nie zostaną wysłane do Google Ads, dopóki blokada nie zostanie świadomie zdjęta w konfiguracji serwera.</p>
+          <ul class="mt-1 space-y-1">
+            @foreach ($local['serving'] as $opId => $message)
+              <li><a class="underline" href="#op-{{ $opId }}">{{ $opLabels[$opId] ?? '#' . $opId }}</a>: {{ $message }}</li>
+            @endforeach
+          </ul>
+        </div>
+      @endif
+
       @if ($unsupportedOps !== [])
         <div class="mt-3 rounded-[var(--radius-card)] border border-danger/30 bg-danger-soft px-3 py-2">
           <p class="font-semibold text-ink">Operacje nieobsługiwane przez Google Ads API ({{ count($unsupportedOps) }})</p>

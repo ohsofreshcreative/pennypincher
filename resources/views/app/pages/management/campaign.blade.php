@@ -111,7 +111,8 @@
             @if ($campaign['status'] === 'enabled')
               <x-pp.button variant="secondary" size="sm" name="action" value="pause">Wstrzymaj kampanię</x-pp.button>
             @else
-              <x-pp.button variant="secondary" size="sm" name="action" value="enable">Włącz kampanię</x-pp.button>
+              <x-pp.button variant="secondary" size="sm" name="action" value="enable">Przygotuj włączenie kampanii</x-pp.button>
+              @unless ($servingAllowed ?? false)<span class="text-[12.5px] text-ink-mute" title="Zmianę można przygotować i zatwierdzić; wdrożenie czeka na zdjęcie blokady emisji.">wdrożenie zablokowane (blokada emisji)</span>@endunless
             @endif
           </div>
           @include('app.partials.changes.draft-select', ['id' => 'f-set-status'])

@@ -115,10 +115,12 @@ Kroki skryptu:
 (bez zapisu)”. `PP_GOOGLE_ADS_API_VALIDATION` pozostaw wyłączone, dopóki nie zdecydujesz się na walidację w Google (żądania
 `validateOnly` nic nie zmieniają, ale są kontaktem z prawdziwym kontem).
 
-**Pierwsza kontrolowana mutacja (osobne konto testowe Google Ads, nie produkcja):**
-1. Utwórz konto testowe (pod kontem menedżera testowego) i połącz je z osobnym projektem Penny Pincher.
-2. Na środowisku testowym/stagingu ustaw `PP_GOOGLE_ADS_WRITE_MODE=write_enabled` (produkcja zostaje w `prepare_only`).
-3. Właściciel: Google Ads Management → „Uprawnienia do zapisu” → wpisz ID konta testowego → „Włącz zapis”; nadaj sobie
+**Pierwsza kontrolowana mutacja (istniejące konto OhSoFresh 689-970-4535, model MANUAL APPROVAL)** – dopiero po wyraźnej
+decyzji; pełna instrukcja: [GOOGLE_ADS_WRITE_TESTING.md](GOOGLE_ADS_WRITE_TESTING.md).
+1. Wdróż kod z `PREPARE_ONLY` i pustą allowlistą; sprawdź sekcję „Uprawnienia do zapisu” i `pp:google-ads:check`.
+2. Ustaw `PP_GOOGLE_ADS_WRITE_MODE=write_enabled` **i** `PP_GOOGLE_ADS_WRITE_CUSTOMERS=689-970-4535`; nie ustawiaj
+   `PP_GOOGLE_ADS_ALLOW_SERVING` (blokada emisji). Inne konta pozostają bez zapisu.
+3. Właściciel: Google Ads Management → „Uprawnienia do zapisu” → wpisz ID konta → „Włącz zapis”; nadaj sobie
    lub administratorowi flagę „wykonawca zmian”.
 4. Przygotuj jedną zmianę niskiego ryzyka (np. nazwa wstrzymanej kampanii), odczytaj stan, wyślij do przeglądu, zatwierdź,
    „Wdróż do Google Ads”, uruchom `wp acorn pp:changes:work`.
@@ -126,7 +128,9 @@ Kroki skryptu:
    konta OAuth, a w zakładce „Kontakt z Google Ads API” request-id.
 6. Przygotuj cofnięcie i wdroż je tak samo. Dopiero potem rozważ włączenie zapisu dla konta klienta (zgoda klienta,
    dostęp Standard/Administrator użytkownika Google, poziom dostępu API co najmniej Explorer).
-7. Wyłączenie awaryjne: `PP_GOOGLE_ADS_WRITE_MODE=prepare_only` (lub `read_only`) – działa natychmiast, także dla zestawów w kolejce.
+7. Wyłączenie awaryjne: „Wyłącz zapis dla konta” w aplikacji (zdejmuje zestawy z kolejki) albo `PP_GOOGLE_ADS_WRITE_MODE=prepare_only`
+   (lub `read_only`) / pusta `PP_GOOGLE_ADS_WRITE_CUSTOMERS` – od następnego procesu PHP / przebiegu workera (trwający przebieg do ok. 4 min
+   widzi starą konfigurację; wyłączenie zgody w aplikacji zatrzymuje go przed kolejnym żądaniem).
 
 ## Wycofanie (rollback)
 

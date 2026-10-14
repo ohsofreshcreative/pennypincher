@@ -389,6 +389,23 @@ class ChangeProposalService
 		return $setId;
 	}
 
+	/**
+	 * Usunięcie reklamy (nieodwracalne – Google nie przywraca usuniętych reklam; statystyki zostają w raportach).
+	 */
+	public function adRemove(Project $project, int $userId, int $adGroupId, string $resourceName, ?int $setId = null): int
+	{
+		$group = $this->adGroup($project, $adGroupId);
+
+		if (! str_starts_with($resourceName, 'customers/' . $group['customer_id'] . '/adGroupAds/' . $group['external_id'] . '~')) {
+			throw new ValidationFailed(['ad' => 'Reklama nie należy do tej grupy.']);
+		}
+
+		$setId = $this->target($project, $userId, $setId, 'Reklamy w grupie „' . $group['name'] . '”');
+		$this->center->addOperation($project, $setId, ['type' => 'ad_group_ad.remove', 'resource_name' => $resourceName, 'payload' => [], 'label' => 'Usuń reklamę ' . ResourceName::childId($resourceName) . ' z grupy „' . $group['name'] . '” (nieodwracalne – zamiast tego możesz ją wstrzymać)'], $userId);
+
+		return $setId;
+	}
+
 	// --- Konwersje ------------------------------------------------------------------------------
 
 	public function conversionCreate(Project $project, int $userId, array $values, ?int $setId = null, string $sourceType = 'manual'): int

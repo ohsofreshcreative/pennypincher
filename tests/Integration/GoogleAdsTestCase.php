@@ -17,7 +17,7 @@ require_once dirname(__DIR__) . '/Support/GoogleAdsMock.php';
  */
 abstract class GoogleAdsTestCase extends IntegrationTestCase
 {
-	protected const ENV = ['PP_GOOGLE_ADS_CLIENT_ID', 'PP_GOOGLE_ADS_CLIENT_SECRET', 'PP_ENCRYPTION_KEY', 'PP_ENCRYPTION_KEY_PREVIOUS', 'PP_GOOGLE_ADS_DEVELOPER_TOKEN', 'PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'PP_GOOGLE_ADS_WRITE_MODE', 'PP_GOOGLE_ADS_API_VALIDATION'];
+	protected const ENV = ['PP_GOOGLE_ADS_CLIENT_ID', 'PP_GOOGLE_ADS_CLIENT_SECRET', 'PP_ENCRYPTION_KEY', 'PP_ENCRYPTION_KEY_PREVIOUS', 'PP_GOOGLE_ADS_DEVELOPER_TOKEN', 'PP_GOOGLE_ADS_LOGIN_CUSTOMER_ID', 'PP_GOOGLE_ADS_WRITE_MODE', 'PP_GOOGLE_ADS_API_VALIDATION', 'PP_GOOGLE_ADS_WRITE_CUSTOMERS', 'PP_GOOGLE_ADS_BLOCKED_CUSTOMERS', 'PP_GOOGLE_ADS_ALLOW_SERVING'];
 
 	protected GoogleAdsMock $mock;
 
@@ -44,6 +44,10 @@ abstract class GoogleAdsTestCase extends IntegrationTestCase
 		// Tryb zapisu: domyślny (prepare_only) – testy zapisu włączają go jawnie i wyłącznie dla atrapy API.
 		putenv('PP_GOOGLE_ADS_WRITE_MODE');
 		putenv('PP_GOOGLE_ADS_API_VALIDATION');
+		// Allowlista pusta, blokada emisji włączona – jak domyślna konfiguracja serwera.
+		putenv('PP_GOOGLE_ADS_WRITE_CUSTOMERS');
+		putenv('PP_GOOGLE_ADS_BLOCKED_CUSTOMERS');
+		putenv('PP_GOOGLE_ADS_ALLOW_SERVING');
 
 		$this->mock = (new GoogleAdsMock())->install();
 	}

@@ -78,6 +78,95 @@ class GoogleAdsConfig
 		return in_array(strtolower((string) $this->value('PP_GOOGLE_ADS_API_VALIDATION')), ['1', 'true', 'yes', 'on'], true);
 	}
 
+	/**
+	 * Konta zablokowane dla zapisu w kodzie (żadne żądanie googleAds:mutate, także walidacyjne) – obecnie brak.
+	 * Blokady konfigurowalne: PP_GOOGLE_ADS_BLOCKED_CUSTOMERS. O zapisie decyduje allowlista PP_GOOGLE_ADS_WRITE_CUSTOMERS.
+	 *
+	 * @var array<int, string>
+	 */
+	public const BLOCKED_WRITE_CUSTOMERS = [];
+
+	/**
+	 * Allowlista kont, na których wolno WYKONYWAĆ zmiany (PP_GOOGLE_ADS_WRITE_CUSTOMERS, np. "689-970-4535").
+	 * Pusta = żadne konto. Sam wpis nie włącza zapisu (potrzebne: write_enabled, zgoda właściciela, wykonawca,
+	 * zatwierdzenie i ręczne polecenie wdrożenia). Konta z listy blokad nigdy nie są dozwolone.
+	 *
+	 * @return array<int, string>
+	 */
+	public function writeCustomerAllowlist(): array
+	{
+		return self::customerList($this->value('PP_GOOGLE_ADS_WRITE_CUSTOMERS'));
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	public function blockedWriteCustomers(): array
+	{
+		return array_values(array_unique([...self::BLOCKED_WRITE_CUSTOMERS, ...self::customerList($this->value('PP_GOOGLE_ADS_BLOCKED_CUSTOMERS'))]));
+	}
+
+	public function isWriteBlockedCustomer(string $customerId): bool
+	{
+		return in_array(self::normalizeCustomer($customerId), $this->blockedWriteCustomers(), true);
+	}
+
+	public function isWriteAllowedCustomer(string $customerId): bool
+	{
+		$id = self::normalizeCustomer($customerId);
+
+		return $id !== '' && ! $this->isWriteBlockedCustomer($id) && in_array($id, $this->writeCustomerAllowlist(), true);
+	}
+
+	/**
+	 * Powód, dla którego na koncie nie wolno wykonywać zmian (null – konto dozwolone).
+	 */
+	public function writeCustomerBlocker(?string $customerId): ?string
+	{
+		$id = self::normalizeCustomer((string) $customerId);
+
+		return match (true) {
+			$id === '' => 'Brak identyfikatora konta Google Ads.',
+			$this->isWriteBlockedCustomer($id) => 'Konto ' . self::formatCustomer($id) . ' jest zablokowane dla zapisu (PP_GOOGLE_ADS_BLOCKED_CUSTOMERS) – możliwy jest wyłącznie odczyt.',
+			! in_array($id, $this->writeCustomerAllowlist(), true) => 'Konto ' . self::formatCustomer($id) . ' nie jest na allowliście zapisu (PP_GOOGLE_ADS_WRITE_CUSTOMERS w konfiguracji serwera).',
+			default => null,
+		};
+	}
+
+	/**
+	 * Blokada emisji reklam (domyślnie WŁĄCZONA): nie wolno włączać kampanii, grup reklam i reklam, aktywować słów
+	 * w aktywnych grupach ani zmieniać budżetów aktywnych kampanii. Wyłączenie wymaga PP_GOOGLE_ADS_ALLOW_SERVING = 1.
+	 */
+	public function servingAllowed(): bool
+	{
+		return in_array(strtolower((string) $this->value('PP_GOOGLE_ADS_ALLOW_SERVING')), ['1', 'true', 'yes', 'on'], true);
+	}
+
+	/**
+	 * Sama liczba (bez myślników, spacji i zer wiodących) – „06899704535” to to samo konto co „6899704535”.
+	 */
+	public static function normalizeCustomer(string $customerId): string
+	{
+		return ltrim((string) preg_replace('/\D/', '', $customerId), '0');
+	}
+
+	public static function formatCustomer(string $customerId): string
+	{
+		$id = self::normalizeCustomer($customerId);
+
+		return strlen($id) === 10 ? substr($id, 0, 3) . '-' . substr($id, 3, 3) . '-' . substr($id, 6) : $id;
+	}
+
+	/**
+	 * @return array<int, string>
+	 */
+	private static function customerList(?string $value): array
+	{
+		$ids = array_map(fn ($part) => self::normalizeCustomer($part), preg_split('/[\s,;]+/', (string) $value) ?: []);
+
+		return array_values(array_unique(array_filter($ids, fn ($id) => strlen($id) >= 6 && strlen($id) <= 10)));
+	}
+
 	public function redirectUri(): string
 	{
 		return AppUrl::to('google-ads/callback');

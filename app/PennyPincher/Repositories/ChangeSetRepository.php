@@ -86,6 +86,34 @@ class ChangeSetRepository
 		) === 1;
 	}
 
+	/**
+	 * Zestawy w kolejce (jeszcze nieprzejęte przez workera) dla połączenia → „Gotowy do wdrożenia”. Zwraca liczbę.
+	 * Zestaw już przetwarzany zatrzyma worker przed kolejnym żądaniem (ponowna kontrola zgody).
+	 */
+	public function stopQueued(int $projectId, int $connectionId, ?int $userId, string $note): int
+	{
+		$ids = array_map('intval', $this->db->column(
+			'SELECT id FROM ' . $this->db->table('change_sets') . ' WHERE project_id = ? AND connection_id = ? AND status = ? AND worker_token IS NULL',
+			[$projectId, $connectionId, ChangeStatus::DEPLOYING]
+		));
+		$stopped = 0;
+
+		foreach ($ids as $id) {
+			// Tylko zestaw nieprzejęty przez workera (worker_token IS NULL) – bez wyścigu z przetwarzaniem.
+			$moved = $this->db->statement(
+				'UPDATE ' . $this->db->table('change_sets') . ' SET status = ?, deploy_key = NULL, next_attempt_at = NULL, last_error = ?, updated_at = ? WHERE id = ? AND status = ? AND worker_token IS NULL',
+				[ChangeStatus::READY, mb_substr($note, 0, 1000), $this->db->now(), $id, ChangeStatus::DEPLOYING]
+			) === 1;
+
+			if ($moved) {
+				$this->addEvent($id, $projectId, 'deploy_stopped', $userId, ChangeStatus::DEPLOYING, ChangeStatus::READY, $note);
+				$stopped++;
+			}
+		}
+
+		return $stopped;
+	}
+
 	public function release(int $id): void
 	{
 		$this->db->update('change_sets', ['worker_token' => null, 'updated_at' => $this->db->now()], ['id' => $id]);

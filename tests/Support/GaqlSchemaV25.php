@@ -101,7 +101,7 @@ final class GaqlSchemaV25
 			'conversion_action.attribution_model_settings.attribution_model', 'conversion_action.owner_customer',
 		],
 		'customer' => [
-			'customer.id', 'customer.descriptive_name', 'customer.currency_code', 'customer.time_zone', 'customer.manager', 'customer.test_account',
+			'customer.id', 'customer.descriptive_name', 'customer.currency_code', 'customer.time_zone', 'customer.manager', 'customer.test_account', 'customer.status',
 			// Segment conversion_action: dozwolone tylko metryki konwersji.
 			'segments.conversion_action', 'segments.date',
 			'metrics.conversions', 'metrics.all_conversions', 'metrics.conversions_value', 'metrics.all_conversions_value',

@@ -13,6 +13,7 @@ use App\PennyPincher\Repositories\CampaignPlanRepository;
 use App\PennyPincher\Repositories\ChangeSetRepository;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Services\GoogleAds\StateReader;
+use App\PennyPincher\Services\GoogleAds\WriteGuard;
 use App\PennyPincher\Support\Format;
 
 /**
@@ -31,6 +32,7 @@ class PlanDeploymentService
 		private ChangeCenterService $center,
 		private GoogleAdsConnectionRepository $connections,
 		private StateReader $reader,
+		private WriteGuard $guard,
 	) {
 	}
 
@@ -125,7 +127,8 @@ class PlanDeploymentService
 			foreach ($campaign['groups'] as $adGroup) {
 				$groupRef = $group . ':ag:' . $adGroup['id'];
 				// Grupa aktywna w kampanii wstrzymanej: nic nie wydaje, dopóki kampania nie zostanie świadomie włączona.
-				$add(['type' => 'ad_group.create', 'temp_ref' => $groupRef, 'payload' => ['campaign' => $campaignRef, 'name' => (string) $adGroup['name'], 'status' => 'ENABLED'], 'label' => 'Grupa reklam „' . $adGroup['name'] . '”', 'local_type' => 'plan_ad_group', 'local_id' => (int) $adGroup['id']]);
+				// Przy blokadzie emisji (tryb testów zapisu) grupa też powstaje jako wstrzymana.
+				$add(['type' => 'ad_group.create', 'temp_ref' => $groupRef, 'payload' => ['campaign' => $campaignRef, 'name' => (string) $adGroup['name'], 'status' => $this->guard->servingAllowed() ? 'ENABLED' : 'PAUSED'], 'label' => 'Grupa reklam „' . $adGroup['name'] . '”', 'local_type' => 'plan_ad_group', 'local_id' => (int) $adGroup['id']]);
 
 				foreach ($adGroup['keywords'] as $keyword) {
 					$add(['type' => 'ad_group_criterion.create', 'payload' => ['ad_group' => 'ref:' . $groupRef, 'text' => (string) $keyword['phrase'], 'match_type' => strtoupper((string) $keyword['match_type']), 'status' => 'ENABLED'], 'label' => 'Słowo „' . $keyword['phrase'] . '” (' . $keyword['match_type'] . ')', 'local_type' => 'plan_keyword', 'local_id' => (int) $keyword['id']]);
@@ -133,7 +136,7 @@ class PlanDeploymentService
 
 				foreach ($adGroup['ads'] as $ad) {
 					$url = $ad['final_url'] ?: ($adGroup['final_url'] ?: ($campaign['final_url'] ?: $project->landingPageUrl));
-					$add(['type' => 'ad_group_ad.create', 'payload' => ['ad_group' => 'ref:' . $groupRef, 'headlines' => $ad['headlines'], 'descriptions' => $ad['descriptions'], 'final_url' => (string) $url, 'path1' => (string) ($ad['path1'] ?? ''), 'path2' => (string) ($ad['path2'] ?? ''), 'status' => 'ENABLED'], 'label' => 'Elastyczna reklama w grupie „' . $adGroup['name'] . '”', 'local_type' => 'plan_ad', 'local_id' => (int) $ad['id']]);
+					$add(['type' => 'ad_group_ad.create', 'payload' => ['ad_group' => 'ref:' . $groupRef, 'headlines' => $ad['headlines'], 'descriptions' => $ad['descriptions'], 'final_url' => (string) $url, 'path1' => (string) ($ad['path1'] ?? ''), 'path2' => (string) ($ad['path2'] ?? ''), 'status' => $this->guard->servingAllowed() ? 'ENABLED' : 'PAUSED'], 'label' => 'Elastyczna reklama w grupie „' . $adGroup['name'] . '”', 'local_type' => 'plan_ad', 'local_id' => (int) $ad['id']]);
 				}
 			}
 

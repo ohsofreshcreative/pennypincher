@@ -7,6 +7,7 @@ use App\PennyPincher\Domain\Access\Policy;
 use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\Conversions\ConversionFieldPolicy;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
+use App\PennyPincher\Domain\GoogleAds\Changes\ServingGuard;
 use App\PennyPincher\Domain\GoogleAds\Changes\ResourceName;
 use App\PennyPincher\Domain\Planner\NegativeConflictChecker;
 use App\PennyPincher\Domain\Projects\Project;
@@ -131,6 +132,7 @@ class ChangeCenterService
 
 		$payload = self::cleanPayload((array) ($op['payload'] ?? []));
 		self::guardConversionFields($type, is_array($op['before_state'] ?? null) ? $op['before_state'] : null, $payload);
+		$this->guardServing(['type' => $type, 'payload' => $payload]);
 		$record = [
 			'type' => $type,
 			'resource_type' => $resource,
@@ -176,6 +178,7 @@ class ChangeCenterService
 		$merged = self::cleanPayload(array_replace($op['payload'], $payload));
 		// Sprawdzamy tylko pola zmieniane teraz – istniejąca, nieprawidłowa operacja jest opisana w walidacji (do usunięcia).
 		self::guardConversionFields($op['type'], is_array($op['before_state'] ?? null) ? $op['before_state'] : null, array_intersect_key($merged, self::cleanPayload($payload)));
+		$this->guardServing(['type' => $op['type'], 'payload' => $merged]);
 		$op['payload'] = $merged;
 
 		$this->sets->updateOperation($operationId, array_filter([
@@ -190,6 +193,65 @@ class ChangeCenterService
 	 * Operacja zmiany działania konwersji nie może zawierać pól, których Google Ads API nie pozwala zmienić
 	 * (ConversionFieldPolicy). Bez znanego stanu działania kontrolę wykona walidacja po odczycie z Google Ads.
 	 */
+	/**
+	 * Blokada emisji reklam (domyślna): NOWE kampanie, grupy reklam i reklamy powstają wyłącznie jako wstrzymane.
+	 * Zmiany istniejących zasobów (np. włączenie, budżet aktywnej kampanii) można przygotować, przejrzeć i zatwierdzić –
+	 * blokowane jest dopiero wdrożenie (deployBlocker, worker, klient mutate).
+	 */
+	private function guardServing(array $op): void
+	{
+		if (! $this->guard->servingAllowed() && OperationCatalog::action((string) $op['type']) === 'create' && ($reason = ServingGuard::operationViolation($op)) !== null) {
+			throw new ValidationFailed(['status' => $reason]);
+		}
+	}
+
+	/**
+	 * Operacje zestawu, których wdrożenie blokuje tryb bezpieczeństwa (blokada emisji): id operacji => powód.
+	 * Na podstawie ładunku i ostatniego odczytu stanu (kampanie korzystające z budżetu). Słowa kluczowe w aktywnych
+	 * grupach sprawdza dodatkowo worker odczytem tuż przed wysłaniem.
+	 *
+	 * @param array<int, array<string, mixed>> $operations
+	 * @return array<int, string>
+	 */
+	public function servingBlocks(array $operations): array
+	{
+		if ($this->guard->servingAllowed()) {
+			return [];
+		}
+
+		$out = [];
+
+		foreach ($operations as $op) {
+			if ($op['status'] !== ChangeStatus::OP_PENDING) {
+				continue;
+			}
+
+			$campaigns = is_array($op['before_state']['campaigns'] ?? null) ? $op['before_state']['campaigns'] : null;
+			$reason = ServingGuard::operationViolation($op) ?? ServingGuard::budgetViolation($op, $campaigns);
+
+			if ($reason !== null) {
+				$out[(int) $op['id']] = $reason;
+			}
+		}
+
+		return $out;
+	}
+
+	/**
+	 * Powód, dla którego bieżący użytkownik nie może zlecić wdrożenia zestawu (null = może): uprawnienia, tryb,
+	 * allowlista, zgoda, zgodność konta, a potem tryb bezpieczeństwa (blokada emisji) dla operacji zestawu.
+	 */
+	public function deployBlocker(Project $project, array $set, array $operations, ?array $connection, int $userId): ?string
+	{
+		if (($blocker = $this->guard->executeBlocker($project, $connection, $userId, $set)) !== null) {
+			return $blocker;
+		}
+
+		$serving = $this->servingBlocks($operations);
+
+		return $serving === [] ? null : 'Wdrożenie zablokowane w trybie bezpieczeństwa (blokada emisji reklam, PP_GOOGLE_ADS_ALLOW_SERVING): ' . implode(' ', array_values(array_unique($serving))) . ' Zmianę można przygotować i zatwierdzić – zostanie wdrożona dopiero po świadomym zdjęciu blokady.';
+	}
+
 	private static function guardConversionFields(string $type, ?array $state, array $payload): void
 	{
 		if ($type !== 'conversion_action.update' || $state === null) {
@@ -320,6 +382,7 @@ class ChangeCenterService
 		$warnings = [];
 		$confirmations = [];
 		$unsupported = [];
+		$serving = [];
 		$setErrors = [];
 		$temps = [];
 		$uuids = array_column($operations, 'op_uuid');
@@ -346,6 +409,19 @@ class ChangeCenterService
 
 			$result = OperationCatalog::validate($op, $opContext);
 			$opErrors = $result['errors'];
+
+			// Blokada emisji reklam: nowe zasoby jako ENABLED = błąd (nie powinny powstać); zmiany istniejących zasobów
+			// (włączenie, budżet aktywnej kampanii) to NIE błąd – można je zatwierdzić, blokowane jest wdrożenie.
+			if (! $this->guard->servingAllowed()) {
+				$campaigns = is_array($op['before_state']['campaigns'] ?? null) ? $op['before_state']['campaigns'] : null;
+				$reason = ServingGuard::operationViolation($op) ?? ServingGuard::budgetViolation($op, $campaigns);
+
+				if ($reason !== null && OperationCatalog::action($op['type']) === 'create') {
+					$opErrors[] = $reason;
+				} elseif ($reason !== null) {
+					$serving[$op['id']] = $reason;
+				}
+			}
 
 			foreach (OperationCatalog::parentRefs($op) as $ref) {
 				if (! str_starts_with($ref, 'ref:')) {
@@ -387,7 +463,7 @@ class ChangeCenterService
 			}
 		}
 
-		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors, 'confirmations' => $confirmations, 'unsupported' => $unsupported];
+		return ['ok' => $errors === [] && $setErrors === [], 'errors' => $errors, 'warnings' => $warnings, 'set_errors' => $setErrors, 'confirmations' => $confirmations, 'unsupported' => $unsupported, 'serving' => $serving];
 	}
 
 	/**
@@ -562,6 +638,12 @@ class ChangeCenterService
 		}
 
 		$this->guard->assertCanExecute($project, $connection, $userId, $set);
+
+		// Tryb bezpieczeństwa: zatwierdzony zestaw z operacjami mogącymi uruchomić emisję lub zmienić budżet aktywnej
+		// kampanii nie trafia do kolejki (zatwierdzenie zostaje ważne).
+		if (($serving = $this->servingBlocks($this->sets->operations($setId))) !== []) {
+			throw new WriteBlockedException('Wdrożenie zablokowane w trybie bezpieczeństwa (blokada emisji reklam): ' . implode(' ', array_values(array_unique($serving))));
+		}
 
 		if ($set['status'] !== ChangeStatus::READY) {
 			throw new ValidationFailed(['status' => 'Wdrożyć można tylko zestaw „Gotowy do wdrożenia”.']);

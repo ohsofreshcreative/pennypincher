@@ -401,6 +401,44 @@ $write = form($page['body'], '/management/write-access');
 check('Zgoda na zapis: formularz niedostępny przy serwerze w PREPARE_ONLY', $write === null && str_contains($page['body'], 'Serwer nie pozwala na zapis'));
 $r = $admin->submit("/app/projects/{$project}/management/write-access/", ['_pp_nonce' => forms($page['body'])[1]['fields']['_pp_nonce'] ?? '', 'enabled' => '1', 'confirm_customer' => '1234567890']);
 check('Zgoda na zapis (ręczne żądanie) → odmowa', str_contains(flash($r['page']['body']), 'Serwer ma wyłączony zapis'), flash($r['page']['body']));
+check('Uprawnienia do zapisu: allowlista pusta, brak twardych blokad kont, blokada emisji, PREPARE_ONLY', str_contains($page['body'], 'Allowlista pusta') && ! str_contains($page['body'], 'Konta zablokowane dla zapisu') && str_contains($page['body'], 'Blokada emisji reklam') && str_contains($page['body'], 'Przygotowanie zmian (bez zapisu)'));
+check('  etapy: przygotowanie, zatwierdzenie, wdrożenie, weryfikacja', str_contains($page['body'], '1. Przygotowanie') && str_contains($page['body'], '4. Weryfikacja'));
+$campaignPage = $admin->get("/app/projects/{$project}/management/campaigns/{$campaign}/")['body'];
+check('  kampania: zmiana statusu do przygotowania (wdrożenie osobno)', str_contains($campaignPage, 'Wstrzymaj kampanię') || str_contains($campaignPage, 'Przygotuj włączenie kampanii'));
+// Blokada emisji: zwiększenie budżetu AKTYWNEJ kampanii można przygotować i zatwierdzić – wdrożenie zablokowane.
+$budgetForm = null;
+
+foreach (forms($campaignPage) as $f) {
+	if (($f['fields']['action'] ?? '') === 'budget') {
+		$budgetForm = $f;
+		break;
+	}
+}
+
+check('Kampania: formularz zmiany budżetu istnieje', $budgetForm !== null);
+
+if ($budgetForm) {
+	$r = $admin->submit($budgetForm['action'], array_replace($budgetForm['fields'], ['amount' => '75', 'change_set_id' => '']));
+	$budgetSet = setId($r['post']['location']);
+	check('Zwiększenie budżetu aktywnej kampanii → szkic (przygotowanie dozwolone)', $budgetSet !== null, (string) $r['post']['location'] . ' ' . flash($r['page']['body']));
+
+	if ($budgetSet) {
+		$read = form($r['page']['body'], '/read-state');
+		$r = $admin->submit($read['action'], $read['fields']);
+		check('  podgląd: obecnie → po zmianie, różnica i wysokie ryzyko', str_contains($r['page']['body'], 'Budżet dzienny') && str_contains($r['page']['body'], 'Wysokie ryzyko'), flash($r['page']['body']));
+		check('  Change Center: „Wdrożenie zablokowane w trybie bezpieczeństwa”, bez błędu walidacji', str_contains($r['page']['body'], 'Wdrożenie zablokowane w trybie bezpieczeństwa') && str_contains($r['page']['body'], 'Penny Pincher: bez błędów'), flash($r['page']['body']));
+		check('  brak formularza „Wdróż do Google Ads”', form($r['page']['body'], '/deploy') === null);
+	}
+}
+
+$accountCheck = form($page['body'], '/management/write-access/check');
+check('Odczytaj dane konta: formularz istnieje', $accountCheck !== null);
+
+if ($accountCheck) {
+	$r = $admin->submit($accountCheck['action'], $accountCheck['fields']);
+	check('Odczytaj dane konta → rodzaj konta (tylko odczyt)', str_contains(flash($r['page']['body']), 'Odczytano dane konta') && (str_contains($r['page']['body'], '>Produkcyjne<') || str_contains($r['page']['body'], '>Testowe (test account)<')), flash($r['page']['body']));
+}
+
 $exec = form($page['body'], '/management/executor');
 $r = $admin->submit($exec['action'], $exec['fields']);
 check('Wykonawca zmian → zapisano', str_contains(flash($r['page']['body']), 'wykonawca'), flash($r['page']['body']));

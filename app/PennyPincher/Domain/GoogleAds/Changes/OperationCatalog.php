@@ -33,6 +33,7 @@ final class OperationCatalog
 		'ad_group_criterion.remove' => ['resource' => 'ad_group_criterion', 'action' => 'remove', 'label' => 'Usunięcie słowa kluczowego lub wykluczenia'],
 		'ad_group_ad.create' => ['resource' => 'ad_group_ad', 'action' => 'create', 'label' => 'Nowa elastyczna reklama w wyszukiwarce (RSA)'],
 		'ad_group_ad.update' => ['resource' => 'ad_group_ad', 'action' => 'update', 'label' => 'Wstrzymanie lub wznowienie reklamy'],
+		'ad_group_ad.remove' => ['resource' => 'ad_group_ad', 'action' => 'remove', 'label' => 'Usunięcie reklamy'],
 		'conversion_action.create' => ['resource' => 'conversion_action', 'action' => 'create', 'label' => 'Nowe działanie konwersji (strona internetowa)'],
 		'conversion_action.update' => ['resource' => 'conversion_action', 'action' => 'update', 'label' => 'Zmiana ustawień działania konwersji'],
 		'customer_conversion_goal.update' => ['resource' => 'customer_conversion_goal', 'action' => 'update', 'label' => 'Zmiana celu konwersji konta (optymalizacja stawek)'],
@@ -156,7 +157,7 @@ final class OperationCatalog
 		return match ($op['type']) {
 			'campaign_budget.update' => ['amount_micros', 'explicitly_shared', 'reference_count'],
 			'campaign.bidding' => ['bidding_strategy_type', 'status'],
-			'campaign_criterion.remove', 'ad_group_criterion.remove' => ['status'],
+			'campaign_criterion.remove', 'ad_group_criterion.remove', 'ad_group_ad.remove' => ['status'],
 			default => self::action($op['type']) === 'update' ? array_values(array_unique([...array_keys(array_intersect_key($payload, self::UPDATE_PATHS[$resource] ?? [])), ...($resource === 'conversion_action' ? [] : ['status'])])) : [],
 		};
 	}
@@ -553,6 +554,8 @@ final class OperationCatalog
 			'ad_group_criterion.create' => ! empty($payload['negative']) || ($payload['status'] ?? 'ENABLED') === 'ENABLED' ? 'medium' : 'low',
 			'ad_group_criterion.update' => 'medium',
 			'ad_group_criterion.remove' => empty($before['negative']) ? 'high' : 'medium',
+			// Usunięcie reklamy jest nieodwracalne (statystyki zostają w raportach) – wstrzymanie jest bezpieczniejsze.
+			'ad_group_ad.remove' => 'high',
 			'ad_group_ad.create' => ($payload['status'] ?? 'PAUSED') === 'ENABLED' ? 'medium' : 'low',
 			'ad_group_ad.update' => ($payload['status'] ?? null) === 'ENABLED' ? 'medium' : 'low',
 			'conversion_action.create' => ($payload['primary_for_goal'] ?? false) === true ? 'high' : 'medium',
@@ -737,7 +740,7 @@ final class OperationCatalog
 			'ad_group_criterion.create' => ['keyword_text' => mb_strtolower((string) $payload['text']), 'match_type' => $payload['match_type'], 'negative' => ! empty($payload['negative'])] + (! empty($payload['negative']) ? [] : ['status' => $payload['status'] ?? 'ENABLED']),
 			'ad_group_ad.create' => ['status' => $payload['status'] ?? 'PAUSED', 'headlines' => array_values(array_filter(array_map('trim', (array) $payload['headlines']), fn ($h) => $h !== ''))],
 			'conversion_action.create' => ['name' => $payload['name'], 'category' => $payload['category'], 'type' => 'WEBPAGE'],
-			'campaign_criterion.remove', 'ad_group_criterion.remove' => ['status' => 'REMOVED'],
+			'campaign_criterion.remove', 'ad_group_criterion.remove', 'ad_group_ad.remove' => ['status' => 'REMOVED'],
 			default => array_intersect_key($payload, self::UPDATE_PATHS[$resource] ?? []),
 		};
 	}

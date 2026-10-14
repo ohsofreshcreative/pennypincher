@@ -98,7 +98,7 @@
         <li><strong class="text-ink">Grupy reklam:</strong> utworzenie, nazwa, wstrzymanie/włączenie, domyślny maks. CPC.</li>
         <li><strong class="text-ink">Słowa kluczowe:</strong> dodanie (ścisłe / do wyrażenia / przybliżone) z kontrolą duplikatów i konfliktów z wykluczeniami, wstrzymanie/włączenie, usunięcie (z potwierdzeniem), zmiana dopasowania jako zamiana (nowe + usunięcie starego w jednej niepodzielnej operacji).</li>
         <li><strong class="text-ink">Wykluczenia:</strong> na poziomie kampanii i grupy, z kontrolą blokowania aktywnych słów.</li>
-        <li><strong class="text-ink">Reklamy RSA:</strong> nowa reklama, „nowa wersja” (nowa reklama + wstrzymanie starej), wstrzymanie/włączenie.</li>
+        <li><strong class="text-ink">Reklamy RSA:</strong> nowa reklama, „nowa wersja” (nowa reklama + wstrzymanie starej – treść reklamy jest w Google Ads niezmienna), wstrzymanie/włączenie, usunięcie (nieodwracalne).</li>
       </ul>
       <h3 class="mt-3 font-semibold text-ink">Niedostępne (celowo)</h3>
       <ul class="mt-1 list-disc space-y-1 pl-5 text-ink-mute">

@@ -91,7 +91,12 @@ define('PP_ENCRYPTION_KEY', '…');
 // Change Center (domyślnie prepare_only – nic nie jest wysyłane do Google Ads):
 // define('PP_GOOGLE_ADS_WRITE_MODE', 'prepare_only');   // read_only | prepare_only | write_enabled (nieznana wartość = read_only)
 // define('PP_GOOGLE_ADS_API_VALIDATION', false);        // true = walidacja validateOnly (bez zapisu) przy zatwierdzaniu
+// define('PP_GOOGLE_ADS_WRITE_CUSTOMERS', '');           // allowlista kont do zapisu (pusta = żadne); sam wpis nie włącza zapisu
+// define('PP_GOOGLE_ADS_BLOCKED_CUSTOMERS', '');         // opcjonalne blokady kont (bez żadnych żądań mutate)
+// define('PP_GOOGLE_ADS_ALLOW_SERVING', false);          // NIE ustawiaj – blokada emisji: nowe zasoby wstrzymane, bez wdrażania włączeń i budżetów aktywnych kampanii
 ```
+
+Zapis do Google Ads (model MANUAL APPROVAL, konto OhSoFresh, blokada emisji): [GOOGLE_ADS_WRITE_TESTING.md](GOOGLE_ADS_WRITE_TESTING.md).
 
 Zamiast stałych można użyć zmiennych środowiskowych o tych samych nazwach. Sprawdzenie (bez wyświetlania sekretów
 i bez łączenia z Google): `wp acorn pp:google-ads:check`.

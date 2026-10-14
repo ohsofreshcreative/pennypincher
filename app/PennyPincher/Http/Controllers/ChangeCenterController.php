@@ -94,7 +94,7 @@ class ChangeCenterController extends Controller
 			'connection' => $connection,
 			'mode' => $this->guard->mode($connection),
 			'serverMode' => $this->guard->serverMode(),
-			'deployBlocker' => $this->guard->executeBlocker($project, $connection, $userId, $row),
+			'deployBlocker' => $this->center->deployBlocker($project, $row, $operations, $connection, $userId),
 			'canPrepare' => Policy::allows($project->role, Ability::PrepareChanges),
 			'canApprove' => Policy::allows($project->role, Ability::ApproveChanges),
 			'apiValidation' => $this->guard->apiValidationAvailable($connection),

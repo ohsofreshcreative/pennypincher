@@ -44,9 +44,9 @@ Kontrolery (`GoogleAdsManagementController`, `ChangeCenterController`, `Conversi
 ## Uprawnienia OAuth / API
 
 - zakres `https://www.googleapis.com/auth/adwords` (ten sam co do odczytu – zapis nie wymaga nowego zakresu, ale **użytkownik Google musi mieć na koncie dostęp Standard lub Administrator**; dostęp „tylko do odczytu” → błąd uprawnień),
-- dostęp do API: konto testowe działa z poziomem Test; konta produkcyjne wymagają co najmniej poziomu Explorer (limit operacji dziennie) – sprawdź poziom w Google Cloud / API Center,
+- dostęp do API: konto testowe działa z poziomem Test; konta produkcyjne wymagają co najmniej poziomu Explorer (do 2 880 operacji dziennie) – poziom należy do projektu Google Cloud (developer tokeny wycofano 9.09.2026), sprawdzisz go w Google Cloud Console → Google Ads API → Overview,
 - koszt: mutacje i odczyty Google Ads API są bezpłatne (limity operacji), nie ma nowych płatnych usług.
 
 ## Zgoda na zapis i wykonawca
 
-Sekcja „Uprawnienia do zapisu” (właściciel): włączenie zgody dla połączonego konta wymaga wpisania jego ID i działa **tylko gdy serwer ma `PP_GOOGLE_ADS_WRITE_MODE=write_enabled`**. Zgoda wygasa przy zmianie konta lub rozłączeniu. Flaga „wykonawca zmian” – tylko dla administratorów/właściciela.
+Sekcja „Uprawnienia do zapisu” pokazuje: Customer ID i nazwę konta, rodzaj konta (produkcyjne/testowe – „Odczytaj dane konta”, tylko GAQL), allowlistę serwera (i ewentualne blokady `PP_GOOGLE_ADS_BLOCKED_CUSTOMERS`), tryb serwera i tryb efektywny, zgodę właściciela, blokadę emisji reklam, czy bieżący użytkownik może wdrażać (z powodem blokady), wykonawców zmian i ostatnią operację zapisu (zestaw, wynik, request-id) oraz etapy: przygotowanie → zatwierdzenie → wdrożenie → weryfikacja. Włączenie zgody (właściciel) wymaga wpisania ID konta i działa **tylko gdy serwer ma `PP_GOOGLE_ADS_WRITE_MODE=write_enabled` i konto jest na allowliście `PP_GOOGLE_ADS_WRITE_CUSTOMERS`**. Gdy zapis jest niedostępny, zmiany nadal można przygotowywać i zatwierdzać – przycisk „Wdróż do Google Ads” się nie pojawia. Model MANUAL APPROVAL i konto OhSoFresh: [GOOGLE_ADS_WRITE_TESTING.md](GOOGLE_ADS_WRITE_TESTING.md).

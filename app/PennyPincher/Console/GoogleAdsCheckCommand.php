@@ -26,6 +26,9 @@ class GoogleAdsCheckCommand extends Command
 			['Wersja API', $config->apiVersion()],
 			['PP_GOOGLE_ADS_WRITE_MODE (Change Center)', $config->writeMode()->value . ' – ' . $config->writeMode()->label()],
 			['PP_GOOGLE_ADS_API_VALIDATION', $config->apiValidationEnabled() ? 'włączone (validateOnly, bez zapisu)' : 'wyłączone'],
+			['PP_GOOGLE_ADS_WRITE_CUSTOMERS (allowlista zapisu)', $config->writeCustomerAllowlist() === [] ? 'pusta – zapis niemożliwy na żadnym koncie' : implode(', ', array_map([GoogleAdsConfig::class, 'formatCustomer'], $config->writeCustomerAllowlist()))],
+			['PP_GOOGLE_ADS_BLOCKED_CUSTOMERS (blokady)', $config->blockedWriteCustomers() === [] ? 'brak' : implode(', ', array_map([GoogleAdsConfig::class, 'formatCustomer'], $config->blockedWriteCustomers()))],
+			['PP_GOOGLE_ADS_ALLOW_SERVING (blokada emisji)', $config->servingAllowed() ? 'emisja DOZWOLONA' : 'blokada włączona – kampanie, grupy i reklamy tylko wstrzymane'],
 			['Redirect URI (dodaj w Google Cloud)', $config->redirectUri()],
 		];
 
@@ -36,7 +39,15 @@ class GoogleAdsCheckCommand extends Command
 		}
 
 		if ($config->writeMode()->canWrite()) {
-			$this->warn('Zapis do Google Ads jest dozwolony na tym serwerze (write_enabled). Na produkcji przed świadomą decyzją używaj prepare_only.');
+			$this->warn('Zapis do Google Ads jest dozwolony na tym serwerze (write_enabled) – tylko dla kont z allowlisty. Na produkcji przed świadomą decyzją używaj prepare_only.');
+		}
+
+		if (array_intersect($config->writeCustomerAllowlist(), $config->blockedWriteCustomers()) !== []) {
+			$this->warn('Allowlista zawiera konto z listy blokad – takie konto pozostaje zablokowane.');
+		}
+
+		if ($config->servingAllowed()) {
+			$this->warn('Blokada emisji reklam jest WYŁĄCZONA (PP_GOOGLE_ADS_ALLOW_SERVING) – Penny Pincher może włączać kampanie, grupy i reklamy.');
 		}
 
 		$ok = $config->isConfigured() && SecretBox::isConfigured();

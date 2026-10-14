@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Infrastructure\GoogleAds\Mutate;
 
+use App\PennyPincher\Domain\GoogleAds\Changes\ServingGuard;
 use App\PennyPincher\Infrastructure\GoogleAds\GoogleAdsApiException;
 use App\PennyPincher\Infrastructure\GoogleAds\GoogleAdsClient;
 use App\PennyPincher\Infrastructure\GoogleAds\GoogleAdsConfig;
@@ -13,7 +14,10 @@ use App\PennyPincher\Infrastructure\GoogleAds\GoogleHttp;
  * (MutateGoogleAdsRequest: mutate_operations, partial_failure, validate_only, response_content_type).
  *
  * Zabezpieczenia niezależne od wyższych warstw (obrona w głąb):
- * - wykonanie (validate_only = false) tylko przy PP_GOOGLE_ADS_WRITE_MODE = write_enabled,
+ * - wykonanie (validate_only = false) tylko przy PP_GOOGLE_ADS_WRITE_MODE = write_enabled i tylko na koncie
+ *   z allowlisty PP_GOOGLE_ADS_WRITE_CUSTOMERS; konta z listy blokad (PP_GOOGLE_ADS_BLOCKED_CUSTOMERS) nie dostają żadnego żądania mutate,
+ * - wszystkie resource name w operacjach muszą należeć do konta żądania,
+ * - blokada emisji: kampanii, grup reklam i reklam nie da się włączyć (PP_GOOGLE_ADS_ALLOW_SERVING ≠ 1),
  * - walidacja w Google (validate_only = true) tylko przy zapisie albo jawnie włączonej PP_GOOGLE_ADS_API_VALIDATION,
  * - brak odpowiedzi / błąd serwera po wysłaniu wykonania = wynik NIEZNANY (AmbiguousMutateException) – nigdy
  *   nie ponawiamy automatycznie, bo Google mógł zmianę przyjąć,
@@ -43,10 +47,30 @@ class GoogleAdsMutateClient
 			throw new WriteBlockedException('Walidacja przez Google Ads API jest wyłączona (PP_GOOGLE_ADS_API_VALIDATION).');
 		}
 
-		$customerId = (string) preg_replace('/\D/', '', $customerId);
+		$customerId = GoogleAdsConfig::normalizeCustomer($customerId);
 
 		if ($customerId === '' || $operations === []) {
 			throw new \InvalidArgumentException('Brak konta albo operacji do wysłania.');
+		}
+
+		// Konta z listy blokad: żadnych żądań mutate – także walidacyjnych.
+		if ($this->config->isWriteBlockedCustomer($customerId)) {
+			throw new WriteBlockedException((string) $this->config->writeCustomerBlocker($customerId));
+		}
+
+		// Wykonanie tylko na koncie z allowlisty serwera (PP_GOOGLE_ADS_WRITE_CUSTOMERS).
+		if (! $validateOnly && ($blocker = $this->config->writeCustomerBlocker($customerId)) !== null) {
+			throw new WriteBlockedException($blocker);
+		}
+
+		// Każdy zasób w operacjach musi należeć do konta z adresu żądania – nie da się „przemycić” innego Customer ID.
+		if (($foreign = self::foreignCustomers($operations, $customerId)) !== []) {
+			throw new WriteBlockedException('Operacje odwołują się do innego konta Google Ads (' . implode(', ', $foreign) . ') niż konto żądania – nic nie wysłano.');
+		}
+
+		// Blokada emisji reklam (domyślna): włączanie kampanii, grup i reklam nie wychodzi z aplikacji.
+		if (! $validateOnly && ! $this->config->servingAllowed() && ($serving = ServingGuard::scanMutate($operations)) !== []) {
+			throw new WriteBlockedException(implode(' ', array_unique($serving)));
 		}
 
 		$url = sprintf('%s/%s/customers/%s/googleAds:mutate', GoogleAdsConfig::API_HOST, $this->config->apiVersion(), $customerId);
@@ -98,6 +122,20 @@ class GoogleAdsMutateClient
 		$result->requestError = mb_substr($error->getMessage(), 0, 500);
 
 		return $result;
+	}
+
+	/**
+	 * Identyfikatory kont w resource name operacji, inne niż konto żądania.
+	 *
+	 * @return array<int, string>
+	 */
+	public static function foreignCustomers(array $operations, string $customerId): array
+	{
+		preg_match_all('#customers/(\d+)/#', (string) wp_json_encode($operations, JSON_UNESCAPED_SLASHES), $m);
+
+		$own = GoogleAdsConfig::normalizeCustomer($customerId);
+
+		return array_values(array_unique(array_filter($m[1], fn ($id) => GoogleAdsConfig::normalizeCustomer($id) !== $own)));
 	}
 
 	private function parseSuccess(array $body, int $count, ?string $requestId, bool $validateOnly): MutateResult

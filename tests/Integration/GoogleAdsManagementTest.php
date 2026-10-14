@@ -61,6 +61,9 @@ class GoogleAdsManagementTest extends ChangeCenterTestCase
 		$this->account('shared', true);
 		$this->fake->set('campaign_budget', $this->budgetName, 'explicitly_shared', true);
 		$this->fake->campaign('112', 'Szukaj | Sofy', $this->budgetName);
+		// Blokada emisji: budżet współdzielony można zmienić tylko, gdy żadna z kampanii nie jest aktywna.
+		$this->pauseTestCampaign();
+		$this->fake->set('campaign', $this->fake->name('campaign', '112'), 'status', 'PAUSED');
 		$setId = $this->proposals()->campaignBudget($this->project, $this->owner, $this->campaignId(), 60_000_000, false);
 		$this->center()->refreshState($this->project, $setId, $this->owner);
 		$op = $this->ops($setId)[0];
@@ -100,6 +103,8 @@ class GoogleAdsManagementTest extends ChangeCenterTestCase
 	public function testRsaNewVersionCreatesNewAdAndPausesOldOneAtomically(): void
 	{
 		$this->account('rsa', true);
+		// Test sprawdza świadome włączenie nowej wersji reklamy – tryb z dozwoloną emisją (nie domyślny).
+		$this->allowServing();
 		$old = $this->fake->name('ad_group_ad', '222~9001');
 		$this->fake->set('ad_group_ad', $old, 'status', 'ENABLED');
 		$this->fake->set('ad_group_ad', $old, 'ad_group', $this->fake->name('ad_group', '222'));

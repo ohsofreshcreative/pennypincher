@@ -157,6 +157,7 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('management/campaigns/{campaign}/change', [GoogleAdsManagementController::class, 'campaignChange'])->whereNumber('campaign');
 			Route::post('management/ad-groups/{group}/change', [GoogleAdsManagementController::class, 'adGroupChange'])->whereNumber('group');
 			Route::post('management/write-access', [GoogleAdsManagementController::class, 'writeAccess']);
+			Route::post('management/write-access/check', [GoogleAdsManagementController::class, 'accountCheck']);
 			Route::post('management/executor', [GoogleAdsManagementController::class, 'executor']);
 			// Conversion Management.
 			Route::get('conversion-management', [ConversionManagementController::class, 'index'])->name('pp.conversion-management');
