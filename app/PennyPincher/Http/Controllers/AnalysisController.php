@@ -15,7 +15,7 @@ use Illuminate\Http\Request;
  */
 class AnalysisController extends Controller
 {
-	private const RETURN_TO = ['budget-leaks', 'recommendations', 'keywords', 'audits', ''];
+	private const RETURN_TO = ['budget-leaks', 'recommendations', 'keywords', 'audits', 'optimization', ''];
 
 	public function __construct(AccessService $access, private AnalysisService $analysis, private AnalysisPeriodRequest $periods)
 	{

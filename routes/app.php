@@ -7,6 +7,9 @@
  * (/app/projects/{project}/…), a dostęp jest sprawdzany w kontrolerze przez AccessService.
  */
 
+use App\PennyPincher\Http\Controllers\ActionInboxController;
+use App\PennyPincher\Http\Controllers\AdministrationController;
+use App\PennyPincher\Http\Controllers\AssistantController;
 use App\PennyPincher\Http\Controllers\ActionPlanController;
 use App\PennyPincher\Http\Controllers\AnalysisController;
 use App\PennyPincher\Http\Controllers\AuditsController;
@@ -15,6 +18,7 @@ use App\PennyPincher\Http\Controllers\BudgetLeaksController;
 use App\PennyPincher\Http\Controllers\CampaignPlannerController;
 use App\PennyPincher\Http\Controllers\CampaignsController;
 use App\PennyPincher\Http\Controllers\ChangeCenterController;
+use App\PennyPincher\Http\Controllers\ConversionCenterController;
 use App\PennyPincher\Http\Controllers\ConversionManagementController;
 use App\PennyPincher\Http\Controllers\ConversionsController;
 use App\PennyPincher\Http\Controllers\DashboardController;
@@ -24,6 +28,7 @@ use App\PennyPincher\Http\Controllers\HomeController;
 use App\PennyPincher\Http\Controllers\ImportsController;
 use App\PennyPincher\Http\Controllers\KeywordOpportunitiesController;
 use App\PennyPincher\Http\Controllers\MonitoringController;
+use App\PennyPincher\Http\Controllers\OptimizationController;
 use App\PennyPincher\Http\Controllers\OrganizationsController;
 use App\PennyPincher\Http\Controllers\ProjectsController;
 use App\PennyPincher\Http\Controllers\RecommendationsController;
@@ -32,6 +37,7 @@ use App\PennyPincher\Http\Controllers\SettingsController;
 use App\PennyPincher\Http\Middleware\Authenticate;
 use App\PennyPincher\Http\Middleware\PrepareAppRequest;
 use App\PennyPincher\Http\Middleware\VerifyNonce;
+use App\PennyPincher\Support\Navigation;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])->group(function () {
@@ -61,6 +67,8 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::get('/', [DashboardController::class, 'show'])->name('pp.dashboard');
 			Route::get('campaigns', [CampaignsController::class, 'index'])->name('pp.campaigns');
 			Route::get('campaigns/{campaign}', [CampaignsController::class, 'show'])->whereNumber('campaign');
+			Route::get('campaigns/{campaign}/optimization', [CampaignsController::class, 'optimization'])->whereNumber('campaign');
+			Route::get('campaigns/{campaign}/planning', [CampaignsController::class, 'planning'])->whereNumber('campaign');
 			Route::get('search-terms', [SearchTermsController::class, 'index'])->name('pp.search-terms');
 			Route::get('imports', [ImportsController::class, 'index'])->name('pp.imports');
 			Route::post('imports', [ImportsController::class, 'store']);
@@ -74,6 +82,8 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('google-ads/sync/{run}/retry', [GoogleAdsController::class, 'retry'])->whereNumber('run');
 			Route::post('google-ads/disconnect', [GoogleAdsController::class, 'disconnect']);
 			Route::post('google-ads/diagnose', [GoogleAdsController::class, 'diagnose']);
+			Route::get('optimization', [OptimizationController::class, 'index'])->name('pp.optimization');
+			Route::get('assistant', [AssistantController::class, 'index'])->name('pp.assistant');
 			Route::get('audits', [AuditsController::class, 'index'])->name('pp.audits');
 			Route::post('audits', [AuditsController::class, 'store']);
 			Route::get('audits/{run}', [AuditsController::class, 'show'])->whereNumber('run');
@@ -94,6 +104,8 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('keywords/status', [KeywordOpportunitiesController::class, 'updateStatus']);
 			Route::post('keywords/clusters/status', [KeywordOpportunitiesController::class, 'updateClusterStatus']);
 			Route::get('action-plan', [ActionPlanController::class, 'index'])->name('pp.action-plan');
+			Route::get('action-plan/inbox', [ActionInboxController::class, 'index']);
+			Route::get('action-plan/trace/{recommendation}', [ActionInboxController::class, 'trace'])->whereNumber('recommendation');
 			Route::post('action-plan/generate', [ActionPlanController::class, 'generate']);
 			Route::post('action-plan/{item}/status', [ActionPlanController::class, 'updateStatus'])->whereNumber('item');
 			Route::post('action-plan/{item}/note', [ActionPlanController::class, 'updateNote'])->whereNumber('item');
@@ -167,14 +179,18 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::post('conversion-management/goal', [ConversionManagementController::class, 'goal']);
 			Route::post('conversion-management/health', [ConversionManagementController::class, 'health']);
 			Route::get('conversions', [ConversionsController::class, 'index'])->name('pp.conversions');
+			Route::get('conversions/center', [ConversionCenterController::class, 'index']);
 			Route::post('conversions', [ConversionsController::class, 'update']);
 			Route::post('settings/context', [SettingsController::class, 'updateContext']);
 			Route::get('settings', [SettingsController::class, 'edit'])->name('pp.settings');
 			Route::post('settings', [SettingsController::class, 'update']);
+			Route::get('administration', [AdministrationController::class, 'index'])->name('pp.administration');
+			// Adresy sekcji głównych nowej nawigacji bez własnego ekranu – przekierowanie do pierwszego podwidoku.
+			Route::get('{group}', [HomeController::class, 'group'])->whereIn('group', array_keys(Navigation::ALIASES));
 		});
 
 		// Skróty bez identyfikatora projektu – przekierowują do bieżącego projektu.
-		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', ['campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits', 'budget-leaks', 'recommendations', 'keywords', 'conversions', 'planner', 'action-plan', 'monitoring', 'changes', 'management', 'conversion-management']);
+		Route::get('{section}', [HomeController::class, 'shortcut'])->whereIn('section', [...Navigation::SECTIONS, ...array_keys(Navigation::ALIASES)]);
 
 		Route::any('{any}', [HomeController::class, 'notFound'])->where('any', '.*');
 	});

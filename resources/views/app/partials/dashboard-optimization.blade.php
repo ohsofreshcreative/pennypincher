@@ -11,7 +11,7 @@
   <div class="pp-card min-w-0">
     <div class="pp-card-header">
       <h2 class="pp-card-title">Największe problemy budżetowe</h2>
-      <a href="{{ AppUrl::project($project->id, 'budget-leaks', $period($o['leak_run'])) }}" class="text-[13px] font-semibold text-mint hover:underline">Budget Leaks →</a>
+      <a href="{{ AppUrl::project($project->id, 'budget-leaks', $period($o['leak_run'])) }}" class="text-meta font-semibold text-mint hover:underline">Budget Leaks →</a>
     </div>
     @if (! $o['leak_run'])
       <p class="px-5 py-4 text-sm text-ink-soft">Analiza Budget Leaks nie była jeszcze uruchamiana. Otwórz Budget Leaks i uruchom analizę wybranego okresu.</p>
@@ -25,14 +25,14 @@
               <x-pp.status-badge :status="$leak['priority']" :label="Leak::PRIORITIES[$leak['priority']]" class="mt-0.5" />
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm font-medium text-ink">{{ $leak['title'] }}</span>
-                <span class="block truncate text-[12px] text-ink-mute">{{ Leak::CATEGORIES[$leak['category']] ?? '' }}</span>
+                <span class="block truncate text-caption text-ink-mute">{{ Leak::CATEGORIES[$leak['category']] ?? '' }}</span>
               </span>
               <span class="pp-num shrink-0 text-sm font-semibold text-copper">{{ Format::money($leak['cost_micros'], $project->currency, 0) }}</span>
             </a>
           </li>
         @endforeach
       </ul>
-      <p class="pp-num border-t border-line px-5 py-2.5 text-[12px] text-ink-mute">Okres: {{ Format::period($o['leak_run']['date_from'], $o['leak_run']['date_to']) }} · łącznie {{ $o['leak_count'] }} problemów</p>
+      <p class="pp-num border-t border-line px-5 py-2.5 text-caption text-ink-mute">Okres: {{ Format::period($o['leak_run']['date_from'], $o['leak_run']['date_to']) }} · łącznie {{ $o['leak_count'] }} problemów</p>
     @endif
   </div>
 

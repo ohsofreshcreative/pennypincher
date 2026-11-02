@@ -69,7 +69,7 @@
                 <td class="whitespace-nowrap text-ink-soft">{{ $row['channel_type'] ?: Format::EMPTY }}</td>
                 <td class="pp-col-num text-ink-soft">
                   {{ Format::money($row['budget_micros'] !== null ? (int) $row['budget_micros'] : null, $currency) }}
-                  @if ($row['budget_period'])<span class="block text-[12px] text-ink-mute">{{ $row['budget_period'] }}</span>@endif
+                  @if ($row['budget_period'])<span class="block text-caption text-ink-mute">{{ $row['budget_period'] }}</span>@endif
                 </td>
                 <td class="pp-col-num font-semibold text-copper">{{ Format::money($row['cost_micros'], $currency) }}</td>
                 <td class="pp-col-num">{{ Format::number($row['clicks']) }}</td>
@@ -87,5 +87,5 @@
     @endif
   </section>
 
-  <p class="text-[13px] text-ink-mute">„—” oznacza brak danych w zaimportowanych raportach (nie zero). Kampanie bez danych w wybranym zakresie są na końcu listy.</p>
+  <p class="text-meta text-ink-mute">„—” oznacza brak danych w zaimportowanych raportach (nie zero). Kampanie bez danych w wybranym zakresie są na końcu listy.</p>
 @endsection

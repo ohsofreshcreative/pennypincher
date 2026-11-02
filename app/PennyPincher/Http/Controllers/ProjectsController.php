@@ -45,6 +45,7 @@ class ProjectsController extends Controller
 			'groups' => $grouped,
 			'canCreateOrganization' => $this->access->canCreateOrganizations($userId),
 			'pageTitle' => 'Projekty',
+			'section' => 'projects',
 		]);
 	}
 
@@ -96,6 +97,7 @@ class ProjectsController extends Controller
 			'errors' => $errors,
 			'old' => $request->isMethod('POST') ? $request->input() : ['organization_id' => $request->query('organization')],
 			'pageTitle' => 'Nowy projekt',
+			'section' => 'projects',
 		], $status);
 	}
 }

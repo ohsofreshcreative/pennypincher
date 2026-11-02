@@ -42,7 +42,7 @@
     <section class="pp-card" aria-label="Podsumowanie">
       <div class="pp-card-header">
         <h2 class="pp-card-title">Podsumowanie okresu</h2>
-        <p class="pp-num text-[13px] text-ink-mute">Analiza: {{ Format::datetime($run['created_at']) }} · {{ $triggers[$run['trigger_type']] ?? $run['trigger_type'] }}</p>
+        <p class="pp-num text-meta text-ink-mute">Analiza: {{ Format::datetime($run['created_at']) }} · {{ $triggers[$run['trigger_type']] ?? $run['trigger_type'] }}</p>
       </div>
       <dl class="grid divide-y divide-line sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
         <x-pp.stat-card label="Wydatki w okresie" :value="Format::money($summary['spend_micros'] ?? null, $currency)" :hint="Format::number($summary['clicks'] ?? null) . ' kliknięć'" tone="spend" />
@@ -50,7 +50,7 @@
         <x-pp.stat-card label="Potencjał oszczędności (SZACUNEK)" :value="$savings && $savings['total'] > 0 ? 'ok. ' . Format::money($savings['total'], $currency, 0) . ' / mies.' : 'Brak danych'" hint="Bez podwójnego liczenia nakładających się problemów; bez pominiętych" />
         <x-pp.stat-card label="Konwersje" :value="Format::conversions($summary['google_conversions'] ?? null)" :hint="($summary['goal_conversions'] ?? null) !== null ? 'W tym celów biznesowych: ' . Format::conversions($summary['goal_conversions']) : 'Cele biznesowe: brak klasyfikacji'" />
       </dl>
-      <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+      <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
         Kwoty oszczędności to <strong class="font-semibold text-ink-soft">szacunek</strong> miesięcznych wydatków, które można ograniczyć – nie gwarancja. Konwersje haseł i słów kluczowych to „Konwersje” z Google Ads (nie da się ich rozbić na działania);
         @if (! ($summary['campaign_level_conversions'] ?? false))
           konwersje celów biznesowych per kampania będą dostępne po ponownym pobraniu historii z Google Ads.
@@ -122,17 +122,17 @@
                       <x-pp.status-badge :status="$leak['priority']" :label="'Priorytet: ' . Leak::PRIORITIES[$leak['priority']]" />
                       <span class="pp-badge pp-badge-neutral">{{ Leak::CATEGORIES[$leak['category']] ?? $leak['category'] }}</span>
                       @if ($leak['status'] !== 'new')<x-pp.status-badge :status="$leak['status']" />@endif
-                      <span class="text-[12px] text-ink-mute">Pewność: {{ Statistics::CONFIDENCE_LABELS[$leak['confidence']] ?? $leak['confidence'] }}</span>
+                      <span class="text-caption text-ink-mute">Pewność: {{ Statistics::CONFIDENCE_LABELS[$leak['confidence']] ?? $leak['confidence'] }}</span>
                     </div>
                     <h3 class="mt-1.5 font-semibold text-ink">{{ $leak['title'] }}</h3>
-                    <p class="mt-0.5 truncate text-[13px] text-ink-mute">
+                    <p class="mt-0.5 truncate text-meta text-ink-mute">
                       {{ $leak['campaign_id'] ? ($campaignOptions[(int) $leak['campaign_id']] ?? 'Kampania') : 'Całe konto' }}@if ($group) · {{ $group }}@endif
                     </p>
                   </div>
                   <div class="shrink-0 text-right">
                     <p class="pp-num font-semibold text-copper">{{ Format::money($leak['cost_micros'], $currency) }}</p>
                     @if ($leak['savings_micros'] !== null && $leak['status'] !== 'dismissed')
-                      <p class="pp-num text-[12px] text-ink-mute" title="Szacunek miesięcznej oszczędności">SZACUNEK: ok. {{ Format::money($leak['savings_micros'], $currency, 0) }}/mies.</p>
+                      <p class="pp-num text-caption text-ink-mute" title="Szacunek miesięcznej oszczędności">SZACUNEK: ok. {{ Format::money($leak['savings_micros'], $currency, 0) }}/mies.</p>
                     @endif
                   </div>
                   <x-pp.icon name="chevron-down" class="mt-0.5 text-ink-mute transition-transform" x-bind:class="open && 'rotate-180'" />
@@ -140,18 +140,18 @@
 
                 <div x-show="open" x-cloak class="space-y-4 px-5 pb-5 text-sm leading-6">
                   <dl class="grid grid-cols-2 gap-x-6 gap-y-2 rounded-[var(--radius-control)] border border-line px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-6">
-                    <div><dt class="text-[12px] text-ink-mute">Okres</dt><dd class="pp-num text-ink">{{ Format::period($run['date_from'], $run['date_to']) }}</dd></div>
-                    <div><dt class="text-[12px] text-ink-mute">Wydatki</dt><dd class="pp-num text-ink">{{ Format::money($leak['cost_micros'], $currency) }}</dd></div>
-                    <div><dt class="text-[12px] text-ink-mute">Kliknięcia</dt><dd class="pp-num text-ink">{{ Format::number($leak['clicks']) }}</dd></div>
-                    <div><dt class="text-[12px] text-ink-mute">Konwersje (Google)</dt><dd class="pp-num text-ink">{{ Format::conversions($leak['conversions']) }}</dd></div>
-                    <div><dt class="text-[12px] text-ink-mute">Konwersje wartościowe</dt><dd class="pp-num text-ink">{{ $leak['valuable_conversions'] === null ? 'Brak danych' : Format::conversions($leak['valuable_conversions']) }}</dd></div>
-                    <div><dt class="text-[12px] text-ink-mute">Priorytet (pkt)</dt><dd class="pp-num text-ink">{{ $leak['priority_score'] }}/100</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Okres</dt><dd class="pp-num text-ink">{{ Format::period($run['date_from'], $run['date_to']) }}</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Wydatki</dt><dd class="pp-num text-ink">{{ Format::money($leak['cost_micros'], $currency) }}</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Kliknięcia</dt><dd class="pp-num text-ink">{{ Format::number($leak['clicks']) }}</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Konwersje (Google)</dt><dd class="pp-num text-ink">{{ Format::conversions($leak['conversions']) }}</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Konwersje wartościowe</dt><dd class="pp-num text-ink">{{ $leak['valuable_conversions'] === null ? 'Brak danych' : Format::conversions($leak['valuable_conversions']) }}</dd></div>
+                    <div><dt class="text-caption text-ink-mute">Priorytet (pkt)</dt><dd class="pp-num text-ink">{{ $leak['priority_score'] }}/100</dd></div>
                   </dl>
                   @if ($leak['subject'])
                     <p class="text-ink-soft"><span class="text-ink-mute">{{ $leak['entity_type'] === 'search_term' ? 'Wyszukiwane hasło' : ($leak['entity_type'] === 'keyword' ? 'Słowo kluczowe' : 'Dotyczy') }}:</span> <strong class="font-semibold text-ink">{{ $leak['subject'] }}</strong></p>
                   @endif
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Uzasadnienie</h4>
+                    <h4 class="text-meta font-semibold text-ink">Uzasadnienie</h4>
                     <p class="mt-0.5 text-ink-soft">{{ $leak['reason'] }}</p>
                   </div>
                   @if ($leak['evidence']['pairs'])
@@ -165,12 +165,12 @@
                     </dl>
                   @endif
                   <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5">
-                    <h4 class="text-[13px] font-semibold text-mint-dark">Sugerowane działanie</h4>
+                    <h4 class="text-meta font-semibold text-mint-dark">Sugerowane działanie</h4>
                     <p class="mt-0.5 text-ink">{{ $leak['action'] }}</p>
                   </div>
                   @include('app.partials.changes.source-change', ['sourceId' => $leak['id'], 'action' => AppUrl::project($project->id, 'budget-leaks/' . $leak['id'] . '/prepare-change'), 'blocker' => in_array($leak['rule_id'], \App\PennyPincher\Services\Changes\ChangeProposalService::LEAK_RULES, true) && $leak['campaign_id'] !== null ? null : 'Wymaga decyzji lub działań poza Google Ads API – bez operacji do wdrożenia.'])
                   <div class="flex flex-wrap items-center justify-between gap-3">
-                    <p class="text-[12.5px] text-ink-mute">{{ $leak['rule_id'] }} · status wycieku ustawiasz samodzielnie – wdrożenie zmiany go nie zmienia.</p>
+                    <p class="text-caption text-ink-mute">{{ $leak['rule_id'] }} · status wycieku ustawiasz samodzielnie – wdrożenie zmiany go nie zmienia.</p>
                     @if ($canRun)
                       <form method="post" action="{{ AppUrl::project($project->id, 'budget-leaks/' . $leak['id'] . '/status') }}" class="flex flex-wrap gap-2">
                         <x-pp.nonce />
@@ -193,7 +193,7 @@
         @if ($canRun)
           <section class="pp-card p-5">
             <h2 class="pp-card-title">Ponowna analiza</h2>
-            <p class="mt-1 text-[13px] leading-5 text-ink-mute">Przelicza audyt, Budget Leaks, słowa kluczowe i rekomendacje dla okresu {{ $period->range->label() }}. Statusy problemów zostają zachowane.</p>
+            <p class="mt-1 text-meta leading-5 text-ink-mute">Przelicza audyt, Budget Leaks, słowa kluczowe i rekomendacje dla okresu {{ $period->range->label() }}. Statusy problemów zostają zachowane.</p>
             <div class="mt-3">@include('app.partials.analysis.run-form', ['return' => 'budget-leaks', 'variant' => 'secondary', 'size' => 'sm', 'label' => 'Uruchom ponownie'])</div>
           </section>
         @endif
@@ -206,14 +206,14 @@
               <li>
                 <a href="{{ AppUrl::project($project->id, 'budget-leaks', $query) }}" @class(['block px-5 py-3 hover:bg-ink/[0.03]', 'bg-mint-soft/60' => (int) $item['id'] === (int) $run['id']])>
                   <span class="pp-num block text-sm text-ink">Okres: {{ Format::period($item['date_from'], $item['date_to']) }}</span>
-                  <span class="pp-num block text-[12px] text-ink-mute">{{ Format::datetime($item['created_at']) }} · {{ array_sum($item['summary']['counts'] ?? []) }} problemów · {{ $triggers[$item['trigger_type']] ?? $item['trigger_type'] }}</span>
+                  <span class="pp-num block text-caption text-ink-mute">{{ Format::datetime($item['created_at']) }} · {{ array_sum($item['summary']['counts'] ?? []) }} problemów · {{ $triggers[$item['trigger_type']] ?? $item['trigger_type'] }}</span>
                 </a>
               </li>
             @endforeach
           </ul>
         </section>
 
-        <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+        <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
           <h2 class="pp-card-title">Jak to działa</h2>
           <p class="mt-2">Hasło lub słowo bez konwersji jest problemem dopiero, gdy przy typowym współczynniku konwersji kampanii brak wyniku jest mało prawdopodobny przypadkiem. Pewność „Wysoka” oznacza, że szansa na zero konwersji przy tej liczbie kliknięć to poniżej 5%.</p>
           <p class="mt-2">Priorytet łączy wpływ na budżet, pewność statystyczną i znaczenie biznesowe – nie tylko wysokość wydatków.</p>

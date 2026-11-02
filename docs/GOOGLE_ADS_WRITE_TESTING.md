@@ -58,7 +58,15 @@ i kontem, a każdy resource name w operacjach musi należeć do tego konta. Opcj
   worker (odczyt stanu tuż przed wysłaniem) i klient mutate (status ENABLED).
 - Przykład: budżet 100 zł → 150 zł w aktywnej kampanii – podgląd „obecnie / po zmianie”, +50%, szacunek miesięczny,
   wysokie ryzyko, zatwierdzenie możliwe; wdrożenie czeka na świadome zdjęcie blokady.
-- Wstrzymywanie, zmiany nazw, ustawień, słów kluczowych, wykluczeń i reklam we wstrzymanych zasobach nie są blokowane.
+- Zmiany, które mogą **zwiększyć wydatki** aktywnej kampanii (lub grupy w aktywnej kampanii), też są blokowane przy
+  wdrożeniu: włączenie sieci reklamowej albo partnerów wyszukiwania, każda zmiana strategii stawek, podniesienie stawki
+  CPC grupy lub słowa, usunięcie wykluczenia, usunięcie kierowania na lokalizację/język. Worker odczytuje stan
+  kampanii i grupy tuż przed wysłaniem; nieznany stan = blokada (`ServingGuard::raisesSpend` / `spendViolation`).
+- Wstrzymywanie, zmiany nazw, obniżanie stawek, dodawanie wykluczeń oraz zmiany we wstrzymanych zasobach nie są blokowane.
+- Stany bez wyjścia: „Wymaga uzgodnienia” bez operacji o nieznanym wyniku rozwiązuje „Uzgodnij stan” (przeliczenie
+  z zapisanych wyników); zawieszoną „Walidację” i nieprzejętą kolejkę (nic nie wysłano) można anulować; operacja
+  w konflikcie wraca do „Oczekuje” po ponownym odczycie stanu (cała grupa atomowa wdrażana razem), a zestawu z
+  nierozwiązanym konfliktem nie da się zatwierdzić.
 - Brak płatności na koncie nie jest traktowany jako zabezpieczenie.
 
 ## 4. Zakres edycji istniejących kampanii (Search)

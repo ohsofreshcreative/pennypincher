@@ -17,7 +17,7 @@
     <x-pp.nonce />
     <div class="pp-card-header">
       <h2 class="pp-card-title">Projekt</h2>
-      <p class="text-[13px] text-ink-mute">Organizacja: {{ $project->organizationName }}</p>
+      <p class="text-meta text-ink-mute">Organizacja: {{ $project->organizationName }}</p>
     </div>
     <div class="p-5 sm:p-6">
       @include('app.partials.project-fields', ['model' => $project, 'disabled' => ! $canEdit])
@@ -34,7 +34,7 @@
     <x-pp.nonce />
     <div class="pp-card-header">
       <h2 class="pp-card-title">Kontekst biznesowy</h2>
-      <p class="text-[13px] text-ink-mute">Używany w Budget Leaks, rekomendacjach i ocenie słów kluczowych</p>
+      <p class="text-meta text-ink-mute">Używany w Budget Leaks, rekomendacjach i ocenie słów kluczowych</p>
     </div>
     <div class="p-5 sm:p-6">
       @include('app.partials.context-fields', ['disabled' => ! $canEdit, 'errors' => $contextErrors ?? [], 'old' => $contextOld ?? []])

@@ -1,7 +1,10 @@
 @php
   use App\PennyPincher\Support\AppUrl;
+  use App\PennyPincher\Support\Feature;
+  use App\PennyPincher\Support\Navigation;
 
   $section = $section ?? null;
+  $newNavigation = Feature::enabled(Feature::NAVIGATION);
   $nav = $project
     ? [
         ['overview', 'Przegląd', 'overview', AppUrl::project($project->id)],
@@ -23,6 +26,26 @@
       ]
     : [];
   $groupedProjects = collect($projects)->groupBy('organizationName');
+
+  // Nawigacja 2.0: okruszki Projekt › Sekcja › Podwidok › szczegół, a na stronie startowej podwidoku nagłówek z nazwą z menu.
+  $heading = $pageTitle ?? 'Penny Pincher';
+  $trail = [];
+  if ($newNavigation && $project && ($navGroup = Navigation::groupOf($section))) {
+    $navDefinition = Navigation::groups()[$navGroup];
+    $navItem = $navDefinition['items'][$section];
+    $navItemUrl = empty($navItem['global']) ? AppUrl::project($project->id, $navItem['path']) : AppUrl::to($navItem['path']);
+    $isLanding = str_ends_with(trim((string) wp_parse_url($navItemUrl, PHP_URL_PATH), '/'), trim(request()->path(), '/'));
+    $trail[] = ['label' => $project->name, 'url' => AppUrl::project($project->id)];
+    $trail[] = ['label' => $navDefinition['label'], 'url' => AppUrl::project($project->id, Navigation::resolve($navGroup))];
+    if (count($navDefinition['items']) > 1) {
+      $trail[] = ['label' => $navItem['label'], 'url' => $navItemUrl];
+    }
+    if ($isLanding) {
+      $heading = count($navDefinition['items']) > 1 ? $navItem['label'] : $navDefinition['label'];
+    } else {
+      $trail[] = ['label' => $heading, 'url' => null];
+    }
+  }
 @endphp
 
 @extends('app.layouts.document')
@@ -46,7 +69,7 @@
 
       @if ($projects)
         <form method="get" action="{{ AppUrl::to('switch') }}" class="px-4 pb-4">
-          <label for="pp-project-switch" class="mb-1.5 block px-1 text-[12px] font-medium text-sidebar-text/70">Projekt</label>
+          <label for="pp-project-switch" class="mb-1.5 block px-1 text-caption font-medium text-sidebar-text/70">Projekt</label>
           <select id="pp-project-switch" name="project" data-autosubmit
             class="block min-h-10 w-full appearance-none rounded-[var(--radius-control)] border border-sidebar-line bg-white/5 px-3 text-sm text-white focus:border-copper focus:outline-none">
             @unless ($project)
@@ -69,6 +92,9 @@
         </form>
       @endif
 
+      @if ($newNavigation)
+        @include('app.partials.navigation')
+      @else
       <nav class="flex-1 overflow-y-auto px-3 pb-6">
         <ul class="space-y-0.5">
           @foreach ($nav as [$key, $label, $icon, $url])
@@ -77,7 +103,7 @@
                 <x-pp.icon :name="$icon" />
                 {{ $label }}
                 @if ($key === 'monitoring' && ($alertCount ?? 0) > 0)
-                  <span class="pp-num ml-auto rounded-full bg-copper px-1.5 text-[11px] leading-5 font-semibold text-white" title="Nowe alerty">{{ $alertCount > 99 ? '99+' : $alertCount }}<span class="sr-only"> nowych alertów</span></span>
+                  <span class="pp-num ml-auto rounded-full bg-copper px-1.5 text-2xs leading-5 font-semibold text-white" title="Nowe alerty">{{ $alertCount > 99 ? '99+' : $alertCount }}<span class="sr-only"> nowych alertów</span></span>
                 @endif
               </a>
             </li>
@@ -102,15 +128,16 @@
         </ul>
 
       </nav>
+      @endif
 
       <div class="border-t border-sidebar-line px-4 py-4">
         <div class="flex items-center gap-3">
-          <span class="grid size-9 shrink-0 place-items-center rounded-full bg-white/10 text-[13px] font-semibold text-white" aria-hidden="true">
+          <span class="grid size-9 shrink-0 place-items-center rounded-full bg-white/10 text-meta font-semibold text-white" aria-hidden="true">
             {{ mb_strtoupper(mb_substr($currentUser->display_name ?: $currentUser->user_login, 0, 1)) }}
           </span>
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-white">{{ $currentUser->display_name ?: $currentUser->user_login }}</p>
-            <p class="truncate text-[12px] text-sidebar-text/70">{{ $currentUser->user_email }}</p>
+            <p class="truncate text-caption text-sidebar-text/70">{{ $currentUser->user_email }}</p>
           </div>
           <form method="post" action="{{ AppUrl::to('logout') }}">
             <x-pp.nonce />
@@ -131,13 +158,18 @@
           </button>
 
           <div class="min-w-0 flex-1">
-            @if ($project)
-              <p class="flex items-center gap-2 truncate text-[12.5px] text-ink-mute">
+            @if ($trail)
+              <div class="flex items-center gap-2">
+                <x-pp.breadcrumbs :items="$trail" />
+                @if ($project->isDemo)<span class="pp-badge pp-badge-demo">DEMO</span>@endif
+              </div>
+            @elseif ($project)
+              <p class="flex items-center gap-2 truncate text-caption text-ink-mute">
                 <span class="truncate">{{ $project->organizationName }} / {{ $project->name }}</span>
                 @if ($project->isDemo)<span class="pp-badge pp-badge-demo">DEMO</span>@endif
               </p>
             @endif
-            <h1 class="truncate text-xl leading-7 font-semibold text-ink">{{ $pageTitle ?? 'Penny Pincher' }}</h1>
+            <h1 class="truncate text-xl leading-7 font-semibold text-ink">{{ $heading }}</h1>
           </div>
 
           @isset($range)

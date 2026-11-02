@@ -46,7 +46,7 @@
               <dd class="font-medium text-ink">
                 @if ($connection['customer_id'])
                   {{ $connection['customer_name'] ?: '—' }}
-                  <span class="pp-num block text-[12.5px] font-normal text-ink-mute">{{ preg_replace('/^(\d{3})(\d{3})(\d{4})$/', '$1-$2-$3', $connection['customer_id']) }}</span>
+                  <span class="pp-num block text-caption font-normal text-ink-mute">{{ preg_replace('/^(\d{3})(\d{3})(\d{4})$/', '$1-$2-$3', $connection['customer_id']) }}</span>
                 @else
                   nie wybrano
                 @endif
@@ -103,7 +103,7 @@
                         <input type="radio" name="customer_id" value="{{ $account['customer_id'] }}" class="mt-1" required @checked(count($accounts) === 1)>
                         <span class="min-w-0 text-sm">
                           <span class="block font-medium text-ink">{{ $account['name'] ?: 'Bez nazwy' }}@if ($account['test']) <span class="pp-badge pp-badge-neutral">konto testowe</span>@endif</span>
-                          <span class="pp-num block text-[12.5px] text-ink-mute">{{ preg_replace('/^(\d{3})(\d{3})(\d{4})$/', '$1-$2-$3', $account['customer_id']) }} · {{ $account['currency'] ?? '—' }}@if ($account['login_customer_id']) · przez konto menedżera {{ $account['login_customer_id'] }}@endif</span>
+                          <span class="pp-num block text-caption text-ink-mute">{{ preg_replace('/^(\d{3})(\d{3})(\d{4})$/', '$1-$2-$3', $account['customer_id']) }} · {{ $account['currency'] ?? '—' }}@if ($account['login_customer_id']) · przez konto menedżera {{ $account['login_customer_id'] }}@endif</span>
                         </span>
                       </label>
                     @endforeach
@@ -112,7 +112,7 @@
                 </form>
               @endif
               @if ($skippedAccounts !== [] && ! $accountsError)
-                <details class="mt-3 text-[13px] text-ink-mute">
+                <details class="mt-3 text-meta text-ink-mute">
                   <summary class="cursor-pointer">Pominięte konta ({{ count($skippedAccounts) }})</summary>
                   <ul class="mt-2 space-y-1">
                     @foreach ($skippedAccounts as $skipped)
@@ -171,29 +171,10 @@
       </div>
 
       @if ($diagnostics && $canManage)
-        <div id="pp-diagnostics" class="border-t border-line p-5">
-          <h3 class="text-sm font-semibold text-ink">Diagnostyka połączenia <span class="pp-num font-normal text-ink-mute">{{ Format::datetime($diagnostics['at']) }}</span></h3>
-          <p class="mt-1 text-[12.5px] text-ink-mute">Tylko odczyt. Bez tokenów i sekretów.</p>
-          <div class="pp-table-wrap mt-3">
-            <table class="pp-table text-[13px]">
-              <thead><tr><th>Zapytanie</th><th>HTTP</th><th>Kod Google</th><th>Wynik</th><th class="pp-col-num">Konta</th></tr></thead>
-              <tbody>
-                @foreach ($diagnostics['rows'] as $row)
-                  <tr>
-                    <td class="pp-num break-all">{{ $row['endpoint'] }}</td>
-                    <td class="pp-num">{{ $row['status'] ?? '—' }}</td>
-                    <td class="pp-num {{ $row['code'] ? 'text-danger' : '' }}">{{ $row['code'] ?? '—' }}</td>
-                    <td class="min-w-[220px]">{{ $row['message'] ?? '—' }}</td>
-                    <td class="pp-col-num">{{ $row['count'] ?? '—' }}</td>
-                  </tr>
-                @endforeach
-              </tbody>
-            </table>
-          </div>
-        </div>
+        @include('app.partials.google-ads.diagnostics')
       @endif
 
-      <div class="border-t border-line p-5 text-[13px] leading-6 text-ink-mute">
+      <div class="border-t border-line p-5 text-meta leading-6 text-ink-mute">
         <p>Zakres danych: kampanie (status, typ, budżet, strategia stawek, sieci, lokalizacje), grupy reklam, słowa kluczowe, wyszukiwane hasła, działania konwersji (kategoria, konwersja główna/dodatkowa, sposób zliczania) oraz dzienne metryki z ostatnich 12 miesięcy.</p>
         <p class="mt-2">Dane z API mają pierwszeństwo przed importami za te same dni – wydatki nie są liczone podwójnie. Historia importów pozostaje dostępna. Google Ads API {{ $apiVersion }}.</p>
       </div>
@@ -203,7 +184,7 @@
       <div class="pp-card-header">
         <h2 id="pp-sync-history" class="pp-card-title">Historia synchronizacji</h2>
         @if ($openRun)
-          <span class="text-[13px] text-ink-mute">Synchronizacja jest dokańczana w tle przez zadanie cron.</span>
+          <span class="text-meta text-ink-mute">Synchronizacja jest dokańczana w tle przez zadanie cron.</span>
         @endif
       </div>
 
@@ -228,23 +209,23 @@
                 <tr>
                   <td class="whitespace-nowrap">
                     <span class="font-medium text-ink">{{ $typeLabels[$run['type']] ?? $run['type'] }}</span>
-                    <span class="pp-num block text-[12px] text-ink-mute">#{{ $run['id'] }}, {{ Format::datetime($run['created_at']) }}</span>
+                    <span class="pp-num block text-caption text-ink-mute">#{{ $run['id'] }}, {{ Format::datetime($run['created_at']) }}</span>
                   </td>
                   <td class="pp-num whitespace-nowrap text-ink-soft">{{ Format::period($run['date_from'], $run['date_to']) }}</td>
                   <td class="max-w-[280px]">
                     <x-pp.status-badge :status="$run['status']" :label="$runStatusLabels[$run['status']] ?? null" />
                     @if ($run['status'] === 'queued' && $run['next_attempt_at'])
-                      <span class="block text-[12px] text-ink-mute">Ponowienie (próba {{ $run['attempts'] + 1 }}) po {{ Format::datetime($run['next_attempt_at']) }}</span>
+                      <span class="block text-caption text-ink-mute">Ponowienie (próba {{ $run['attempts'] + 1 }}) po {{ Format::datetime($run['next_attempt_at']) }}</span>
                     @endif
                     @if ($run['last_error'] && $run['status'] !== 'completed')
-                      <span class="mt-1 block text-[12.5px] leading-5 text-danger">{{ $run['last_error'] }}</span>
+                      <span class="mt-1 block text-caption leading-5 text-danger">{{ $run['last_error'] }}</span>
                     @endif
                   </td>
                   <td class="min-w-[140px]">
                     <div class="h-1.5 overflow-hidden rounded-full bg-ink/10" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $percent }}" aria-label="Postęp synchronizacji">
                       <div class="h-full rounded-full {{ $run['status'] === 'failed' ? 'bg-danger' : 'bg-mint' }}" style="width: {{ $percent }}%"></div>
                     </div>
-                    <span class="pp-num text-[12px] text-ink-mute">{{ $run['step_index'] }} z {{ $run['steps_total'] }} kroków</span>
+                    <span class="pp-num text-caption text-ink-mute">{{ $run['step_index'] }} z {{ $run['steps_total'] }} kroków</span>
                   </td>
                   <td class="pp-col-num">{{ Format::number($run['records_imported']) }}</td>
                   <td class="text-right">

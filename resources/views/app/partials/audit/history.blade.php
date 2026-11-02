@@ -16,8 +16,8 @@
                   <span class="pp-num w-9 text-lg font-semibold text-ink">{{ $item['score'] ?? '—' }}</span>
                   <span class="min-w-0 flex-1">
                     <span class="pp-num block text-sm text-ink">{{ Format::datetime($item['created_at']) }}</span>
-                    <span class="pp-num block text-[12px] text-ink-mute">Okres: {{ Format::period($item['date_from'], $item['date_to']) }}</span>
-                    <span class="block text-[12px] text-ink-mute">{{ (int) $item['critical_count'] }} kryt. · {{ (int) $item['warning_count'] }} ostrz. · {{ (int) $item['info_count'] }} inf. · {{ $triggers[$item['trigger_type']] ?? $item['trigger_type'] }}</span>
+                    <span class="pp-num block text-caption text-ink-mute">Okres: {{ Format::period($item['date_from'], $item['date_to']) }}</span>
+                    <span class="block text-caption text-ink-mute">{{ (int) $item['critical_count'] }} kryt. · {{ (int) $item['warning_count'] }} ostrz. · {{ (int) $item['info_count'] }} inf. · {{ $triggers[$item['trigger_type']] ?? $item['trigger_type'] }}</span>
                   </span>
                 </a>
               </li>

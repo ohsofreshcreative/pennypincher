@@ -124,17 +124,17 @@
                     <x-pp.status-badge :status="$rec['priority']" :label="'Priorytet: ' . ['high' => 'wysoki', 'medium' => 'średni', 'low' => 'niski'][$rec['priority']]" />
                     <x-pp.status-badge :status="$rec['status']" :label="RecommendationGenerator::STATUSES[$rec['status']] ?? $rec['status']" />
                     @if ($rec['is_obsolete'])<x-pp.status-badge status="obsolete" />@endif
-                    <span class="text-[12px] text-ink-mute">{{ implode(' + ', array_map(fn ($s) => RecommendationGenerator::SOURCES[$s] ?? $s, $rec['sources'])) }} · pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$rec['confidence']] ?? $rec['confidence']) }}</span>
+                    <span class="text-caption text-ink-mute">{{ implode(' + ', array_map(fn ($s) => RecommendationGenerator::SOURCES[$s] ?? $s, $rec['sources'])) }} · pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$rec['confidence']] ?? $rec['confidence']) }}</span>
                   </div>
                   <h3 class="mt-1.5 font-semibold text-ink">{{ $rec['title'] }}</h3>
-                  <p class="mt-0.5 truncate text-[13px] text-ink-mute">
+                  <p class="mt-0.5 truncate text-meta text-ink-mute">
                     {{ $rec['campaign_id'] ? ($campaignOptions[(int) $rec['campaign_id']] ?? 'Kampania') : 'Całe konto' }}
                     · okres {{ Format::period($rec['date_from'], $rec['date_to']) }}
                   </p>
                 </div>
                 <div class="hidden shrink-0 text-right sm:block">
-                  <p class="pp-num text-[13px] text-ink-soft">{{ $rec['impact_label'] ?? 'Wpływ: brak danych' }}</p>
-                  <p class="pp-num text-[12px] text-ink-mute">{{ $rec['priority_score'] }}/100 pkt</p>
+                  <p class="pp-num text-meta text-ink-soft">{{ $rec['impact_label'] ?? 'Wpływ: brak danych' }}</p>
+                  <p class="pp-num text-caption text-ink-mute">{{ $rec['priority_score'] }}/100 pkt</p>
                 </div>
                 <x-pp.icon name="chevron-down" class="mt-0.5 text-ink-mute transition-transform" x-bind:class="open && 'rotate-180'" />
               </button>
@@ -143,7 +143,7 @@
                 <p class="text-ink-soft">{{ $rec['description'] }}</p>
                 @if ($rec['rationale'])
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Uzasadnienie (dane)</h4>
+                    <h4 class="text-meta font-semibold text-ink">Uzasadnienie (dane)</h4>
                     <p class="mt-0.5 whitespace-pre-line text-ink-soft">{{ $rec['rationale'] }}</p>
                   </div>
                 @endif
@@ -160,11 +160,11 @@
                   </dl>
                 @endif
                 <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5">
-                  <h4 class="text-[13px] font-semibold text-mint-dark">Działanie</h4>
+                  <h4 class="text-meta font-semibold text-mint-dark">Działanie</h4>
                   <p class="mt-0.5 text-ink">{{ $rec['action'] }}</p>
                 </div>
                 @include('app.partials.changes.source-change', ['sourceId' => $rec['id'], 'action' => AppUrl::project($project->id, 'recommendations/' . $rec['id'] . '/prepare-change'), 'blocker' => \App\PennyPincher\Services\Changes\ChangeProposalService::deployable($rec) !== null ? 'Wymaga działań poza Google Ads API (np. na stronie) – bez operacji do wdrożenia.' : ($blockers[(int) $rec['id']] ?? null)])
-                <dl class="grid gap-x-6 gap-y-1 text-[12.5px] text-ink-mute sm:grid-cols-2 lg:grid-cols-4">
+                <dl class="grid gap-x-6 gap-y-1 text-caption text-ink-mute sm:grid-cols-2 lg:grid-cols-4">
                   <div><dt class="inline">Szacowany wpływ:</dt> <dd class="inline text-ink-soft">{{ $rec['impact_label'] ?? 'brak danych' }}</dd></div>
                   <div><dt class="inline">Pierwsze wykrycie:</dt> <dd class="pp-num inline text-ink-soft">{{ Format::datetime($rec['first_seen_at']) }}</dd></div>
                   <div><dt class="inline">Ostatnia analiza:</dt> <dd class="pp-num inline text-ink-soft">{{ Format::datetime($rec['last_seen_at']) }}</dd></div>
@@ -180,7 +180,7 @@
                     <form method="post" action="{{ AppUrl::project($project->id, 'recommendations/' . $rec['id'] . '/status') }}" class="space-y-2">
                       <x-pp.nonce />
                       <input type="hidden" name="back" value="{{ $back }}">
-                      <p class="text-[13px] font-semibold text-ink">Zmień status</p>
+                      <p class="text-meta font-semibold text-ink">Zmień status</p>
                       <div class="flex flex-wrap gap-2">
                         @foreach (RecommendationGenerator::STATUSES as $value => $label)
                           @if ($value !== $rec['status'])
@@ -188,12 +188,12 @@
                           @endif
                         @endforeach
                       </div>
-                      <p class="text-[12px] text-ink-mute">„Wykonana” to Twoje potwierdzenie, że zmianę wprowadzono. Status nie zmienia się automatycznie po wdrożeniu przez Change Center – skuteczność oceniasz Ty.</p>
+                      <p class="text-caption text-ink-mute">„Wykonana” to Twoje potwierdzenie, że zmianę wprowadzono. Status nie zmienia się automatycznie po wdrożeniu przez Change Center – skuteczność oceniasz Ty.</p>
                     </form>
                     <form method="post" action="{{ AppUrl::project($project->id, 'recommendations/' . $rec['id'] . '/note') }}" class="space-y-2">
                       <x-pp.nonce />
                       <input type="hidden" name="back" value="{{ $back }}">
-                      <label for="note-{{ $rec['id'] }}" class="text-[13px] font-semibold text-ink">Notatka</label>
+                      <label for="note-{{ $rec['id'] }}" class="text-meta font-semibold text-ink">Notatka</label>
                       <textarea id="note-{{ $rec['id'] }}" name="note" rows="2" maxlength="2000" class="pp-input">{{ $rec['note'] }}</textarea>
                       <div class="flex flex-wrap gap-2">
                         <x-pp.button variant="secondary" size="sm">Zapisz notatkę</x-pp.button>
@@ -210,8 +210,8 @@
 
                 @if ($open === (int) $rec['id'] && $events->isNotEmpty())
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Historia</h4>
-                    <ol class="mt-2 space-y-1.5 border-l border-line pl-4 text-[12.5px] text-ink-soft">
+                    <h4 class="text-meta font-semibold text-ink">Historia</h4>
+                    <ol class="mt-2 space-y-1.5 border-l border-line pl-4 text-caption text-ink-soft">
                       @foreach ($events as $event)
                         <li>
                           <span class="pp-num text-ink-mute">{{ Format::datetime($event['created_at']) }}</span> ·
@@ -223,7 +223,7 @@
                     </ol>
                   </div>
                 @elseif ($open !== (int) $rec['id'])
-                  <a href="{{ AppUrl::project($project->id, 'recommendations', array_filter(request()->query(), 'is_scalar') + ['open' => $rec['id']]) }}#rec-{{ $rec['id'] }}" class="text-[12.5px] text-mint underline">Pokaż historię zmian</a>
+                  <a href="{{ AppUrl::project($project->id, 'recommendations', array_filter(request()->query(), 'is_scalar') + ['open' => $rec['id']]) }}#rec-{{ $rec['id'] }}" class="text-caption text-mint underline">Pokaż historię zmian</a>
                 @endif
               </div>
             </li>
@@ -235,7 +235,7 @@
 
     @if ($canEdit)
       <section class="pp-card flex flex-wrap items-center justify-between gap-4 p-5">
-        <p class="max-w-2xl text-[13px] leading-5 text-ink-mute">Ponowna analiza aktualizuje istniejące rekomendacje (bez dublowania) i zachowuje statusy oraz notatki. Rekomendacje, których problem zniknął w analizie tego samego okresu, są oznaczane jako nieaktualne.</p>
+        <p class="max-w-2xl text-meta leading-5 text-ink-mute">Ponowna analiza aktualizuje istniejące rekomendacje (bez dublowania) i zachowuje statusy oraz notatki. Rekomendacje, których problem zniknął w analizie tego samego okresu, są oznaczane jako nieaktualne.</p>
         @include('app.partials.analysis.run-form', ['return' => 'recommendations', 'variant' => 'secondary', 'size' => 'sm', 'label' => 'Analizuj ' . $period->range->label()])
       </section>
     @endif

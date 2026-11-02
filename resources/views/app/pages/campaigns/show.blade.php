@@ -11,16 +11,20 @@
 @endphp
 
 @section('content')
-  <a href="{{ AppUrl::project($project->id, 'campaigns') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-mint hover:underline">
-    <x-pp.icon name="chevron-left" :size="16" />Wszystkie kampanie
-  </a>
+  @if (\App\PennyPincher\Support\Feature::enabled(\App\PennyPincher\Support\Feature::CAMPAIGNS))
+    <x-pp.campaign-tabs :project="$project" :campaign-id="(int) $campaign['id']" :campaign-name="$campaign['name']" active="results" />
+  @else
+    <a href="{{ AppUrl::project($project->id, 'campaigns') }}" class="inline-flex items-center gap-1 text-sm font-semibold text-mint hover:underline">
+      <x-pp.icon name="chevron-left" :size="16" />Wszystkie kampanie
+    </a>
+  @endif
 
   <section class="pp-card" aria-label="Szczegóły kampanii">
     <dl class="grid gap-x-6 gap-y-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-      <div><dt class="text-[13px] text-ink-mute">Stan</dt><dd class="mt-1"><x-pp.status-badge :status="$campaign['status'] ?? 'unknown'" :label="$campaign['status'] ? null : 'Brak danych'" />@if ($campaign['status_raw'])<span class="ml-2 text-sm text-ink-soft">{{ $campaign['status_raw'] }}</span>@endif</dd></div>
-      <div><dt class="text-[13px] text-ink-mute">Typ kampanii</dt><dd class="mt-1 font-medium">{{ $campaign['channel_type'] ?: Format::EMPTY }}</dd></div>
-      <div><dt class="text-[13px] text-ink-mute">Budżet</dt><dd class="pp-num mt-1 font-medium">{{ Format::money($campaign['budget_micros'] !== null ? (int) $campaign['budget_micros'] : null, $currency) }} {{ $campaign['budget_period'] }}</dd></div>
-      <div><dt class="text-[13px] text-ink-mute">Identyfikator Google Ads</dt><dd class="pp-num mt-1 font-medium">{{ $campaign['external_id'] ?: 'Brak w eksportach' }}</dd></div>
+      <div><dt class="text-meta text-ink-mute">Stan</dt><dd class="mt-1"><x-pp.status-badge :status="$campaign['status'] ?? 'unknown'" :label="$campaign['status'] ? null : 'Brak danych'" />@if ($campaign['status_raw'])<span class="ml-2 text-sm text-ink-soft">{{ $campaign['status_raw'] }}</span>@endif</dd></div>
+      <div><dt class="text-meta text-ink-mute">Typ kampanii</dt><dd class="mt-1 font-medium">{{ $campaign['channel_type'] ?: Format::EMPTY }}</dd></div>
+      <div><dt class="text-meta text-ink-mute">Budżet</dt><dd class="pp-num mt-1 font-medium">{{ Format::money($campaign['budget_micros'] !== null ? (int) $campaign['budget_micros'] : null, $currency) }} {{ $campaign['budget_period'] }}</dd></div>
+      <div><dt class="text-meta text-ink-mute">Identyfikator Google Ads</dt><dd class="pp-num mt-1 font-medium">{{ $campaign['external_id'] ?: 'Brak w eksportach' }}</dd></div>
     </dl>
   </section>
 
@@ -59,9 +63,9 @@
               <tr>
                 <td class="max-w-[220px]">
                   @if ($source['source'] === 'api')
-                    <a href="{{ AppUrl::project($project->id, 'google-ads') }}" class="block truncate font-medium hover:text-mint">Google Ads API</a><span class="text-[12px] text-ink-mute">Synchronizacja (źródło nadrzędne)</span>
+                    <a href="{{ AppUrl::project($project->id, 'google-ads') }}" class="block truncate font-medium hover:text-mint">Google Ads API</a><span class="text-caption text-ink-mute">Synchronizacja (źródło nadrzędne)</span>
                   @else
-                    <a href="{{ AppUrl::project($project->id, 'imports/' . $source['import_id']) }}" class="block truncate font-medium hover:text-mint">#{{ $source['import_id'] }} {{ $source['original_filename'] }}</a><span class="text-[12px] text-ink-mute">{{ $reportLabels[$source['report_type']] ?? '' }}</span>
+                    <a href="{{ AppUrl::project($project->id, 'imports/' . $source['import_id']) }}" class="block truncate font-medium hover:text-mint">#{{ $source['import_id'] }} {{ $source['original_filename'] }}</a><span class="text-caption text-ink-mute">{{ $reportLabels[$source['report_type']] ?? '' }}</span>
                   @endif
                 </td>
                 <td class="whitespace-nowrap">{{ $source['granularity'] === 'day' ? 'Dzienne (' . $source['rows_count'] . ' dni)' : 'Okres' }}</td>

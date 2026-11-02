@@ -2,9 +2,13 @@
 
 namespace App\PennyPincher\Http\Controllers;
 
+use App\PennyPincher\Domain\Access\Ability;
+use App\PennyPincher\Domain\Access\Policy;
+use App\PennyPincher\Domain\Analysis\AnalysisPeriod;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\DashboardService;
 use App\PennyPincher\Support\DateRangeRequest;
+use App\PennyPincher\Support\Feature;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -20,13 +24,27 @@ class DashboardController extends Controller
 		$this->access->rememberProject($project);
 		$range = $this->ranges->resolve($request, $project);
 
-		return $this->render('app.pages.dashboard', [
+		$data = [
 			'project' => $project,
 			'range' => $range,
 			'pageTitle' => 'Przegląd',
 			'section' => 'overview',
 			'health' => $this->dashboard->health($project),
 			'optimization' => $this->dashboard->optimization($project),
-		] + $this->dashboard->build($project, $range));
+		] + $this->dashboard->build($project, $range);
+
+		if (! Feature::enabled(Feature::DASHBOARD)) {
+			return $this->render('app.pages.dashboard', $data);
+		}
+
+		// Centrum dowodzenia (flaga pp2_dashboard): te same KPI co w Przeglądzie + priorytety, zdarzenia i onboarding.
+		// Analiza uruchamiana stąd obejmuje dokładnie zakres dat dashboardu.
+		return $this->render('app.pages.command-center', [
+			'pageTitle' => 'Centrum dowodzenia',
+			'activity' => $this->dashboard->activity($project),
+			'newAlerts' => $this->dashboard->newAlerts($project),
+			'canRun' => Policy::allows($project->role, Ability::ImportData),
+			'analysisPeriod' => AnalysisPeriod::custom($range->fromString(), $range->toString(), $project->timezone()),
+		] + $data);
 	}
 }

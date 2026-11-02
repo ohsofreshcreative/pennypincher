@@ -11,6 +11,10 @@
 @endphp
 
 @section('content')
+  @if ($filters['campaign_id'] && \App\PennyPincher\Support\Feature::enabled(\App\PennyPincher\Support\Feature::CAMPAIGNS))
+    <x-pp.campaign-tabs :project="$project" :campaign-id="$filters['campaign_id']" :campaign-name="$campaignOptions[$filters['campaign_id']]" active="search-terms" />
+  @endif
+
   @include('app.partials.coverage', ['resolved' => $resolved, 'reportLabel' => 'raportu wyszukiwanych haseł'])
 
   <section class="pp-card min-w-0" aria-label="Wyszukiwane hasła">
@@ -72,7 +76,7 @@
               <tr>
                 <td class="pp-col-sticky max-w-[320px]">
                   <span class="block truncate font-medium" title="{{ $row['term'] }}">{{ $row['term'] }}</span>
-                  @if ($row['keyword_text'])<span class="block truncate text-[12px] text-ink-mute">Słowo kluczowe: {{ $row['keyword_text'] }}</span>@endif
+                  @if ($row['keyword_text'])<span class="block truncate text-caption text-ink-mute">Słowo kluczowe: {{ $row['keyword_text'] }}</span>@endif
                 </td>
                 <td class="max-w-[220px]"><a href="{{ AppUrl::project($project->id, 'campaigns/' . $row['campaign_id']) }}" class="block truncate text-ink-soft hover:text-mint">{{ $row['campaign_name'] }}</a></td>
                 <td class="max-w-[180px] truncate text-ink-soft">{{ $row['ad_group_name'] ?: Format::EMPTY }}</td>

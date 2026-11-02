@@ -11,6 +11,7 @@ use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\Changes\ChangeProposalService;
 use App\PennyPincher\Services\Changes\ConversionManagementService;
+use App\PennyPincher\Services\Conversions\ConversionCenterService;
 use App\PennyPincher\Services\GoogleAds\WriteGuard;
 use App\PennyPincher\Support\AppUrl;
 use Closure;
@@ -57,10 +58,10 @@ class ConversionManagementController extends Controller
 		try {
 			$this->service->readFromGoogle($project);
 		} catch (ValidationFailed $e) {
-			return $this->redirect(AppUrl::project($project->id, 'conversion-management'), (string) array_values($e->errors)[0], 'error');
+			return $this->redirect(ConversionCenterService::back($project->id, 'conversion-management'), (string) array_values($e->errors)[0], 'error');
 		}
 
-		return $this->redirect(AppUrl::project($project->id, 'conversion-management'), 'Odczytano konfigurację konwersji i celów z Google Ads (tylko odczyt).');
+		return $this->redirect(ConversionCenterService::back($project->id, 'conversion-management'), 'Odczytano konfigurację konwersji i celów z Google Ads (tylko odczyt).');
 	}
 
 	public function create(int $project, Request $request)
@@ -129,9 +130,9 @@ class ConversionManagementController extends Controller
 		try {
 			$id = $this->proposals->atomically($projectModel, $this->access->userId(), fn () => $action($projectModel, $this->access->userId()));
 		} catch (ValidationFailed $e) {
-			return $this->redirect(AppUrl::project($projectModel->id, 'conversion-management'), (string) (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
+			return $this->redirect(ConversionCenterService::back($projectModel->id, 'conversion-management'), (string) (array_values($e->errors)[0] ?? $e->getMessage()), 'error');
 		} catch (GoogleAdsApiException $e) {
-			return $this->redirect(AppUrl::project($projectModel->id, 'conversion-management'), 'Nie udało się odczytać danych z Google Ads: ' . $e->userMessage(), 'error');
+			return $this->redirect(ConversionCenterService::back($projectModel->id, 'conversion-management'), 'Nie udało się odczytać danych z Google Ads: ' . $e->userMessage(), 'error');
 		}
 
 		return $this->redirect(AppUrl::project($projectModel->id, 'changes/' . $id), 'Przygotowano szkic zmiany konwersji. Zmiany celów wpływają na automatyczne strategie stawek – w Change Center potwierdź je osobno.');

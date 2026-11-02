@@ -18,7 +18,8 @@
     @endif
   </x-pp.alert>
 @else
-  <p class="text-[13px] text-ink-mute">
+  <p class="text-meta text-ink-mute">
+    <x-pp.source-badge :source="$source" :demo="isset($project) && $project->isDemo" class="mr-1" />
     Dane z {{ $reportLabel }}:
     @if ($source === 'api')
       wartości dzienne z Google Ads API.

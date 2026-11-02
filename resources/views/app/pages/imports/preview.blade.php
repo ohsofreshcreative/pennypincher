@@ -93,7 +93,7 @@
       <section class="pp-card" aria-labelledby="pp-mapping">
         <div class="pp-card-header">
           <h2 id="pp-mapping" class="pp-card-title">Mapowanie kolumn</h2>
-          <p class="text-[13px] text-ink-mute">Kolumny bez przypisania są pomijane. Metryk pochodnych (CTR, CPC) nie importujemy – liczymy je sami.</p>
+          <p class="text-meta text-ink-mute">Kolumny bez przypisania są pomijane. Metryk pochodnych (CTR, CPC) nie importujemy – liczymy je sami.</p>
         </div>
         @if ($unmapped !== [])
           <p class="px-5 pt-4 text-sm text-ink-soft">Kolumny pliku, które nie zostaną zaimportowane: {{ implode(', ', $unmapped) }}.</p>
@@ -151,7 +151,7 @@
       <section class="pp-card min-w-0" aria-labelledby="pp-sample">
         <div class="pp-card-header">
           <h2 id="pp-sample" class="pp-card-title">Podgląd danych</h2>
-          <p class="text-[13px] text-ink-mute">Pierwsze {{ count($sample) }} wierszy pod nagłówkiem. Podświetlone kolumny są zmapowane.</p>
+          <p class="text-meta text-ink-mute">Pierwsze {{ count($sample) }} wierszy pod nagłówkiem. Podświetlone kolumny są zmapowane.</p>
         </div>
         <div class="pp-table-wrap">
           <table class="pp-table">

@@ -51,6 +51,7 @@ class OrganizationsController extends Controller
 			'errors' => $errors,
 			'old' => $request->isMethod('POST') ? $request->input() : [],
 			'pageTitle' => 'Członkowie: ' . $org['name'],
+			'section' => 'projects',
 		], $status);
 	}
 

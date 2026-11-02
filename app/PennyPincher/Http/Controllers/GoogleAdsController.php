@@ -15,6 +15,7 @@ use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\GoogleAds\ConnectionService;
 use App\PennyPincher\Services\GoogleAds\SyncService;
 use App\PennyPincher\Support\AppUrl;
+use App\PennyPincher\Support\Feature;
 use Illuminate\Http\Request;
 
 /**
@@ -90,7 +91,10 @@ class GoogleAdsController extends Controller
 	{
 		$project = $this->access->project($project, Ability::UpdateProject);
 		$connection = $this->connections->currentForProject($project->id);
-		$back = AppUrl::project($project->id, 'google-ads');
+		// Z przeglądu Zarządzania (pp2_management) wynik wraca na przegląd; w pozostałych przypadkach – jak dotąd.
+		$back = Feature::enabled(Feature::MANAGEMENT) && request()->input('return') === 'administration'
+			? AppUrl::project($project->id, 'administration')
+			: AppUrl::project($project->id, 'google-ads');
 
 		if ($connection === null) {
 			return $this->redirect($back, 'Najpierw połącz konto Google.', 'error');
@@ -253,7 +257,7 @@ class GoogleAdsController extends Controller
 		return ['title' => $title, 'message' => $e->userMessage(), 'kind' => $e->kind];
 	}
 
-	private static function diagnosticsKey(int $projectId): string
+	public static function diagnosticsKey(int $projectId): string
 	{
 		return 'pp_gads_diag_' . $projectId . '_' . get_current_user_id();
 	}

@@ -31,12 +31,12 @@
         @endif
       @endforeach
     </svg>
-    <div class="relative mx-0 h-4 text-[11px] text-ink-mute" aria-hidden="true">
+    <div class="relative mx-0 h-4 text-2xs text-ink-mute" aria-hidden="true">
       @foreach ($chart['ticks'] as $tick)
         @php $left = $tick['x'] / \App\PennyPincher\Support\LineChart::WIDTH * 100; @endphp
         <span class="pp-num absolute top-0 -translate-x-1/2 whitespace-nowrap" style="left: {{ max(6, min(94, $left)) }}%">{{ $tick['label'] }}</span>
       @endforeach
     </div>
-    <p class="px-5 pt-1 pb-3 text-[12px] text-ink-mute">Najwyżej: <span class="pp-num">{{ $chart['maxLabel'] }}</span></p>
+    <p class="px-5 pt-1 pb-3 text-caption text-ink-mute">Najwyżej: <span class="pp-num">{{ $chart['maxLabel'] }}</span></p>
   @endif
 </figure>

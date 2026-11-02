@@ -13,10 +13,13 @@ namespace App\PennyPincher\Domain\GoogleAds\Changes;
  *   włączenie istniejących można przygotować i zatwierdzić, ale wdrożenie jest blokowane,
  * - słowa kluczowe: aktywne słowo wolno dodać lub włączyć tylko w grupie albo kampanii, która jest wstrzymana
  *   (sprawdzane odczytem z Google Ads tuż przed wysłaniem),
- * - budżety: zmiana tylko wtedy, gdy żadna kampania korzystająca z budżetu nie jest aktywna (odczyt przed wysłaniem).
+ * - budżety: zmiana tylko wtedy, gdy żadna kampania korzystająca z budżetu nie jest aktywna (odczyt przed wysłaniem),
+ * - zmiany mogące zwiększyć wydatki (włączenie sieci reklamowej lub partnerów, zmiana strategii stawek, podniesienie
+ *   stawki CPC, usunięcie wykluczenia, usunięcie kierowania na lokalizację/język) – tylko w zasobach, które nie mogą
+ *   emitować (wstrzymana kampania albo grupa); stan rodziców odczytywany przed wysłaniem, nieznany = blokada.
  *
  * Brak skonfigurowanych płatności na koncie NIE jest traktowany jako zabezpieczenie. Wstrzymywanie, zmiany nazw,
- * słów, wykluczeń i ustawień wstrzymanych zasobów nie są blokowane.
+ * obniżanie stawek, dodawanie wykluczeń i ustawienia wstrzymanych zasobów nie są blokowane.
  */
 final class ServingGuard
 {
@@ -107,6 +110,46 @@ final class ServingGuard
 			'ad_group_criterion.update' => ($payload['status'] ?? null) === 'ENABLED',
 			default => false,
 		};
+	}
+
+	/**
+	 * Czy operacja może zwiększyć wydatki zasobu, który emituje reklamy. `$current` – aktualny stan zasobu z Google Ads
+	 * (null = nieznany, wtedy zakładamy najgorszy przypadek).
+	 */
+	public static function raisesSpend(array $op, ?array $current): bool
+	{
+		$payload = (array) ($op['payload'] ?? []);
+
+		return match ($op['type'] ?? '') {
+			'campaign.update' => (($payload['target_content_network'] ?? null) === true && ! ($current['target_content_network'] ?? false))
+				|| (($payload['target_search_network'] ?? null) === true && ! ($current['target_search_network'] ?? false)),
+			'campaign.bidding' => true,
+			'ad_group.update', 'ad_group_criterion.update' => array_key_exists('cpc_bid_micros', $payload) && $payload['cpc_bid_micros'] !== null
+				&& (($current['cpc_bid_micros'] ?? null) === null || (int) $payload['cpc_bid_micros'] > (int) $current['cpc_bid_micros']),
+			'campaign_criterion.remove' => $current === null || ! empty($current['negative']) || in_array($current['type'] ?? null, ['LOCATION', 'LANGUAGE'], true),
+			'ad_group_criterion.remove' => $current === null || ! empty($current['negative']),
+			default => false,
+		};
+	}
+
+	/**
+	 * Zmiana zwiększająca wydatki: dozwolona tylko, gdy kampania (a dla zmian w grupie – kampania albo grupa) jest
+	 * wstrzymana. Nieznany stan rodzica = blokada.
+	 *
+	 * @param array{status?: ?string}|null $campaign
+	 * @param array{status?: ?string}|null $adGroup wymagane dla operacji na poziomie grupy (null = nieznany)
+	 */
+	public static function spendViolation(array $op, ?array $campaign, ?array $adGroup, bool $groupLevel): ?string
+	{
+		if ($campaign === null || ($groupLevel && $adGroup === null)) {
+			return self::PREFIX . 'nie udało się potwierdzić, że kampania' . ($groupLevel ? ' lub grupa reklam' : '') . ' jest wstrzymana – zmiana „' . ($op['label'] ?? $op['type'] ?? '') . '” może zwiększyć wydatki.';
+		}
+
+		$serving = ($campaign['status'] ?? null) === 'ENABLED' && (! $groupLevel || ($adGroup['status'] ?? null) === 'ENABLED');
+
+		return $serving
+			? self::PREFIX . 'zmiana „' . ($op['label'] ?? $op['type'] ?? '') . '” może zwiększyć wydatki aktywnej kampanii – najpierw ją wstrzymaj albo świadomie zdejmij blokadę emisji.'
+			: null;
 	}
 
 	/** CampaignStatus / AdGroupStatus / AdGroupAdStatus: PAUSED = 3, REMOVED = 4 (REST przyjmuje nazwę albo liczbę). */

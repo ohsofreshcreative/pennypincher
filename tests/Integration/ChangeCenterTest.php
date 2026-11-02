@@ -433,6 +433,7 @@ class ChangeCenterTest extends ChangeCenterTestCase
 	public function testHighRiskRequiresExtraConfirmations(): void
 	{
 		$this->account('risk', true);
+		$this->pauseTestCampaign(); // blokada emisji: zmiana strategii stawek tylko przy wstrzymanej kampanii
 		$setId = $this->proposals()->campaignBidding($this->project, $this->owner, $this->campaignId(), 'MANUAL_CPC', null, null);
 		$this->center()->refreshState($this->project, $setId, $this->owner);
 		$this->center()->submit($this->project, $setId, $this->owner);

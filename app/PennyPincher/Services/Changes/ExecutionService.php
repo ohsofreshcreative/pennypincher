@@ -328,7 +328,9 @@ class ExecutionService
 		$operations = $this->sets->operations($setId);
 		$unknown = array_values(array_filter($operations, fn ($op) => in_array($op['status'], [ChangeStatus::OP_RECONCILE, ChangeStatus::OP_SENDING], true)));
 
-		if ($unknown === [] || ! in_array($set['status'], [ChangeStatus::RECONCILE, ChangeStatus::PARTIAL, ChangeStatus::FAILED], true)) {
+		// „Wymaga uzgodnienia” bez operacji o nieznanym wyniku (worker przerwany przed wysłaniem albo w weryfikacji):
+		// uzgodnienie przelicza status z zapisanych wyników i weryfikacji – inaczej zestaw nie miałby wyjścia.
+		if (! in_array($set['status'], [ChangeStatus::RECONCILE, ChangeStatus::PARTIAL, ChangeStatus::FAILED], true) || ($unknown === [] && $set['status'] !== ChangeStatus::RECONCILE)) {
 			throw new ValidationFailed(['reconcile' => 'Ten zestaw nie wymaga uzgodnienia.']);
 		}
 
@@ -467,6 +469,26 @@ class ExecutionService
 				$group = $read('ad_group', $groupName) ?: null;
 				$campaign = $group !== null ? ($read('campaign', (string) ($group['campaign'] ?? '')) ?: null) : null;
 				$reason = ServingGuard::keywordViolation($op, $group, $campaign);
+			}
+
+			// Zmiany mogące zwiększyć wydatki (sieci, strategia, stawki, wykluczenia, lokalizacje) – tylko w zasobach bez emisji.
+			if ($reason === null && in_array($op['type'], ['campaign.update', 'campaign.bidding', 'ad_group.update', 'ad_group_criterion.update', 'campaign_criterion.remove', 'ad_group_criterion.remove'], true)) {
+				$current = $read(OperationCatalog::resource($op['type']), (string) $op['resource_name']) ?: null;
+
+				if (ServingGuard::raisesSpend($op, $current)) {
+					$resource = OperationCatalog::resource($op['type']);
+					$group = match ($resource) {
+						'ad_group' => $current,
+						'ad_group_criterion' => $current !== null ? ($read('ad_group', (string) ($current['ad_group'] ?? '')) ?: null) : null,
+						default => null,
+					};
+					$campaign = match ($resource) {
+						'campaign' => $current,
+						'campaign_criterion' => $current !== null ? ($read('campaign', (string) ($current['campaign'] ?? '')) ?: null) : null,
+						default => $group !== null ? ($read('campaign', (string) ($group['campaign'] ?? '')) ?: null) : null,
+					};
+					$reason = ServingGuard::spendViolation($op, $campaign, $group, in_array($resource, ['ad_group', 'ad_group_criterion'], true));
+				}
 			}
 
 			if ($reason !== null) {

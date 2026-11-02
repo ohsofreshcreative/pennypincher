@@ -19,10 +19,10 @@
     <span @class(['pp-num font-semibold text-ink', 'text-[28px]' => $size === 'lg', 'text-[20px]' => $size !== 'lg'])>{{ $score ?? '—' }}</span>
   </div>
   <div class="min-w-0">
-    <p class="text-[13px] font-medium text-ink-mute">Audit Score</p>
+    <p class="text-meta font-medium text-ink-mute">Audit Score</p>
     <p class="font-semibold text-ink">{{ AuditScore::label($score) }}</p>
     @if ($score === null && ! empty($run['score_breakdown']['reason']))
-      <p class="mt-1 text-[13px] leading-5 text-ink-soft">{{ $run['score_breakdown']['reason'] }}</p>
+      <p class="mt-1 text-meta leading-5 text-ink-soft">{{ $run['score_breakdown']['reason'] }}</p>
     @endif
   </div>
 </div>

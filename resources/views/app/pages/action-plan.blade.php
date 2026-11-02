@@ -19,7 +19,7 @@
 @endphp
 
 @section('content')
-  <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+  <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="max-w-3xl">
         <h2 class="pp-card-title">Plan działań</h2>
@@ -82,19 +82,19 @@
             @endphp
             <li id="action-{{ $item['id'] }}" class="scroll-mt-24" x-data="{ open: {{ $open === (int) $item['id'] ? 'true' : 'false' }} }">
               <button type="button" class="flex w-full items-start gap-3 px-5 py-4 text-left hover:bg-ink/[0.02]" x-on:click="open = !open" x-bind:aria-expanded="open">
-                <span class="pp-num grid size-7 shrink-0 place-items-center rounded-full bg-ink/5 text-[13px] font-semibold text-ink">{{ $index + 1 }}</span>
+                <span class="pp-num grid size-7 shrink-0 place-items-center rounded-full bg-ink/5 text-meta font-semibold text-ink">{{ $index + 1 }}</span>
                 <span class="min-w-0 flex-1">
                   <span class="flex flex-wrap items-center gap-2">
                     <x-pp.status-badge :status="$item['priority']" :label="'Priorytet: ' . ['high' => 'wysoki', 'medium' => 'średni', 'low' => 'niski'][$item['priority']]" />
                     <x-pp.status-badge :status="$statusTones[$item['status']] ?? 'info'" :label="ActionItemRepository::STATUSES[$item['status']]" />
                     @if ($item['is_obsolete'])<x-pp.status-badge status="obsolete" label="Nieaktualne" />@endif
-                    <span class="text-[12px] text-ink-mute">{{ ActionPlanBuilder::CATEGORIES[$item['category']] ?? $item['category'] }} · pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$item['confidence']] ?? $item['confidence']) }} · nakład: {{ mb_strtolower(explode(' ', ActionPlanBuilder::EFFORT_LABELS[$item['effort']] ?? $item['effort'])[0]) }}</span>
+                    <span class="text-caption text-ink-mute">{{ ActionPlanBuilder::CATEGORIES[$item['category']] ?? $item['category'] }} · pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$item['confidence']] ?? $item['confidence']) }} · nakład: {{ mb_strtolower(explode(' ', ActionPlanBuilder::EFFORT_LABELS[$item['effort']] ?? $item['effort'])[0]) }}</span>
                   </span>
                   <span class="mt-1.5 block font-semibold text-ink">{{ $item['title'] }}</span>
                   @if ($openDeps)
-                    <span class="mt-0.5 block text-[12.5px] text-warn">Najpierw: {{ implode(', ', array_map(fn ($d) => $d['title'], $openDeps)) }}</span>
+                    <span class="mt-0.5 block text-caption text-warn">Najpierw: {{ implode(', ', array_map(fn ($d) => $d['title'], $openDeps)) }}</span>
                   @elseif (! empty($blocks[$item['fingerprint']]))
-                    <span class="mt-0.5 block text-[12.5px] text-mint-dark">Odblokowuje {{ count($blocks[$item['fingerprint']]) }} {{ Format::plural(count($blocks[$item['fingerprint']]), 'działanie', 'działania', 'działań') }}</span>
+                    <span class="mt-0.5 block text-caption text-mint-dark">Odblokowuje {{ count($blocks[$item['fingerprint']]) }} {{ Format::plural(count($blocks[$item['fingerprint']]), 'działanie', 'działania', 'działań') }}</span>
                   @endif
                 </span>
                 <x-pp.icon name="chevron-down" class="mt-0.5 text-ink-mute transition-transform" x-bind:class="open && 'rotate-180'" />
@@ -104,9 +104,9 @@
                 <p class="text-ink-soft">{{ $item['description'] }}</p>
                 @include('app.partials.changes.source-change', ['sourceId' => $item['id'], 'action' => AppUrl::project($project->id, 'action-plan/' . $item['id'] . '/prepare-change'), 'blocker' => array_key_exists((int) $item['id'], $blockers) ? $blockers[(int) $item['id']] : \App\PennyPincher\Services\Changes\ChangeLinkService::OUTSIDE_API])
                 @if ($item['details']['action'] ?? null)
-                  <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5"><h4 class="text-[13px] font-semibold text-mint-dark">Co zrobić</h4><p class="mt-0.5 text-ink">{{ $item['details']['action'] }}</p></div>
+                  <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5"><h4 class="text-meta font-semibold text-mint-dark">Co zrobić</h4><p class="mt-0.5 text-ink">{{ $item['details']['action'] }}</p></div>
                 @endif
-                <dl class="grid gap-x-6 gap-y-1 text-[13px] sm:grid-cols-2">
+                <dl class="grid gap-x-6 gap-y-1 text-meta sm:grid-cols-2">
                   <div><dt class="inline text-ink-mute">Sugerowany efekt:</dt> <dd class="inline text-ink">{{ $item['expected_effect'] }}</dd></div>
                   <div><dt class="inline text-ink-mute">Nakład pracy:</dt> <dd class="inline text-ink">{{ ActionPlanBuilder::EFFORT_LABELS[$item['effort']] ?? $item['effort'] }}</dd></div>
                   <div><dt class="inline text-ink-mute">Źródło:</dt> <dd class="inline text-ink">{{ implode(', ', array_map(fn ($s) => RecommendationGenerator::SOURCES[$s] ?? $s, $item['sources'])) ?: '—' }}</dd></div>
@@ -114,18 +114,18 @@
                   @if ($deps)<div class="sm:col-span-2"><dt class="inline text-ink-mute">Zależy od:</dt> <dd class="inline text-ink">{{ implode(', ', array_map(fn ($d) => $d['title'] . ' (' . mb_strtolower(ActionItemRepository::STATUSES[$d['status']]) . ')', $deps)) }}</dd></div>@endif
                 </dl>
                 @if ($item['rationale'])
-                  <div><h4 class="text-[13px] font-semibold text-ink">Uzasadnienie</h4><p class="mt-0.5 whitespace-pre-line text-ink-soft">{{ $item['rationale'] }}</p></div>
+                  <div><h4 class="text-meta font-semibold text-ink">Uzasadnienie</h4><p class="mt-0.5 whitespace-pre-line text-ink-soft">{{ $item['rationale'] }}</p></div>
                 @endif
                 @if ($item['details']['items'] ?? [])
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Powiązane rekomendacje</h4>
+                    <h4 class="text-meta font-semibold text-ink">Powiązane rekomendacje</h4>
                     <ul class="mt-1 space-y-2">
                       @foreach ($item['details']['items'] as $rec)
                         <li class="rounded-[var(--radius-control)] border border-line px-3 py-2">
                           <a href="{{ AppUrl::project($project->id, 'recommendations', ['open' => $rec['id'], 'obsolete' => 'all']) }}#rec-{{ $rec['id'] }}" class="font-medium text-ink hover:text-mint">{{ $rec['title'] }}</a>
-                          <span class="text-[12px] text-ink-mute">· {{ RecommendationGenerator::STATUSES[$rec['status']] ?? $rec['status'] }}</span>
+                          <span class="text-caption text-ink-mute">· {{ RecommendationGenerator::STATUSES[$rec['status']] ?? $rec['status'] }}</span>
                           @if ($rec['evidence'])
-                            <ul class="mt-1 text-[12.5px] text-ink-soft">@foreach ($rec['evidence'] as $pair)@if (is_array($pair) && count($pair) >= 2)<li>{{ $pair[0] }} – {{ $pair[1] }}</li>@endif @endforeach</ul>
+                            <ul class="mt-1 text-caption text-ink-soft">@foreach ($rec['evidence'] as $pair)@if (is_array($pair) && count($pair) >= 2)<li>{{ $pair[0] }} – {{ $pair[1] }}</li>@endif @endforeach</ul>
                           @endif
                         </li>
                       @endforeach
@@ -138,7 +138,7 @@
                   <div class="grid gap-4 border-t border-line pt-4 lg:grid-cols-2">
                     <form method="post" action="{{ AppUrl::project($project->id, 'action-plan/' . $item['id'] . '/status') }}" class="space-y-2">
                       <x-pp.nonce /><input type="hidden" name="back" value="{{ $back }}">
-                      <p class="text-[13px] font-semibold text-ink">Zmień status</p>
+                      <p class="text-meta font-semibold text-ink">Zmień status</p>
                       <div class="flex flex-wrap gap-2">
                         @foreach (ActionItemRepository::STATUSES as $value => $label)
                           @if ($value !== $item['status'])
@@ -147,12 +147,12 @@
                         @endforeach
                       </div>
                       @if ($item['recommendation_ids'])
-                        <label class="flex items-start gap-2 text-[12.5px] text-ink-soft"><input type="checkbox" name="also_recommendations" value="1" class="mt-1 accent-mint"> Przy „Wykonane” / „Odrzucone” zmień też status {{ count($item['recommendation_ids']) }} {{ Format::plural(count($item['recommendation_ids']), 'powiązanej rekomendacji', 'powiązanych rekomendacji', 'powiązanych rekomendacji') }}</label>
+                        <label class="flex items-start gap-2 text-caption text-ink-soft"><input type="checkbox" name="also_recommendations" value="1" class="mt-1 accent-mint"> Przy „Wykonane” / „Odrzucone” zmień też status {{ count($item['recommendation_ids']) }} {{ Format::plural(count($item['recommendation_ids']), 'powiązanej rekomendacji', 'powiązanych rekomendacji', 'powiązanych rekomendacji') }}</label>
                       @endif
                     </form>
                     <form method="post" action="{{ AppUrl::project($project->id, 'action-plan/' . $item['id'] . '/note') }}" class="space-y-2">
                       <x-pp.nonce /><input type="hidden" name="back" value="{{ $back }}">
-                      <label for="note-{{ $item['id'] }}" class="text-[13px] font-semibold text-ink">Notatka</label>
+                      <label for="note-{{ $item['id'] }}" class="text-meta font-semibold text-ink">Notatka</label>
                       <textarea id="note-{{ $item['id'] }}" name="note" rows="2" maxlength="2000" class="pp-input">{{ $item['note'] }}</textarea>
                       <x-pp.button variant="secondary" size="sm">Zapisz notatkę</x-pp.button>
                     </form>
@@ -161,15 +161,15 @@
 
                 @if ($open === (int) $item['id'] && $events)
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Historia</h4>
-                    <ol class="mt-2 space-y-1 border-l border-line pl-4 text-[12.5px] text-ink-soft">
+                    <h4 class="text-meta font-semibold text-ink">Historia</h4>
+                    <ol class="mt-2 space-y-1 border-l border-line pl-4 text-caption text-ink-soft">
                       @foreach ($events as $event)
                         <li><span class="pp-num text-ink-mute">{{ Format::datetime($event['created_at']) }}</span> · {{ $eventLabels[$event['event']] ?? $event['event'] }}@if ($event['from_status'] || $event['to_status']): {{ ActionItemRepository::STATUSES[$event['from_status']] ?? '—' }} → {{ ActionItemRepository::STATUSES[$event['to_status']] ?? '—' }}@endif @if ($event['user_name'])· {{ $event['user_name'] }}@endif @if ($event['note'])– {{ $event['note'] }}@endif</li>
                       @endforeach
                     </ol>
                   </div>
                 @elseif ($open !== (int) $item['id'])
-                  <a href="{{ AppUrl::project($project->id, 'action-plan', array_filter(request()->query(), 'is_scalar') + ['open' => $item['id']]) }}#action-{{ $item['id'] }}" class="text-[12.5px] text-mint underline">Pokaż historię</a>
+                  <a href="{{ AppUrl::project($project->id, 'action-plan', array_filter(request()->query(), 'is_scalar') + ['open' => $item['id']]) }}#action-{{ $item['id'] }}" class="text-caption text-mint underline">Pokaż historię</a>
                 @endif
               </div>
             </li>

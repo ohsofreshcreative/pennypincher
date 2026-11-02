@@ -143,6 +143,9 @@ scripts/rollback.sh 20261012-101500 --database   # dodatkowo baza – NADPISUJE 
 Migracje są addytywne, więc zwykle wystarczy przywrócić pliki: starszy kod ignoruje nowe tabele i kolumny.
 Przywrócenie bazy tylko przy uszkodzeniu danych – przed nim skrypt robi kopię bieżącej bazy.
 
+Interfejs 2.0 (flagi `PP2_*` w `wp-config.php`): kolejność włączania, kontrola po każdym kroku i wycofanie flagi bez
+wdrożenia – `docs/WYDANIE_2_0.md`.
+
 ## Bezpieczeństwo produkcji – lista kontrolna
 
 | Wymaganie | Jak spełnione |

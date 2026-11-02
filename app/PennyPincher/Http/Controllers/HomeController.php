@@ -3,6 +3,7 @@
 namespace App\PennyPincher\Http\Controllers;
 
 use App\PennyPincher\Support\AppUrl;
+use App\PennyPincher\Support\Navigation;
 use Illuminate\Http\Request;
 
 class HomeController extends Controller
@@ -15,7 +16,7 @@ class HomeController extends Controller
 	}
 
 	/**
-	 * Skróty /app/campaigns/, /app/search-terms/ itd. prowadzą do bieżącego projektu.
+	 * Skróty /app/campaigns/, /app/search-terms/ itd. (także aliasy sekcji głównych) prowadzą do bieżącego projektu.
 	 */
 	public function shortcut(Request $request, string $section)
 	{
@@ -25,16 +26,25 @@ class HomeController extends Controller
 			return $this->redirect(AppUrl::to('projects'), 'Najpierw utwórz projekt albo wybierz istniejący.', 'info');
 		}
 
-		return redirect()->to(AppUrl::project($project->id, $section, $request->query()));
+		return redirect()->to(AppUrl::project($project->id, Navigation::resolve($section), $request->query()));
+	}
+
+	/**
+	 * Adres sekcji głównej (np. /app/projects/1/optimization/) – pierwszy podwidok z zachowaniem parametrów.
+	 */
+	public function group(int $project, string $group, Request $request)
+	{
+		$project = $this->access->project($project);
+
+		return redirect()->to(AppUrl::project($project->id, Navigation::resolve($group), $request->query()));
 	}
 
 	public function switchProject(Request $request)
 	{
 		$project = $this->access->project((int) $request->query('project'));
 		$section = (string) $request->query('section', '');
-		$allowed = ['', 'campaigns', 'search-terms', 'imports', 'settings', 'google-ads', 'audits', 'budget-leaks', 'recommendations', 'keywords', 'conversions', 'planner', 'action-plan', 'monitoring', 'changes', 'management', 'conversion-management'];
 
-		return redirect()->to(AppUrl::project($project->id, in_array($section, $allowed, true) ? $section : ''));
+		return redirect()->to(AppUrl::project($project->id, in_array($section, Navigation::SECTIONS, true) ? $section : ''));
 	}
 
 	public function notFound()

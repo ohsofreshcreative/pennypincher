@@ -3,12 +3,15 @@
 namespace App\PennyPincher\Services;
 
 use App\PennyPincher\Domain\Audit\Rules\MonthlyPacingForecast;
+use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\Metrics\BudgetCalculator;
 use App\PennyPincher\Domain\Metrics\DateRange;
 use App\PennyPincher\Domain\Metrics\MetricCalculator;
 use App\PennyPincher\Domain\Projects\Project;
+use App\PennyPincher\Repositories\AlertRepository;
 use App\PennyPincher\Repositories\AnalysisRepository;
 use App\PennyPincher\Repositories\AuditRepository;
+use App\PennyPincher\Repositories\ChangeSetRepository;
 use App\PennyPincher\Repositories\GoogleAdsConnectionRepository;
 use App\PennyPincher\Repositories\ImportRepository;
 use App\PennyPincher\Repositories\MetricsRepository;
@@ -33,7 +36,75 @@ class DashboardService
 		private AuditContextBuilder $auditContext,
 		private AnalysisRepository $analyses,
 		private RecommendationRepository $recommendations,
+		private AlertRepository $alerts,
+		private ChangeSetRepository $changeSets,
 	) {
+	}
+
+	/**
+	 * Nowe (niepotwierdzone) alerty monitoringu – najważniejsze najpierw.
+	 *
+	 * @return array<int, array<string, mixed>>
+	 */
+	public function newAlerts(Project $project, int $limit = 3): array
+	{
+		return $this->alerts->paginate($project->id, ['status' => 'new'], 1, $limit)->items;
+	}
+
+	/**
+	 * Historia ostatnich zdarzeń projektu (importy, synchronizacje, audyty, analizy, zestawy zmian, alerty) – tylko odczyt
+	 * istniejących rekordów, najnowsze najpierw.
+	 *
+	 * @return array<int, array{at: string, kind: string, title: string, status: ?string, status_label: ?string, path: string, query: array, anchor: ?string}>
+	 */
+	public function activity(Project $project, int $limit = 8): array
+	{
+		$events = [];
+		$event = fn (?string $at, string $kind, string $title, ?string $status, string $path, array $query = [], ?string $anchor = null, ?string $statusLabel = null) => $at ? compact('at', 'kind', 'title', 'status', 'path', 'query', 'anchor') + ['status_label' => $statusLabel] : null;
+
+		foreach ($this->imports->latest($project->id, $limit) as $import) {
+			$events[] = $event($import['completed_at'] ?? $import['created_at'], 'Import', (string) $import['original_filename'], $import['status'], 'imports/' . $import['id']);
+		}
+
+		foreach ($this->runs->recentForProject($project->id, $limit) as $run) {
+			$events[] = $event($run['finished_at'] ?? $run['created_at'], 'Synchronizacja Google Ads', $run['type'] === 'backfill' ? 'Pobranie historii konta' : 'Aktualizacja danych z konta', $run['status'], 'google-ads');
+		}
+
+		foreach ($this->audits->runs($project->id, $limit) as $run) {
+			$events[] = $event($run['created_at'], 'Audyt', 'Audyt konta' . ($run['score'] !== null ? ' – wynik ' . (int) $run['score'] . '/100' : ''), $run['status'], 'audits/' . $run['id']);
+		}
+
+		foreach ([BudgetLeakService::TYPE => ['Analiza wycieków budżetu', 'budget-leaks'], KeywordOpportunityService::TYPE => ['Analiza słów kluczowych', 'keywords']] as $type => [$title, $path]) {
+			foreach ($this->analyses->runs($project->id, $type, $limit) as $run) {
+				$query = ['period' => $run['range_preset'] === 'custom' || ! $run['range_preset'] ? 'custom' : $run['range_preset']] + ($run['range_preset'] === 'custom' || ! $run['range_preset'] ? ['from' => $run['date_from'], 'to' => $run['date_to']] : []);
+				$events[] = $event($run['created_at'], 'Analiza', $title, $run['status'], $path, $query);
+			}
+		}
+
+		foreach ($this->changeSets->paginate($project->id, [], 1, $limit)->items as $set) {
+			$events[] = $event($set['updated_at'], 'Zmiany na koncie', (string) $set['title'], $set['status'], 'changes/' . $set['id'], [], null, ChangeStatus::LABELS[$set['status']] ?? null);
+		}
+
+		foreach ($this->alerts->paginate($project->id, [], 1, $limit)->items as $alert) {
+			$events[] = $event($alert['last_detected_at'], 'Alert', (string) $alert['title'], $alert['severity'], 'monitoring', ['open' => $alert['id']], 'alert-' . $alert['id']);
+		}
+
+		return self::latestEvents($events, $limit);
+	}
+
+	/**
+	 * Łączy zdarzenia z różnych źródeł: najnowsze najpierw (przy remisie zachowuje kolejność źródeł), bez pustych.
+	 *
+	 * @param array<int, ?array{at: string}> $events
+	 * @return array<int, array{at: string}>
+	 */
+	public static function latestEvents(array $events, int $limit): array
+	{
+		$events = array_values(array_filter($events));
+		$order = array_keys($events);
+		array_multisort(array_column($events, 'at'), SORT_DESC, SORT_STRING, $order, SORT_ASC, $events);
+
+		return array_slice($events, 0, $limit);
 	}
 
 	/**

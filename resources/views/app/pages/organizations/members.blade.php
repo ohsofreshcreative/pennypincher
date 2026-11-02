@@ -21,7 +21,7 @@
     <section class="pp-card min-w-0" aria-labelledby="pp-members">
       <div class="pp-card-header">
         <h2 id="pp-members" class="pp-card-title">Członkowie organizacji</h2>
-        <p class="text-[13px] text-ink-mute">Twoja rola: {{ $role->label() }}</p>
+        <p class="text-meta text-ink-mute">Twoja rola: {{ $role->label() }}</p>
       </div>
       <div class="pp-table-wrap">
         <table class="pp-table">
@@ -32,7 +32,7 @@
               <tr>
                 <td class="max-w-[260px]">
                   <span class="block truncate font-medium">{{ $member['display_name'] ?: $member['user_login'] ?: 'Usunięte konto #' . $member['user_id'] }}</span>
-                  <span class="block truncate text-[12.5px] text-ink-mute">{{ $member['user_email'] }}</span>
+                  <span class="block truncate text-caption text-ink-mute">{{ $member['user_email'] }}</span>
                 </td>
                 <td><span class="pp-badge pp-badge-neutral">{{ $memberRole?->label() }}</span></td>
                 <td class="pp-num whitespace-nowrap text-ink-soft">{{ Format::datetime($member['created_at']) }}</td>
@@ -63,7 +63,7 @@
           <x-pp.field name="identifier" label="E-mail lub login" :value="$old['identifier'] ?? ''" :errors="$errors" required
             help="Konto musi istnieć w WordPressie. Podanie osoby, która już jest członkiem, zmieni jej rolę." />
           <x-pp.field name="role" label="Rola" :options="$roles" :value="$old['role'] ?? 'member'" :errors="$errors" required />
-          <dl class="space-y-1.5 text-[13px] text-ink-soft">
+          <dl class="space-y-1.5 text-meta text-ink-soft">
             <div><dt class="inline font-semibold text-ink">Członek</dt> <dd class="inline">przegląda dane i importuje raporty.</dd></div>
             <div><dt class="inline font-semibold text-ink">Administrator</dt> <dd class="inline">dodatkowo tworzy projekty, zmienia ustawienia i zarządza członkami.</dd></div>
             <div><dt class="inline font-semibold text-ink">Właściciel</dt> <dd class="inline">pełny dostęp, w tym nadawanie roli właściciela.</dd></div>

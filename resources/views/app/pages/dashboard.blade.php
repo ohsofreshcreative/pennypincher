@@ -37,34 +37,7 @@
           <h2 id="pp-spend-heading" class="text-sm font-medium text-ink-soft">Wydatki w wybranym zakresie</h2>
           <p class="pp-display pp-num mt-2 text-[34px] leading-[1.1] text-copper sm:text-[40px]">{{ Format::money($kpis['spend'], $currency) }}</p>
 
-          @if ($kpis['budget_for_range'] !== null)
-            <div class="mt-5">
-              <div class="flex items-baseline justify-between gap-3 text-sm">
-                <span class="text-ink-soft">{{ $kpis['budget_partial'] ? 'Budżet dla dni z danymi' : 'Budżet na ten zakres' }}</span>
-                <span class="pp-num font-semibold text-ink">{{ Format::money($kpis['budget_compared'], $currency) }}</span>
-              </div>
-              <div class="pp-meter mt-2" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $used !== null ? round(min($used, 100)) : 0 }}" aria-label="Wykorzystanie budżetu">
-                <div @class(['pp-meter-fill', 'pp-meter-over' => $used !== null && $used > 100]) style="width: {{ $used !== null ? min(100, round($used, 1)) : 0 }}%"></div>
-              </div>
-              <p class="mt-2 text-sm text-ink-soft">
-                @if ($used === null)
-                  Brak danych o wydatkach w tym zakresie.
-                @elseif ($used > 100)
-                  <strong class="pp-num text-danger">{{ Format::percent($used, 1) }}</strong> budżetu – wydatki przekroczyły plan o {{ Format::money($kpis['spend'] - $kpis['budget_compared'], $currency) }}.
-                @else
-                  Wykorzystano <strong class="pp-num text-ink">{{ Format::percent($used, 1) }}</strong> budżetu.
-                @endif
-                @if ($kpis['budget_partial'] && $used !== null)
-                  <span class="block text-[13px] text-ink-mute">Budżet całego zakresu: {{ Format::money($kpis['budget_for_range'], $currency) }}.</span>
-                @endif
-              </p>
-            </div>
-          @else
-            <p class="mt-5 text-sm text-ink-soft">
-              Ustaw budżet miesięczny, żeby śledzić jego wykorzystanie.
-              <a href="{{ AppUrl::project($project->id, 'settings') }}" class="font-semibold text-mint underline-offset-2 hover:underline">Przejdź do ustawień</a>
-            </p>
-          @endif
+          @include('app.partials.dashboard-budget-range')
         </div>
 
         <dl class="grid grid-cols-2 divide-line sm:grid-cols-3 [&>div]:border-b [&>div]:border-line">
@@ -94,45 +67,7 @@
     @endif
 
     <div class="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-      {{-- Kampanie --}}
-      <section class="pp-card min-w-0" aria-labelledby="pp-campaigns-heading">
-        <div class="pp-card-header">
-          <h2 id="pp-campaigns-heading" class="pp-card-title">Skuteczność kampanii</h2>
-          <a href="{{ AppUrl::project($project->id, 'campaigns') }}" class="text-sm font-semibold text-mint underline-offset-2 hover:underline">Wszystkie kampanie</a>
-        </div>
-        @if ($campaigns->items === [])
-          <p class="px-5 py-6 text-sm text-ink-soft">Brak kampanii w danych tego projektu.</p>
-        @else
-          <div class="pp-table-wrap">
-            <table class="pp-table">
-              <thead>
-                <tr>
-                  <th class="pp-col-sticky">Kampania</th>
-                  <th class="pp-col-num">Wydatki</th>
-                  <th class="pp-col-num">Kliknięcia</th>
-                  <th class="pp-col-num">CTR</th>
-                  <th class="pp-col-num">Konwersje</th>
-                  <th class="pp-col-num">Koszt / konw.</th>
-                </tr>
-              </thead>
-              <tbody>
-                @foreach ($campaigns->items as $row)
-                  <tr>
-                    <td class="pp-col-sticky max-w-[260px]">
-                      <a href="{{ AppUrl::project($project->id, 'campaigns/' . $row['id']) }}" class="block truncate font-medium text-ink hover:text-mint">{{ $row['name'] }}</a>
-                    </td>
-                    <td class="pp-col-num font-semibold text-copper">{{ Format::money($row['cost_micros'], $currency) }}</td>
-                    <td class="pp-col-num">{{ Format::number($row['clicks']) }}</td>
-                    <td class="pp-col-num">{{ Format::percent(MetricCalculator::ctr($row['clicks'], $row['impressions'])) }}</td>
-                    <td class="pp-col-num">{{ Format::conversions($row['conversions']) }}</td>
-                    <td class="pp-col-num">{{ Format::money(MetricCalculator::costPerConversion($row['cost_micros'], $row['conversions']), $currency) }}</td>
-                  </tr>
-                @endforeach
-              </tbody>
-            </table>
-          </div>
-        @endif
-      </section>
+      @include('app.partials.dashboard-campaigns')
 
       {{-- Ostatnie importy --}}
       <section class="pp-card min-w-0" aria-labelledby="pp-imports-heading">
@@ -145,7 +80,7 @@
             <li class="flex items-start justify-between gap-3 px-5 py-3">
               <div class="min-w-0">
                 <a href="{{ AppUrl::project($project->id, 'imports/' . $import['id']) }}" class="block truncate text-sm font-medium text-ink hover:text-mint">{{ $import['original_filename'] }}</a>
-                <p class="pp-num text-[12.5px] text-ink-mute">{{ Format::period($import['date_from'], $import['date_to']) }}, {{ Format::datetime($import['created_at']) }}</p>
+                <p class="pp-num text-caption text-ink-mute">{{ Format::period($import['date_from'], $import['date_to']) }}, {{ Format::datetime($import['created_at']) }}</p>
               </div>
               <x-pp.status-badge :status="$import['status']" />
             </li>
@@ -156,106 +91,9 @@
       </section>
     </div>
 
-    {{-- Wyszukiwane hasła --}}
-    <section class="pp-card min-w-0" aria-labelledby="pp-terms-heading">
-      <div class="pp-card-header">
-        <div>
-          <h2 id="pp-terms-heading" class="pp-card-title">Wyszukiwane hasła z największymi wydatkami</h2>
-          <p class="mt-0.5 text-[13px] text-ink-mute">Osobne źródło: raport wyszukiwanych haseł. Jego koszty nie są dodawane do wydatków kampanii.</p>
-        </div>
-        <a href="{{ AppUrl::project($project->id, 'search-terms') }}" class="text-sm font-semibold text-mint underline-offset-2 hover:underline">Wszystkie hasła</a>
-      </div>
-      @if ($searchTerms->items === [])
-        <p class="px-5 py-6 text-sm text-ink-soft">
-          @if ($searchResolved->outsidePeriods !== [])
-            Raport wyszukiwanych haseł nie mieści się w całości w wybranym zakresie dat. Wybierz „Wszystkie dane” albo zakres raportu.
-          @else
-            Brak danych z raportu wyszukiwanych haseł w tym zakresie.
-          @endif
-        </p>
-      @else
-        <div class="pp-table-wrap">
-          <table class="pp-table">
-            <thead>
-              <tr>
-                <th class="pp-col-sticky">Hasło</th>
-                <th>Kampania</th>
-                <th class="pp-col-num">Wydatki</th>
-                <th class="pp-col-num">Kliknięcia</th>
-                <th class="pp-col-num">Konwersje</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach ($searchTerms->items as $row)
-                <tr>
-                  <td class="pp-col-sticky max-w-[280px] truncate font-medium">{{ $row['term'] }}</td>
-                  <td class="max-w-[220px] truncate text-ink-soft">{{ $row['campaign_name'] }}</td>
-                  <td class="pp-col-num font-semibold text-copper">{{ Format::money($row['cost_micros'], $currency) }}</td>
-                  <td class="pp-col-num">{{ Format::number($row['clicks']) }}</td>
-                  <td class="pp-col-num">{{ Format::conversions($row['conversions']) }}</td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
-    </section>
+    @include('app.partials.dashboard-search-terms')
 
     {{-- Działania powodujące konwersję --}}
-    <section class="pp-card min-w-0" aria-labelledby="pp-conversions-heading">
-      <div class="pp-card-header">
-        <div>
-          <h2 id="pp-conversions-heading" class="pp-card-title">Działania powodujące konwersję</h2>
-          <p class="mt-0.5 text-[13px] text-ink-mute">Źródło: raport konwersji. Konwersje po obejrzeniu pokazujemy osobno – nie są doliczane do konwersji.</p>
-        </div>
-      </div>
-      @if ($conversionActions === [])
-        <p class="px-5 py-6 text-sm text-ink-soft">
-          @if ($conversionResolved->outsidePeriods !== [])
-            Raport konwersji nie mieści się w całości w wybranym zakresie dat
-            (@foreach ($conversionResolved->outsidePeriods as [$from, $to])<span class="pp-num whitespace-nowrap">{{ Format::period($from, $to) }}</span>@if (! $loop->last), @endif @endforeach).
-            Wybierz „Wszystkie dane” albo zakres raportu.
-          @else
-            Brak danych z raportu konwersji w tym zakresie. Zaimportuj raport „Konwersje” z Google Ads, żeby sprawdzić, co jest liczone jako konwersja.
-          @endif
-        </p>
-      @else
-        <p class="px-5 pt-3 text-[13px] text-ink-mute">
-          @foreach ($conversionResolved->periods as [$from, $to])
-            Okres raportu: <span class="pp-num">{{ Format::period($from, $to) }}</span>.
-          @endforeach
-          @if ($conversionResolved->hasDaily()) Dane dzienne. @endif
-          Pokrycie zakresu: <span class="pp-num">{{ min($conversionResolved->coveredDays, $conversionResolved->totalDays) }} z {{ $conversionResolved->totalDays }}</span> dni.
-        </p>
-        <div class="pp-table-wrap">
-          <table class="pp-table">
-            <thead>
-              <tr>
-                <th class="pp-col-sticky">Działanie</th>
-                <th>Kategoria</th>
-                <th>W „Konwersjach”</th>
-                <th class="pp-col-num">Konwersje</th>
-                <th class="pp-col-num">Konw. po obejrzeniu</th>
-                <th class="pp-col-num">Wszystkie konw.</th>
-                <th class="pp-col-num">Wartość</th>
-              </tr>
-            </thead>
-            <tbody>
-              @foreach ($conversionActions as $action)
-                <tr>
-                  <td class="pp-col-sticky max-w-[300px] truncate font-medium" title="{{ $action['name'] }}">{{ $action['name'] }}</td>
-                  <td class="max-w-[200px] truncate text-ink-soft">{{ $action['category'] ?: Format::EMPTY }}</td>
-                  <td class="text-ink-soft">{{ $action['include_in_conversions'] === null ? Format::EMPTY : ((int) $action['include_in_conversions'] ? 'Tak' : 'Nie') }}</td>
-                  <td class="pp-col-num font-semibold">{{ Format::conversions($action['conversions']) }}</td>
-                  <td class="pp-col-num">{{ Format::conversions($action['view_through_conversions']) }}</td>
-                  <td class="pp-col-num">{{ Format::conversions($action['all_conversions']) }}</td>
-                  <td class="pp-col-num">{{ Format::money($action['conversions_value_micros'] !== null ? (int) $action['conversions_value_micros'] : null, $currency) }}</td>
-                </tr>
-              @endforeach
-            </tbody>
-          </table>
-        </div>
-      @endif
-    </section>
+    @include('app.partials.dashboard-conversions')
   @endif
 @endsection

@@ -65,8 +65,11 @@ final class ChangeStatus
 	/** Statusy, w których operacje można edytować. */
 	public const EDITABLE = [self::DRAFT, self::REVIEW];
 
-	/** Statusy, z których można anulować (przed wysłaniem do Google Ads). */
-	public const CANCELLABLE = [self::DRAFT, self::REVIEW, self::APPROVED, self::READY, self::FAILED];
+	/**
+	 * Statusy, z których można anulować (przed wysłaniem do Google Ads). Walidacja jest bez zapisu, więc zestaw
+	 * zawieszony w „Walidacji” (np. przerwane żądanie) też można anulować. Kolejkę (DEPLOYING) – patrz cancelQueued.
+	 */
+	public const CANCELLABLE = [self::DRAFT, self::REVIEW, self::APPROVED, self::VALIDATING, self::READY, self::FAILED];
 
 	/** Statusy końcowe po próbie wdrożenia (do historii i efektów). */
 	public const DEPLOYED = [self::APPLIED, self::PARTIAL];

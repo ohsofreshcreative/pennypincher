@@ -10,6 +10,9 @@
 @source not "../views/components/pp";
 @source not "../js/pp-app.js";
 @source not "../../app/PennyPincher";
+/* Testy i dokumentacja aplikacji zawierają nazwy klas – nie mogą trafiać do CSS strony */
+@source not "../../tests";
+@source not "../../docs";
 
 /* Twoje “źródłowe” zmienne RGB */
 :root {

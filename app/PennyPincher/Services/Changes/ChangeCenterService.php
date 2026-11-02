@@ -229,6 +229,12 @@ class ChangeCenterService
 			$campaigns = is_array($op['before_state']['campaigns'] ?? null) ? $op['before_state']['campaigns'] : null;
 			$reason = ServingGuard::operationViolation($op) ?? ServingGuard::budgetViolation($op, $campaigns);
 
+			// Kampania znana z ostatniego odczytu jako aktywna: zmiana zwiększająca wydatki blokowana od razu
+			// (pozostałe przypadki – grupy, słowa, kryteria – worker sprawdza odczytem rodziców przed wysłaniem).
+			if ($reason === null && in_array($op['type'], ['campaign.update', 'campaign.bidding'], true) && is_array($op['before_state']) && ($op['before_state']['status'] ?? null) === 'ENABLED' && ServingGuard::raisesSpend($op, $op['before_state'])) {
+				$reason = ServingGuard::spendViolation($op, $op['before_state'], null, false);
+			}
+
 			if ($reason !== null) {
 				$out[(int) $op['id']] = $reason;
 			}
@@ -364,6 +370,14 @@ class ChangeCenterService
 		}
 
 		$values['current_state'] = $context === [] ? null : ['context' => $context, 'read_at' => $this->db->now()];
+
+		// Konflikt (stan zmieniony poza Penny Pincher) rozstrzyga ponowny odczyt: nowy stan „przed” → operacja znów
+		// oczekuje i trafi do wdrożenia razem ze swoją grupą atomową (bez tego część grupy zostałaby pominięta).
+		if ($op['status'] === ChangeStatus::OP_CONFLICT) {
+			$values['status'] = ChangeStatus::OP_PENDING;
+			$values['error_message'] = null;
+		}
+
 		$op['before_state'] = $values['before_state'] ?? $op['before_state'];
 		$values['risk'] = OperationCatalog::risk($op);
 		$this->sets->updateOperation((int) $op['id'], $values);
@@ -549,6 +563,10 @@ class ChangeCenterService
 		$operations = $this->sets->operations($setId);
 		$limit = gmdate('Y-m-d H:i:s', time() - self::STATE_MAX_AGE_HOURS * HOUR_IN_SECONDS);
 
+		if (array_filter($operations, fn ($op) => $op['status'] === ChangeStatus::OP_CONFLICT) !== []) {
+			throw new ValidationFailed(['state' => 'Część operacji ma konflikt ze stanem konta – odczytaj aktualny stan z Google Ads i sprawdź zmiany przed zatwierdzeniem.']);
+		}
+
 		foreach ($operations as $op) {
 			if ($op['before_source'] !== 'api' || $op['before_read_at'] === null || $op['before_read_at'] < $limit) {
 				throw new ValidationFailed(['state' => 'Przed zatwierdzeniem odczytaj aktualny stan zasobów z Google Ads („Odczytaj stan z Google Ads”) – stan nie może być starszy niż ' . self::STATE_MAX_AGE_HOURS . ' h.']);
@@ -584,7 +602,14 @@ class ChangeCenterService
 
 		$this->sets->addEvent($setId, $project->id, 'approved', $userId, ChangeStatus::REVIEW, ChangeStatus::VALIDATING, 'Zatwierdzono wersję ' . $set['version'] . ' (odcisk ' . substr($hash, 0, 12) . '). Zatwierdzenie nie oznacza wdrożenia.');
 
-		$api = $this->validateWithApi($project, $set, $operations, $userId);
+		try {
+			$api = $this->validateWithApi($project, $set, $operations, $userId);
+		} catch (\Throwable $e) {
+			// Bez tego zestaw zostałby w „Walidacji” bez wyjścia (walidacja jest bez zapisu – na koncie nic się nie zmieniło).
+			error_log('[Penny Pincher] Walidacja zestawu #' . $setId . ': ' . ChangeSetRepository::scrub($e->getMessage()));
+			$api = ['status' => 'error', 'message' => 'Nieoczekiwany błąd walidacji w Google Ads API – zestaw wrócił do szkicu. Szczegóły w logu serwera.', 'errors' => []];
+		}
+
 		$record = ['local' => $validation + ['at' => $this->db->now()], 'api' => $api + ['at' => $this->db->now()]];
 
 		if ($api['status'] === 'error') {
@@ -679,6 +704,19 @@ class ChangeCenterService
 	public function cancel(Project $project, int $setId, int $userId): void
 	{
 		$set = $this->find($project, $setId);
+
+		// Zestaw w kolejce (nieprzejęty przez workera), z którego nic nie zostało jeszcze wysłane, też można anulować.
+		if ($set['status'] === ChangeStatus::DEPLOYING) {
+			$touched = array_filter($this->sets->operations($setId), fn ($op) => ! in_array($op['status'], [ChangeStatus::OP_PENDING, ChangeStatus::OP_CONFLICT], true));
+
+			if ($touched !== [] || ! $this->sets->cancelQueued($setId)) {
+				throw new ValidationFailed(['status' => 'Tego zestawu nie można już anulować – worker go przetwarza albo część zmian została wysłana.']);
+			}
+
+			$this->sets->addEvent($setId, $project->id, 'cancelled', $userId, ChangeStatus::DEPLOYING, ChangeStatus::CANCELLED, 'Anulowano przed przetworzeniem kolejki – nic nie wysłano.');
+
+			return;
+		}
 
 		if (! $this->sets->transition($setId, ChangeStatus::CANCELLABLE, ChangeStatus::CANCELLED)) {
 			throw new ValidationFailed(['status' => 'Tego zestawu nie można już anulować (jest wdrażany albo wdrożony).']);

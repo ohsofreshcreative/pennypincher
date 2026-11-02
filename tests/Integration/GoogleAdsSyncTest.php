@@ -132,7 +132,14 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 	{
 		[$project, $connection] = $this->connected('zero-days');
 		// API nie zwraca wierszy dla dni bez aktywności – pokrycie okna mówi, że to zera, nie brak danych.
-		$this->mock->on('campaign_metrics', fn ($request) => [200, GoogleAdsMock::stream(array_map(fn ($date) => ['campaign' => ['id' => '111'], 'segments' => ['date' => $date], 'metrics' => ['costMicros' => '1000000', 'clicks' => '1', 'impressions' => '1']], array_slice(GoogleAdsMock::dates($request['gaql']), 0, 1)))]);
+		// Wiersz tylko dla pierwszego dnia każdego okna zapytania; zapamiętujemy te dni, bo układ okien zależy od daty uruchomienia.
+		$withRows = [];
+		$this->mock->on('campaign_metrics', function ($request) use (&$withRows) {
+			$dates = array_slice(GoogleAdsMock::dates($request['gaql']), 0, 1);
+			array_push($withRows, ...$dates);
+
+			return [200, GoogleAdsMock::stream(array_map(fn ($date) => ['campaign' => ['id' => '111'], 'segments' => ['date' => $date], 'metrics' => ['costMicros' => '1000000', 'clicks' => '1', 'impressions' => '1']], $dates))];
+		});
 		$sync = $this->make(SyncService::class);
 		$run = $sync->process($sync->enqueue($connection, 'backfill'), time() + 300);
 
@@ -142,7 +149,12 @@ class GoogleAdsSyncTest extends GoogleAdsTestCase
 
 		$this->assertTrue($resolved->isComplete(), 'Okres w całości pokryty przez API.');
 		$series = $metrics->dailySeries($project->id, $resolved, $range);
-		$this->assertSame(0, $series[count($series) - 1]['cost_micros'] ?? null, 'Dzień bez wierszy w API = 0, nie null.');
+		$empty = array_values(array_filter($series, fn ($day) => ! in_array($day['date'], $withRows, true)));
+		$this->assertTrue($empty !== [], 'W zakresie są dni bez wierszy z API.');
+
+		foreach ($series as $day) {
+			$this->assertSame(in_array($day['date'], $withRows, true) ? 1_000_000 : 0, $day['cost_micros'], 'Dzień ' . $day['date'] . ': bez wierszy w API = 0, nie null.');
+		}
 	}
 
 	public function testTransientErrorIsRetriedWithBackoffAndResumesFromFailedStep(): void

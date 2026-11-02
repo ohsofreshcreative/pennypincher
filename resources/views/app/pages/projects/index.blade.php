@@ -49,7 +49,7 @@
                   <span class="truncate">{{ $item->name }}</span>
                   @if ($item->isDemo)<span class="pp-badge pp-badge-demo">DEMO</span>@endif
                 </a>
-                <p class="mt-0.5 text-[13px] text-ink-mute">
+                <p class="mt-0.5 text-meta text-ink-mute">
                   Google Ads, {{ $item->currency }}{{ $item->landingPageUrl ? ', ' . preg_replace('#^https?://#', '', rtrim($item->landingPageUrl, '/')) : '' }}
                 </p>
               </div>

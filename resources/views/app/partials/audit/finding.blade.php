@@ -13,11 +13,11 @@
       <div class="flex flex-wrap items-center gap-2">
         <x-pp.status-badge :status="$finding['severity']" />
         @if ($finding['status'] !== 'new')<x-pp.status-badge :status="$finding['status']" />@endif
-        <span class="text-[12px] text-ink-mute">{{ $finding['rule_id'] }} · {{ Category::LABELS[$finding['category']] ?? $finding['category'] }}</span>
+        <span class="text-caption text-ink-mute">{{ $finding['rule_id'] }} · {{ Category::LABELS[$finding['category']] ?? $finding['category'] }}</span>
       </div>
       <h3 class="mt-1.5 font-semibold text-ink">{{ $finding['title'] }}</h3>
     </div>
-    <span class="pp-num shrink-0 text-[13px] text-ink-mute" title="Wpływ na Audit Score">
+    <span class="pp-num shrink-0 text-meta text-ink-mute" title="Wpływ na Audit Score">
       @if ($finding['penalty'] > 0)−{{ rtrim(rtrim(number_format($finding['penalty'], 1, ',', ''), '0'), ',') }} pkt @else bez wpływu @endif
     </span>
     <x-pp.icon name="chevron-down" class="mt-0.5 text-ink-mute transition-transform" x-bind:class="open && 'rotate-180'" />
@@ -28,7 +28,7 @@
 
     @if ($finding['evidence'])
       <div>
-        <h4 class="text-[13px] font-semibold text-ink">Dowody</h4>
+        <h4 class="text-meta font-semibold text-ink">Dowody</h4>
         <dl class="mt-2 divide-y divide-line rounded-[var(--radius-control)] border border-line">
           @foreach ($finding['evidence'] as [$label, $value])
             <div class="grid gap-1 px-3 py-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] sm:gap-4">
@@ -41,12 +41,12 @@
     @endif
 
     <div class="rounded-[var(--radius-control)] bg-mint-soft px-3 py-2.5">
-      <h4 class="text-[13px] font-semibold text-mint-dark">Rekomendacja</h4>
+      <h4 class="text-meta font-semibold text-mint-dark">Rekomendacja</h4>
       <p class="mt-0.5 text-ink">{{ $finding['recommendation'] }}</p>
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <p class="text-[12.5px] text-ink-mute">
+      <p class="text-caption text-ink-mute">
         Obszar: {{ $dimension?->label() ?? '—' }}.
         Zmiany wprowadzasz samodzielnie w Google Ads – Penny Pincher nie modyfikuje konta.
       </p>

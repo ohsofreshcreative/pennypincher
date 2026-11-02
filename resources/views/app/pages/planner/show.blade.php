@@ -33,9 +33,9 @@
       <div class="min-w-0">
         <div class="flex flex-wrap items-center gap-2">
           <x-pp.status-badge :status="$statusTones[$plan['status']] ?? 'info'" :label="PlanStatus::LABELS[$plan['status']]" />
-          <span class="text-[13px] text-ink-mute">Autor: {{ $plan['author_name'] ?: '—' }} · utworzono {{ Format::datetime($plan['created_at']) }} · zmiana {{ Format::datetime($plan['updated_at']) }}</span>
+          <span class="text-meta text-ink-mute">Autor: {{ $plan['author_name'] ?: '—' }} · utworzono {{ Format::datetime($plan['created_at']) }} · zmiana {{ Format::datetime($plan['updated_at']) }}</span>
         </div>
-        <dl class="mt-3 grid gap-x-8 gap-y-1 text-[13px] sm:grid-cols-2 lg:grid-cols-3">
+        <dl class="mt-3 grid gap-x-8 gap-y-1 text-meta sm:grid-cols-2 lg:grid-cols-3">
           <div><dt class="inline text-ink-mute">Cel:</dt> <dd class="inline text-ink">{{ BusinessContext::GOALS[$plan['goal']] ?? '—' }}</dd></div>
           <div><dt class="inline text-ink-mute">Usługa:</dt> <dd class="inline text-ink">{{ $plan['service'] ?: '—' }}</dd></div>
           <div><dt class="inline text-ink-mute">Lokalizacja / język:</dt> <dd class="inline text-ink">{{ $plan['location'] ?: '—' }} / {{ BusinessContext::LANGUAGES[$plan['language']] ?? $plan['language'] }}</dd></div>
@@ -57,20 +57,20 @@
       <form method="post" action="{{ $base }}/status" class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
         <x-pp.nonce />
         <input type="hidden" name="tab" value="{{ $tab }}">
-        <span class="text-[13px] text-ink-mute">Zmień status:</span>
+        <span class="text-meta text-ink-mute">Zmień status:</span>
         @foreach (['draft' => 'Przywróć do szkicu', 'review' => 'Wyślij do przeglądu', 'approved' => 'Zatwierdź plan', 'archived' => 'Archiwizuj'] as $value => $label)
           @if ($value !== $plan['status'] && ($canApprove || (in_array($value, PlanStatus::EDITABLE, true) && $editable)))
             <button type="submit" name="status" value="{{ $value }}" class="pp-btn pp-btn-sm {{ $value === 'approved' ? 'pp-btn-primary' : 'pp-btn-ghost' }}">{{ $label }}</button>
           @endif
         @endforeach
         @unless ($editable)
-          <span class="text-[12.5px] text-ink-mute">Plan zatwierdzony lub zarchiwizowany jest tylko do odczytu – zmień status na „Szkic” albo skopiuj plan.</span>
+          <span class="text-caption text-ink-mute">Plan zatwierdzony lub zarchiwizowany jest tylko do odczytu – zmień status na „Szkic” albo skopiuj plan.</span>
         @endunless
       </form>
     @endif
 
     @if ($plan['status'] === 'approved' || ($changes['sets'][(int) $plan['id']] ?? null))
-      <div class="border-t border-line px-5 py-3 text-[13px]">
+      <div class="border-t border-line px-5 py-3 text-meta">
         @if ($changes['sets'][(int) $plan['id']] ?? null)
           @include('app.partials.changes.source-change', ['sourceId' => $plan['id'], 'action' => '', 'blocker' => null])
           @if ($deployedLinks !== [])<p class="mt-1 text-ink-mute">W Google Ads utworzono {{ count($deployedLinks) }} z {{ count($tree['campaigns']) }} kampanii planu – ponowne przygotowanie pominie już utworzone.</p>@endif
@@ -93,7 +93,7 @@
 
     @if ($canEdit)
       <details class="border-t border-line px-5 py-3">
-        <summary class="cursor-pointer text-[13px] font-semibold text-ink">Edytuj dane planu</summary>
+        <summary class="cursor-pointer text-meta font-semibold text-ink">Edytuj dane planu</summary>
         <form method="post" action="{{ $base }}" class="mt-3 grid gap-4 lg:grid-cols-3">
           <x-pp.nonce />
           <x-pp.field name="name" label="Nazwa" required :value="$plan['name']" />
@@ -140,10 +140,10 @@
         <div class="pp-card-header flex-wrap gap-3">
           <div class="min-w-0">
             <h2 class="pp-card-title">{{ $campaign['name'] }}</h2>
-            <p class="text-[12.5px] text-ink-mute">{{ $campaign['kind'] === 'brand' ? 'Kampania brandowa' : 'Kampania w wyszukiwarce' }} · budżet: {{ $campaign['budget_micros'] !== null ? $money($campaign['budget_micros']) . ' / mies.' : 'nie przydzielono' }} · {{ count($campaign['groups']) }} {{ Format::plural(count($campaign['groups']), 'grupa', 'grupy', 'grup') }}</p>
+            <p class="text-caption text-ink-mute">{{ $campaign['kind'] === 'brand' ? 'Kampania brandowa' : 'Kampania w wyszukiwarce' }} · budżet: {{ $campaign['budget_micros'] !== null ? $money($campaign['budget_micros']) . ' / mies.' : 'nie przydzielono' }} · {{ count($campaign['groups']) }} {{ Format::plural(count($campaign['groups']), 'grupa', 'grupy', 'grup') }}</p>
           </div>
           @if ($canEdit)
-            <details class="text-[13px]">
+            <details class="text-meta">
               <summary class="cursor-pointer text-ink-soft">Edytuj kampanię</summary>
               <div class="mt-2 space-y-2">
                 <form method="post" action="{{ $base }}/campaigns/{{ $campaign['id'] }}" class="flex flex-wrap items-end gap-2">
@@ -164,9 +164,9 @@
         @foreach ($campaign['groups'] as $group)
           <div class="scroll-mt-24 border-t border-line" id="group-{{ $group['id'] }}">
             <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
-              <h3 class="font-semibold text-ink">{{ $group['name'] }} <span class="pp-num text-[13px] font-normal text-ink-mute">({{ count($group['keywords']) }} słów)</span></h3>
+              <h3 class="font-semibold text-ink">{{ $group['name'] }} <span class="pp-num text-meta font-normal text-ink-mute">({{ count($group['keywords']) }} słów)</span></h3>
               @if ($canEdit)
-                <details class="text-[13px]">
+                <details class="text-meta">
                   <summary class="cursor-pointer text-ink-soft">Edytuj grupę</summary>
                   <div class="mt-2 space-y-2">
                     <form method="post" action="{{ $base }}/groups/{{ $group['id'] }}" class="flex flex-wrap items-end gap-2">
@@ -202,7 +202,7 @@
                     @foreach ($group['keywords'] as $keyword)
                       <tr class="align-top">
                         <td class="pp-col-sticky max-w-[260px] font-medium text-ink">{{ MatchType::notation($keyword['phrase'], $keyword['match_type']) }}
-                          @if ($keyword['term_clicks'] !== null)<span class="block text-[11.5px] font-normal text-ink-mute">historia: {{ Format::number($keyword['term_clicks']) }} klik. · {{ Format::conversions($keyword['term_conversions']) }} konw.</span>@endif
+                          @if ($keyword['term_clicks'] !== null)<span class="block text-2xs font-normal text-ink-mute">historia: {{ Format::number($keyword['term_clicks']) }} klik. · {{ Format::conversions($keyword['term_conversions']) }} konw.</span>@endif
                         </td>
                         <td>
                           @if ($canEdit)
@@ -216,18 +216,18 @@
                           @else
                             {{ MatchType::LABELS[$keyword['match_type']] ?? $keyword['match_type'] }}
                           @endif
-                          @if ($keyword['match_type'] === MatchType::BROAD && ! $measurement['reliable'])<span class="mt-1 block text-[11.5px] text-warn">ryzykowne przy obecnym pomiarze</span>@endif
+                          @if ($keyword['match_type'] === MatchType::BROAD && ! $measurement['reliable'])<span class="mt-1 block text-2xs text-warn">ryzykowne przy obecnym pomiarze</span>@endif
                         </td>
                         <td class="whitespace-nowrap text-ink-soft">{{ Text::INTENT_LABELS[$keyword['intent']] ?? 'Brak danych' }}</td>
                         <td class="pp-col-num">{{ $keyword['score'] ?? '—' }}</td>
                         <td class="pp-col-num">
                           @if ($keyword['cpc_micros'] === null) Brak danych
                           @else {{ Format::money((int) $keyword['cpc_micros'], $keyword['cpc_currency'] ?? $currency) }}
-                            @if (($keyword['cpc_currency'] ?? $currency) !== $currency)<span class="block text-[11.5px] text-ink-mute">{{ $keyword['cpc_project_micros'] !== null ? '≈ ' . Format::money((int) $keyword['cpc_project_micros'], $currency) : 'brak kursu' }}</span>@endif
+                            @if (($keyword['cpc_currency'] ?? $currency) !== $currency)<span class="block text-2xs text-ink-mute">{{ $keyword['cpc_project_micros'] !== null ? '≈ ' . Format::money((int) $keyword['cpc_project_micros'], $currency) : 'brak kursu' }}</span>@endif
                           @endif
                         </td>
                         <td class="pp-col-num">{{ $keyword['search_volume'] === null ? 'Brak danych' : Format::number($keyword['search_volume']) }}</td>
-                        <td class="text-[12.5px] text-ink-soft">{{ str_replace(['search_terms', 'dataforseo', 'keyword_opportunities', 'manual', ','], ['wyszukiwane hasła', 'DataForSEO', 'Keyword Opportunities', 'ręcznie', ', '], $keyword['source']) }}</td>
+                        <td class="text-caption text-ink-soft">{{ str_replace(['search_terms', 'dataforseo', 'keyword_opportunities', 'manual', ','], ['wyszukiwane hasła', 'DataForSEO', 'Keyword Opportunities', 'ręcznie', ', '], $keyword['source']) }}</td>
                         <td class="text-ink-soft">{{ Statistics::CONFIDENCE_LABELS[$keyword['confidence']] ?? 'Brak danych' }}</td>
                         @if ($canEdit)
                           <td class="whitespace-nowrap">
@@ -253,7 +253,7 @@
                 </table>
               </div>
             @else
-              <p class="px-5 pb-3 text-[13px] text-ink-mute">Brak słów kluczowych w grupie.</p>
+              <p class="px-5 pb-3 text-meta text-ink-mute">Brak słów kluczowych w grupie.</p>
             @endif
 
             @if ($canEdit)
@@ -309,9 +309,9 @@
         <x-pp.stat-card label="Scenariusz" :value="$b['config']['label']" :hint="'Sprawdzone ' . round($b['config']['proven_share'] * 100) . '% · test ' . round((1 - $b['config']['proven_share']) * 100) . '%'" />
       </dl>
       @foreach ($b['warnings'] as $warning)
-        <p class="border-t border-line px-5 py-2.5 text-[13px] text-warn">{{ $warning }}</p>
+        <p class="border-t border-line px-5 py-2.5 text-meta text-warn">{{ $warning }}</p>
       @endforeach
-      <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+      <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
         Kwoty są planistyczne. W Google Ads ustawia się budżet dzienny – w pojedynczym dniu kampania może wydać do 2× budżetu dziennego, ale w miesiącu nie więcej niż ok. 30,4× budżet dzienny. Planowanie nie zmienia budżetów na koncie.
       </p>
     </section>
@@ -324,7 +324,7 @@
             <form method="post" action="{{ $base }}/budget/apply"><x-pp.nonce /><input type="hidden" name="tab" value="budget"><x-pp.button size="sm">Zastosuj proponowany podział</x-pp.button></form>
           @endif
         </div>
-        @foreach ($b['proposal']['notes'] as $note)<p class="px-5 pt-3 text-[13px] text-ink-soft">{{ $note }}</p>@endforeach
+        @foreach ($b['proposal']['notes'] as $note)<p class="px-5 pt-3 text-meta text-ink-soft">{{ $note }}</p>@endforeach
         @if ($b['rows'] === [])
           <x-pp.empty-state title="Brak kampanii" icon="planner">Dodaj kampanie w zakładce Struktura.</x-pp.empty-state>
         @else
@@ -347,9 +347,9 @@
                 @foreach ($b['rows'] as $row)
                   @php $f = $row['forecast']; @endphp
                   <tr class="align-top">
-                    <td class="pp-col-sticky max-w-[220px]"><span class="font-medium text-ink">{{ $row['name'] }}</span>@if ($row['priority'])<span class="block text-[11.5px] text-mint-dark">priorytet biznesowy</span>@endif</td>
-                    <td class="text-[12.5px] text-ink-soft">{{ $row['profile']['evidence'] === 'proven' ? 'Sprawdzona' : 'Test' }}<span class="block text-ink-mute">{{ Format::number($row['profile']['clicks']) }} klik. · {{ Format::conversions($row['profile']['conversions']) }} konw. w historii</span></td>
-                    <td class="pp-col-num">{{ $row['proposed_micros'] !== null ? $money($row['proposed_micros']) : '—' }}@if ($row['proposed_micros'] !== null && $b['budget'])<span class="block text-[11.5px] text-ink-mute">{{ round($row['proposed_micros'] / $b['budget'] * 100) }}%</span>@endif</td>
+                    <td class="pp-col-sticky max-w-[220px]"><span class="font-medium text-ink">{{ $row['name'] }}</span>@if ($row['priority'])<span class="block text-2xs text-mint-dark">priorytet biznesowy</span>@endif</td>
+                    <td class="text-caption text-ink-soft">{{ $row['profile']['evidence'] === 'proven' ? 'Sprawdzona' : 'Test' }}<span class="block text-ink-mute">{{ Format::number($row['profile']['clicks']) }} klik. · {{ Format::conversions($row['profile']['conversions']) }} konw. w historii</span></td>
+                    <td class="pp-col-num">{{ $row['proposed_micros'] !== null ? $money($row['proposed_micros']) : '—' }}@if ($row['proposed_micros'] !== null && $b['budget'])<span class="block text-2xs text-ink-mute">{{ round($row['proposed_micros'] / $b['budget'] * 100) }}%</span>@endif</td>
                     <td class="pp-col-num">
                       @if ($canBudget)
                         <form method="post" action="{{ $base }}/campaigns/{{ $row['id'] }}/budget" class="flex justify-end gap-1">
@@ -363,9 +363,9 @@
                       @endif
                     </td>
                     <td class="pp-col-num">{{ $f['daily'] !== null ? $money($f['daily']) : '—' }}</td>
-                    <td class="pp-col-num">{{ $f['cpc'] !== null ? Format::money($f['cpc_low'], $currency) . '–' . Format::money($f['cpc_high'], $currency) : 'Brak danych' }}@if ($f['cpc_source'])<span class="block text-[11.5px] text-ink-mute">{{ $f['cpc_source'] }}</span>@endif</td>
+                    <td class="pp-col-num">{{ $f['cpc'] !== null ? Format::money($f['cpc_low'], $currency) . '–' . Format::money($f['cpc_high'], $currency) : 'Brak danych' }}@if ($f['cpc_source'])<span class="block text-2xs text-ink-mute">{{ $f['cpc_source'] }}</span>@endif</td>
                     <td class="pp-col-num">{{ $f['clicks_low'] !== null ? Format::number($f['clicks_low']) . '–' . Format::number($f['clicks_high']) : '—' }}</td>
-                    <td class="max-w-[240px] text-[12.5px] text-ink-soft">
+                    <td class="max-w-[240px] text-caption text-ink-soft">
                       @if ($f['lead_message'])
                         {{ $f['lead_message'] }}
                       @else
@@ -378,7 +378,7 @@
               </tbody>
             </table>
           </div>
-          <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+          <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
             Prognozy to orientacyjne zakresy, nie obietnica wyników. CPC: z historii konta albo DataForSEO (przeliczone kursem NBP), z marginesem −20% / +30%. Konwersje pokazujemy tylko dla kampanii z udokumentowaną historią i przy wiarygodnym pomiarze – kliknięcia telefonu czy krótkie wizyty nie są liczone jako leady.
           </p>
         @endif
@@ -386,7 +386,7 @@
 
       <section class="pp-card p-5" aria-labelledby="scenario">
         <h2 id="scenario" class="pp-card-title">Budżet i scenariusz</h2>
-        <p class="mt-1 text-[13px] text-ink-soft">Podział zależy od priorytetów biznesowych, potencjału fraz, wyników historycznych i niepewności – nie od samej liczby kliknięć. Nowe frazy nie są z założenia lepsze od sprawdzonych.</p>
+        <p class="mt-1 text-meta text-ink-soft">Podział zależy od priorytetów biznesowych, potencjału fraz, wyników historycznych i niepewności – nie od samej liczby kliknięć. Nowe frazy nie są z założenia lepsze od sprawdzonych.</p>
         <form method="post" action="{{ $base }}/budget" class="mt-4 space-y-4" x-data="{ s: @js($plan['scenario']) }">
           <x-pp.nonce /><input type="hidden" name="tab" value="budget">
           <fieldset @disabled(! $canBudget) class="space-y-4">
@@ -395,12 +395,12 @@
               @foreach ($scenarios as $key => $scenario)
                 <label class="flex items-start gap-2.5 rounded-[var(--radius-control)] border border-line p-3" x-bind:class="s === '{{ $key }}' && 'border-mint bg-mint-soft/40'">
                   <input type="radio" name="scenario" value="{{ $key }}" x-model="s" class="mt-1 accent-mint" @checked($plan['scenario'] === $key)>
-                  <span><span class="font-semibold text-ink">{{ $scenario['label'] }}</span><span class="block text-[12.5px] text-ink-soft">{{ $scenario['description'] }} Sprawdzone: {{ round($scenario['proven_share'] * 100) }}%.</span></span>
+                  <span><span class="font-semibold text-ink">{{ $scenario['label'] }}</span><span class="block text-caption text-ink-soft">{{ $scenario['description'] }} Sprawdzone: {{ round($scenario['proven_share'] * 100) }}%.</span></span>
                 </label>
               @endforeach
             </div>
             <details>
-              <summary class="cursor-pointer text-[13px] font-semibold text-ink">Dostosuj scenariusz (%)</summary>
+              <summary class="cursor-pointer text-meta font-semibold text-ink">Dostosuj scenariusz (%)</summary>
               <div class="mt-3 grid grid-cols-2 gap-3">
                 @foreach (['proven_share' => 'Udział sprawdzonych kampanii', 'priority' => 'Waga: priorytet biznesowy', 'potential' => 'Waga: potencjał fraz', 'performance' => 'Waga: wyniki historyczne'] as $key => $label)
                   <div>
@@ -409,9 +409,9 @@
                   </div>
                 @endforeach
               </div>
-              <p class="mt-2 text-[12px] text-ink-mute">Puste pole = wartość domyślna scenariusza. Wagi są normalizowane do 100%.</p>
+              <p class="mt-2 text-caption text-ink-mute">Puste pole = wartość domyślna scenariusza. Wagi są normalizowane do 100%.</p>
             </details>
-            @if ($canBudget)<x-pp.button size="sm">Zapisz budżet i scenariusz</x-pp.button>@else<p class="text-[12.5px] text-ink-mute">Budżet może zmienić administrator projektu{{ $editable ? '' : ' (plan jest zablokowany)' }}.</p>@endif
+            @if ($canBudget)<x-pp.button size="sm">Zapisz budżet i scenariusz</x-pp.button>@else<p class="text-caption text-ink-mute">Budżet może zmienić administrator projektu{{ $editable ? '' : ' (plan jest zablokowany)' }}.</p>@endif
           </fieldset>
         </form>
       </section>
@@ -421,7 +421,7 @@
       <section class="pp-card min-w-0" aria-label="Wykluczenia planu">
         <div class="pp-card-header"><h2 class="pp-card-title">Wykluczenia w planie ({{ count($tree['negatives']) }})</h2></div>
         @if ($conflicts !== [])
-          <ul class="space-y-1 border-b border-line bg-danger-soft px-5 py-3 text-[13px] text-ink">
+          <ul class="space-y-1 border-b border-line bg-danger-soft px-5 py-3 text-meta text-ink">
             @foreach ($conflicts as $conflict)<li>⚠ {{ $conflict['message'] }}</li>@endforeach
           </ul>
         @endif
@@ -438,7 +438,7 @@
                 };
               @endphp
               <li class="flex flex-wrap items-center justify-between gap-2 px-5 py-2.5 text-sm">
-                <span><span class="font-medium text-ink">{{ MatchType::notation($negative['phrase'], $negative['match_type']) }}</span> <span class="text-[12.5px] text-ink-mute">· {{ $scope }} · {{ $negative['source'] === 'negative_suggestions' ? 'z propozycji analizy' : 'ręcznie' }}</span></span>
+                <span><span class="font-medium text-ink">{{ MatchType::notation($negative['phrase'], $negative['match_type']) }}</span> <span class="text-caption text-ink-mute">· {{ $scope }} · {{ $negative['source'] === 'negative_suggestions' ? 'z propozycji analizy' : 'ręcznie' }}</span></span>
                 @if ($canEdit)
                   <form method="post" action="{{ $base }}/negatives/{{ $negative['id'] }}/delete"><x-pp.nonce /><input type="hidden" name="tab" value="negatives"><button class="pp-btn pp-btn-ghost pp-btn-sm text-danger">Usuń</button></form>
                 @endif
@@ -446,7 +446,7 @@
             @endforeach
           </ul>
         @endif
-        <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">Zasady Google Ads dla wykluczeń: przybliżone – zapytanie zawiera wszystkie słowa; do wyrażenia – słowa w tej kolejności; ścisłe – dokładnie to zapytanie. Wykluczenia nie obejmują odmian i literówek.</p>
+        <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">Zasady Google Ads dla wykluczeń: przybliżone – zapytanie zawiera wszystkie słowa; do wyrażenia – słowa w tej kolejności; ścisłe – dokładnie to zapytanie. Wykluczenia nie obejmują odmian i literówek.</p>
       </section>
 
       @if ($canEdit)
@@ -463,13 +463,13 @@
             <div><label class="pp-label" for="np">Frazy (jedna w linii)</label><textarea id="np" name="phrases" rows="3" class="pp-input" placeholder="np. darmowy kreator"></textarea></div>
             @if ($negativeSuggestions)
               <details>
-                <summary class="cursor-pointer text-[13px] font-semibold text-ink">Propozycje z analizy ({{ count($negativeSuggestions) }})</summary>
-                <ul class="mt-2 max-h-72 space-y-1 overflow-y-auto text-[13px]">
+                <summary class="cursor-pointer text-meta font-semibold text-ink">Propozycje z analizy ({{ count($negativeSuggestions) }})</summary>
+                <ul class="mt-2 max-h-72 space-y-1 overflow-y-auto text-meta">
                   @foreach ($negativeSuggestions as $i => $suggestion)
                     <li><label class="flex items-start gap-2"><input type="checkbox" name="suggested[]" value="{{ $suggestion['phrase'] }}" class="mt-1 accent-mint"><span><span class="text-ink">{{ $suggestion['phrase'] }}</span> <span class="text-ink-mute">– {{ $suggestion['reason'] }} ({{ Format::money((int) $suggestion['cost_micros'], $project->currency) }})</span></span></label></li>
                   @endforeach
                 </ul>
-                <p class="mt-1 text-[12px] text-ink-mute">Nic nie jest dodawane automatycznie – zaznacz tylko te, które pasują.</p>
+                <p class="mt-1 text-caption text-ink-mute">Nic nie jest dodawane automatycznie – zaznacz tylko te, które pasują.</p>
               </details>
             @endif
             <x-pp.button size="sm" icon="plus">Dodaj wykluczenia</x-pp.button>
@@ -504,7 +504,7 @@
                   <div x-data="{ v: @js($headline) }" class="relative">
                     <label for="h-{{ $gid }}-{{ $i }}" class="sr-only">Nagłówek {{ $i + 1 }}</label>
                     <input id="h-{{ $gid }}-{{ $i }}" name="headlines[]" x-model="v" value="{{ $headline }}" class="pp-input pp-input-sm pr-12" maxlength="60" placeholder="Nagłówek {{ $i + 1 }}">
-                    <span class="pp-num pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-[11px]" x-bind:class="v.length > {{ AdValidator::HEADLINE_MAX }} ? 'text-danger' : 'text-ink-mute'" x-text="v.length + '/{{ AdValidator::HEADLINE_MAX }}'"></span>
+                    <span class="pp-num pointer-events-none absolute top-1/2 right-2 -translate-y-1/2 text-2xs" x-bind:class="v.length > {{ AdValidator::HEADLINE_MAX }} ? 'text-danger' : 'text-ink-mute'" x-text="v.length + '/{{ AdValidator::HEADLINE_MAX }}'"></span>
                   </div>
                 @endforeach
               </div>
@@ -516,7 +516,7 @@
                   <div x-data="{ v: @js($description) }">
                     <label for="d-{{ $gid }}-{{ $i }}" class="sr-only">Opis {{ $i + 1 }}</label>
                     <textarea id="d-{{ $gid }}-{{ $i }}" name="descriptions[]" x-model="v" rows="2" class="pp-input" maxlength="180" placeholder="Opis {{ $i + 1 }}">{{ $description }}</textarea>
-                    <span class="pp-num text-[11px]" x-bind:class="v.length > {{ AdValidator::DESCRIPTION_MAX }} ? 'text-danger' : 'text-ink-mute'" x-text="v.length + '/{{ AdValidator::DESCRIPTION_MAX }}'"></span>
+                    <span class="pp-num text-2xs" x-bind:class="v.length > {{ AdValidator::DESCRIPTION_MAX }} ? 'text-danger' : 'text-ink-mute'" x-text="v.length + '/{{ AdValidator::DESCRIPTION_MAX }}'"></span>
                   </div>
                 @endforeach
               </div>

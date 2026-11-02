@@ -16,13 +16,13 @@
 @endphp
 
 @section('content')
-  <nav class="text-[13px] text-ink-mute" aria-label="Okruszki"><a class="underline" href="{{ AppUrl::project($project->id, 'management') }}">Google Ads Management</a> / kampania</nav>
+  <nav class="text-meta text-ink-mute" aria-label="Okruszki"><a class="underline" href="{{ AppUrl::project($project->id, 'management') }}">Google Ads Management</a> / kampania</nav>
 
   <section class="pp-card p-5">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="min-w-0">
         <h2 class="text-lg font-semibold break-words text-ink">{{ $campaign['name'] }}</h2>
-        <p class="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-ink-mute">
+        <p class="mt-1 flex flex-wrap items-center gap-2 text-meta text-ink-mute">
           <x-pp.status-badge :status="$campaign['status']" /> {{ $campaign['channel_type'] ?: '—' }}
           @if ($resource)· <span class="break-all">{{ $resource }}</span>@endif
         </p>
@@ -34,7 +34,7 @@
         </form>
       @endif
     </div>
-    <dl class="mt-4 grid gap-3 text-[13px] sm:grid-cols-2 xl:grid-cols-4">
+    <dl class="mt-4 grid gap-3 text-meta sm:grid-cols-2 xl:grid-cols-4">
       <div><dt class="text-ink-mute">Budżet dzienny (synchronizacja)</dt><dd class="pp-num font-semibold">{{ $campaign['budget_micros'] !== null ? Format::money((int) $campaign['budget_micros'], $project->currency) : '—' }}@if (! empty($settings['budget_shared'])) <span class="pp-badge pp-badge-warn">współdzielony</span>@endif</dd></div>
       <div><dt class="text-ink-mute">Strategia stawek</dt><dd class="font-semibold">{{ OperationCatalog::BIDDING[$campaign['bidding_strategy']] ?? ($campaign['bidding_strategy'] ?: '—') }}</dd></div>
       <div><dt class="text-ink-mute">Sieci</dt><dd>@if ($networks)Google{{ $networks['search_partners'] ? ' + partnerzy' : '' }}{{ $networks['display'] ? ' + Display' : '' }}@else — @endif</dd></div>
@@ -54,9 +54,9 @@
     <section class="pp-card min-w-0" aria-label="Grupy reklam">
       <div class="pp-card-header"><h3 class="pp-card-title">Grupy reklam ({{ count($adGroups) }})</h3></div>
       @if ($adGroups === [])
-        <p class="px-5 py-4 text-[13px] text-ink-mute">Brak grup reklam w danych.</p>
+        <p class="px-5 py-4 text-meta text-ink-mute">Brak grup reklam w danych.</p>
       @else
-        <ul class="divide-y divide-line text-[13px]">
+        <ul class="divide-y divide-line text-meta">
           @foreach ($adGroups as $g)
             <li><a class="flex flex-wrap items-center justify-between gap-2 px-5 py-3 hover:bg-ink/[0.03]" href="{{ AppUrl::project($project->id, 'management/ad-groups/' . $g['id']) }}"><span class="min-w-0 font-semibold break-words text-ink">{{ $g['name'] }}</span><span class="flex items-center gap-2 text-ink-mute"><x-pp.status-badge :status="$g['status']" /> {{ (int) $g['keyword_count'] }} słów</span></a></li>
           @endforeach
@@ -65,12 +65,12 @@
     </section>
 
     <section class="pp-card min-w-0" aria-label="Kierowanie i wykluczenia">
-      <div class="pp-card-header"><h3 class="pp-card-title">Kierowanie i wykluczenia kampanii</h3>@if ($criteria)<span class="text-[12px] text-ink-mute">odczyt {{ Format::datetime($criteria['read_at']) }}</span>@endif</div>
+      <div class="pp-card-header"><h3 class="pp-card-title">Kierowanie i wykluczenia kampanii</h3>@if ($criteria)<span class="text-caption text-ink-mute">odczyt {{ Format::datetime($criteria['read_at']) }}</span>@endif</div>
       @if ($criteria)
         @if ($criteriaRows === [])
-          <p class="px-5 py-4 text-[13px] text-ink-mute">Brak kryteriów kampanii (bez lokalizacji = cały świat).</p>
+          <p class="px-5 py-4 text-meta text-ink-mute">Brak kryteriów kampanii (bez lokalizacji = cały świat).</p>
         @else
-          <ul class="divide-y divide-line text-[13px]">
+          <ul class="divide-y divide-line text-meta">
             @foreach ($criteriaRows as $cr)
               <li class="flex flex-wrap items-center justify-between gap-2 px-5 py-2">
                 <span class="min-w-0 break-words">
@@ -89,11 +89,11 @@
           </ul>
         @endif
       @else
-        <p class="px-5 py-3 text-[13px] text-ink-mute">Nie odczytano jeszcze kierowania z Google Ads. Wykluczenia z synchronizacji:</p>
+        <p class="px-5 py-3 text-meta text-ink-mute">Nie odczytano jeszcze kierowania z Google Ads. Wykluczenia z synchronizacji:</p>
         @if ($negatives === [])
-          <p class="px-5 pb-4 text-[13px] text-ink-mute">brak.</p>
+          <p class="px-5 pb-4 text-meta text-ink-mute">brak.</p>
         @else
-          <p class="px-5 pb-4 text-[13px] break-words">{{ implode(', ', array_map(fn ($n) => $n['text'] . ' (' . (OperationCatalog::MATCH_TYPES[strtoupper((string) $n['match_type'])] ?? $n['match_type']) . ')', $negatives)) }}</p>
+          <p class="px-5 pb-4 text-meta break-words">{{ implode(', ', array_map(fn ($n) => $n['text'] . ' (' . (OperationCatalog::MATCH_TYPES[strtoupper((string) $n['match_type'])] ?? $n['match_type']) . ')', $negatives)) }}</p>
         @endif
       @endif
     </section>
@@ -102,7 +102,7 @@
   @if ($editable)
     <section class="pp-card p-5" aria-labelledby="prepare">
       <h3 id="prepare" class="pp-card-title">Przygotuj zmianę</h3>
-      <p class="mt-1 text-[13px] text-ink-soft">Każdy formularz dodaje operację do szkicu w Change Center. Nic nie zostanie wysłane do Google Ads.</p>
+      <p class="mt-1 text-meta text-ink-soft">Każdy formularz dodaje operację do szkicu w Change Center. Nic nie zostanie wysłane do Google Ads.</p>
       <div class="mt-4 grid gap-5 lg:grid-cols-2">
         <form method="post" action="{{ $action }}" class="space-y-3 rounded-[var(--radius-card)] border border-line p-4">
           <x-pp.nonce />
@@ -112,7 +112,7 @@
               <x-pp.button variant="secondary" size="sm" name="action" value="pause">Wstrzymaj kampanię</x-pp.button>
             @else
               <x-pp.button variant="secondary" size="sm" name="action" value="enable">Przygotuj włączenie kampanii</x-pp.button>
-              @unless ($servingAllowed ?? false)<span class="text-[12.5px] text-ink-mute" title="Zmianę można przygotować i zatwierdzić; wdrożenie czeka na zdjęcie blokady emisji.">wdrożenie zablokowane (blokada emisji)</span>@endunless
+              @unless ($servingAllowed ?? false)<span class="text-caption text-ink-mute" title="Zmianę można przygotować i zatwierdzić; wdrożenie czeka na zdjęcie blokady emisji.">wdrożenie zablokowane (blokada emisji)</span>@endunless
             @endif
           </div>
           @include('app.partials.changes.draft-select', ['id' => 'f-set-status'])
@@ -128,7 +128,7 @@
         <form method="post" action="{{ $action }}" class="space-y-3 rounded-[var(--radius-card)] border border-line p-4">
           <x-pp.nonce /><input type="hidden" name="action" value="budget">
           <x-pp.field name="amount" label="Nowy budżet dzienny ({{ $project->currency }})" inputmode="decimal" :value="Format::moneyInput($campaign['budget_micros'] !== null ? (int) $campaign['budget_micros'] : null)" required help="Aktualny budżet zostanie odczytany z Google Ads. Podgląd pokaże różnicę i szacunek miesięczny (×30,4)." />
-          <label class="flex items-start gap-2 text-[13px]"><input type="checkbox" name="shared_ack" value="1" class="mt-1"> <span>Jeśli budżet jest współdzielony – rozumiem, że zmiana obejmie wszystkie kampanie z tym budżetem.</span></label>
+          <label class="flex items-start gap-2 text-meta"><input type="checkbox" name="shared_ack" value="1" class="mt-1"> <span>Jeśli budżet jest współdzielony – rozumiem, że zmiana obejmie wszystkie kampanie z tym budżetem.</span></label>
           @include('app.partials.changes.draft-select', ['id' => 'f-set-budget'])
           <x-pp.button variant="secondary" size="sm">Przygotuj zmianę budżetu</x-pp.button>
         </form>
@@ -140,7 +140,7 @@
             <x-pp.field name="target_cpa" label="Docelowy CPA ({{ $project->currency }})" inputmode="decimal" help="Maks. konwersji." />
             <x-pp.field name="ceiling" label="Limit CPC ({{ $project->currency }})" inputmode="decimal" help="Maks. kliknięć." />
           </div>
-          <p class="text-[12.5px] text-warn">Zmiana strategii resetuje okres uczenia Smart Bidding – wymaga osobnego potwierdzenia przy zatwierdzeniu.</p>
+          <p class="text-caption text-warn">Zmiana strategii resetuje okres uczenia Smart Bidding – wymaga osobnego potwierdzenia przy zatwierdzeniu.</p>
           @include('app.partials.changes.draft-select', ['id' => 'f-set-bid'])
           <x-pp.button variant="secondary" size="sm">Przygotuj zmianę strategii</x-pp.button>
         </form>
@@ -148,8 +148,8 @@
         <form method="post" action="{{ $action }}" class="space-y-3 rounded-[var(--radius-card)] border border-line p-4">
           <x-pp.nonce /><input type="hidden" name="action" value="network">
           <p class="font-semibold text-ink">Sieci</p>
-          <label class="flex items-start gap-2 text-[13px]"><input type="checkbox" name="search_partners" value="1" class="mt-1" @checked($networks['search_partners'] ?? false)> <span>Partnerzy wyszukiwania Google</span></label>
-          <label class="flex items-start gap-2 text-[13px]"><input type="checkbox" name="display" value="1" class="mt-1" @checked($networks['display'] ?? false)> <span>Sieć reklamowa (Display) – zwykle niezalecane w kampanii w wyszukiwarce</span></label>
+          <label class="flex items-start gap-2 text-meta"><input type="checkbox" name="search_partners" value="1" class="mt-1" @checked($networks['search_partners'] ?? false)> <span>Partnerzy wyszukiwania Google</span></label>
+          <label class="flex items-start gap-2 text-meta"><input type="checkbox" name="display" value="1" class="mt-1" @checked($networks['display'] ?? false)> <span>Sieć reklamowa (Display) – zwykle niezalecane w kampanii w wyszukiwarce</span></label>
           @include('app.partials.changes.draft-select', ['id' => 'f-set-net'])
           <x-pp.button variant="secondary" size="sm">Przygotuj zmianę sieci</x-pp.button>
         </form>

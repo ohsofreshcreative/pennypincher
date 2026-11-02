@@ -50,7 +50,7 @@
         <section class="pp-card" aria-labelledby="pp-score">
           <div class="pp-card-header">
             <h2 id="pp-score" class="pp-card-title">Wynik audytu</h2>
-            <p class="pp-num text-[13px] text-ink-mute">
+            <p class="pp-num text-meta text-ink-mute">
               Dane: {{ Format::period($run['date_from'], $run['date_to']) }} · {{ Format::datetime($run['created_at']) }} · {{ $triggers[$run['trigger_type']] ?? $run['trigger_type'] }} · reguły v{{ $run['rules_version'] }}
             </p>
           </div>
@@ -58,9 +58,9 @@
             <div class="space-y-4">
               @include('app.partials.audit.score', ['run' => $run])
               <dl class="grid grid-cols-3 divide-x divide-line rounded-[var(--radius-control)] border border-line text-center">
-                <div class="px-2 py-2.5"><dt class="text-[12px] text-ink-mute">Krytyczne</dt><dd class="pp-num text-lg font-semibold text-danger">{{ count($groups['critical']) }}</dd></div>
-                <div class="px-2 py-2.5"><dt class="text-[12px] text-ink-mute">Ostrzeżenia</dt><dd class="pp-num text-lg font-semibold text-warn">{{ count($groups['warning']) }}</dd></div>
-                <div class="px-2 py-2.5"><dt class="text-[12px] text-ink-mute">Informacje</dt><dd class="pp-num text-lg font-semibold text-info">{{ count($groups['info']) }}</dd></div>
+                <div class="px-2 py-2.5"><dt class="text-caption text-ink-mute">Krytyczne</dt><dd class="pp-num text-lg font-semibold text-danger">{{ count($groups['critical']) }}</dd></div>
+                <div class="px-2 py-2.5"><dt class="text-caption text-ink-mute">Ostrzeżenia</dt><dd class="pp-num text-lg font-semibold text-warn">{{ count($groups['warning']) }}</dd></div>
+                <div class="px-2 py-2.5"><dt class="text-caption text-ink-mute">Informacje</dt><dd class="pp-num text-lg font-semibold text-info">{{ count($groups['info']) }}</dd></div>
               </dl>
               @if ($canRun)
                 <form method="post" action="{{ AppUrl::project($project->id, 'audits') }}" data-busy>
@@ -72,7 +72,7 @@
             </div>
 
             <div>
-              <h3 class="text-[13px] font-semibold text-ink">Z czego wynika wynik</h3>
+              <h3 class="text-meta font-semibold text-ink">Z czego wynika wynik</h3>
               <ul class="mt-2 space-y-3">
                 @foreach ($run['score_breakdown']['dimensions'] ?? [] as $dimension)
                   <li>
@@ -84,12 +84,12 @@
                       <div class="h-full rounded-full bg-mint" style="width: {{ $dimension['max'] > 0 ? round($dimension['points'] / $dimension['max'] * 100) : 0 }}%"></div>
                     </div>
                     @if ($dimension['findings'] > 0)
-                      <p class="pp-num mt-0.5 text-[12px] text-ink-mute">−{{ rtrim(rtrim(number_format(min($dimension['penalty'], $dimension['max']), 1, ',', ''), '0'), ',') }} pkt za {{ $dimension['findings'] }} {{ $dimension['findings'] === 1 ? 'problem' : 'problemy' }}</p>
+                      <p class="pp-num mt-0.5 text-caption text-ink-mute">−{{ rtrim(rtrim(number_format(min($dimension['penalty'], $dimension['max']), 1, ',', ''), '0'), ',') }} pkt za {{ $dimension['findings'] }} {{ $dimension['findings'] === 1 ? 'problem' : 'problemy' }}</p>
                     @endif
                   </li>
                 @endforeach
               </ul>
-              <p class="mt-3 text-[12px] leading-5 text-ink-mute">
+              <p class="mt-3 text-caption leading-5 text-ink-mute">
                 Audit Score ocenia higienę konta i wiarygodność danych – to nie jest ROAS ani prognoza wyników.
                 Kary: krytyczny −10, ostrzeżenie −4, informacja −1 (niektóre informacje 0) w puli swojego obszaru. Pominięte problemy nie obniżają wyniku.
               </p>
@@ -98,7 +98,7 @@
 
           @php $quality = $run['data_quality'] ?? []; $activity = $quality['activity'] ?? null; @endphp
           @if ($quality)
-            <div class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+            <div class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
               @if ($activity)
                 <dl class="grid gap-x-6 gap-y-1 sm:grid-cols-3">
                   <div><dt class="inline">Pierwszy dzień z danymi:</dt> <dd class="pp-num inline text-ink">{{ Format::date($activity['first_day']) }}</dd></div>
@@ -121,8 +121,8 @@
         @foreach ($sections as $key => [$title, $hint])
           <section aria-labelledby="pp-sec-{{ $key }}" class="space-y-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="pp-sec-{{ $key }}" class="text-[15px] font-semibold text-ink">{{ $title }} <span class="pp-num text-ink-mute">({{ count($groups[$key]) }})</span></h2>
-              <p class="text-[13px] text-ink-mute">{{ $hint }}</p>
+              <h2 id="pp-sec-{{ $key }}" class="pp-card-title">{{ $title }} <span class="pp-num text-ink-mute">({{ count($groups[$key]) }})</span></h2>
+              <p class="text-meta text-ink-mute">{{ $hint }}</p>
             </div>
             @forelse ($groups[$key] as $finding)
               @include('app.partials.audit.finding', ['finding' => $finding, 'projectId' => $project->id, 'open' => $key === 'critical' && $finding['status'] === 'new'])
@@ -134,7 +134,7 @@
 
         @if ($groups['dismissed'] !== [])
           <details class="space-y-3">
-            <summary class="cursor-pointer text-[15px] font-semibold text-ink">Pominięte <span class="pp-num text-ink-mute">({{ count($groups['dismissed']) }})</span></summary>
+            <summary class="pp-card-title cursor-pointer">Pominięte <span class="pp-num text-ink-mute">({{ count($groups['dismissed']) }})</span></summary>
             <div class="mt-3 space-y-3">
               @foreach ($groups['dismissed'] as $finding)
                 @include('app.partials.audit.finding', ['finding' => $finding, 'projectId' => $project->id])
@@ -147,7 +147,7 @@
       <aside class="space-y-6">
         @include('app.partials.audit.history')
 
-        <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+        <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
           <h2 class="pp-card-title">Jak działa audyt</h2>
           <p class="mt-2">Reguły są deterministyczne i opisane w dokumentacji – ten sam zestaw danych daje zawsze ten sam wynik. Porównania okresów uwzględniają wielkość próby (np. min. 100 kliknięć), a reguły pomiaru konwersji opierają się na ustawieniach z Google Ads API, nie na nazwach.</p>
           <p class="mt-2">Status „Przejrzany” lub „Pominięty” przechodzi na kolejne audyty, dopóki problem występuje.</p>

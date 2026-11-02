@@ -5,7 +5,7 @@
   use App\PennyPincher\Support\AppUrl;
   $linked = $changes['sets'][(int) $sourceId] ?? null;
 @endphp
-<div class="flex flex-wrap items-center gap-2 text-[12.5px]">
+<div class="flex flex-wrap items-center gap-2 text-caption">
   @if ($linked)
     <a href="{{ AppUrl::project($project->id, 'changes/' . $linked['id']) }}" class="pp-btn pp-btn-secondary pp-btn-sm"><x-pp.icon name="changes" :size="16" /> Zmiana #{{ $linked['id'] }}</a>
     <span class="pp-badge pp-badge-{{ ChangeStatus::TONES[$linked['status']] ?? 'neutral' }}">{{ ChangeStatus::LABELS[$linked['status']] ?? $linked['status'] }}</span>

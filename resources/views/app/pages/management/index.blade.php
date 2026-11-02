@@ -11,7 +11,7 @@
 @endphp
 
 @section('content')
-  <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+  <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
     <h2 class="pp-card-title">Google Ads Management</h2>
     <p class="mt-1">Przegląd kampanii, grup reklam, słów kluczowych, wykluczeń i reklam oraz przygotowanie zmian. <strong class="text-ink">Każda akcja tworzy szkic w Change Center</strong> – nic nie trafia do Google Ads bez podglądu, odczytu aktualnego stanu z API, zatwierdzenia i świadomego wdrożenia.</p>
     <p class="mt-1">Edycja: kampanie w sieci wyszukiwania. Pozostałe typy (Performance Max, Display, wideo, zakupowe) są widoczne tylko do odczytu – Penny Pincher nie udaje operacji, których nie obsługuje.</p>
@@ -28,7 +28,7 @@
   <section class="pp-card min-w-0" aria-label="Kampanie">
     <div class="pp-card-header">
       <h2 class="pp-card-title">Kampanie</h2>
-      <span class="text-[12.5px] text-ink-mute">Metryki: {{ $period->range->label() }}</span>
+      <span class="text-caption text-ink-mute">Metryki: {{ $period->range->label() }}</span>
     </div>
     @if ($campaigns === [])
       <x-pp.empty-state title="Brak kampanii" icon="campaigns">Zsynchronizuj konto Google Ads albo zaimportuj dane.</x-pp.empty-state>
@@ -47,16 +47,16 @@
               <tr>
                 <td class="pp-col-sticky max-w-[18rem]">
                   <a class="font-semibold break-words text-ink underline-offset-2 hover:underline" href="{{ AppUrl::project($project->id, 'management/campaigns/' . $c['id']) }}">{{ $c['name'] }}</a>
-                  <span class="block text-[12px] text-ink-mute">{{ (int) $c['ad_group_count'] }} {{ Format::plural((int) $c['ad_group_count'], 'grupa', 'grupy', 'grup') }}</span>
+                  <span class="block text-caption text-ink-mute">{{ (int) $c['ad_group_count'] }} {{ Format::plural((int) $c['ad_group_count'], 'grupa', 'grupy', 'grup') }}</span>
                 </td>
                 <td><x-pp.status-badge :status="$c['status']" /></td>
-                <td class="text-[13px] whitespace-nowrap">{{ $c['channel_type'] ?: '—' }}</td>
+                <td class="text-meta whitespace-nowrap">{{ $c['channel_type'] ?: '—' }}</td>
                 <td class="pp-col-num">{{ $c['budget_micros'] !== null ? Format::money((int) $c['budget_micros'], $project->currency) : '—' }}</td>
-                <td class="text-[13px] whitespace-nowrap">{{ OperationCatalog::BIDDING[$c['bidding_strategy']] ?? ($c['bidding_strategy'] ?: '—') }}</td>
+                <td class="text-meta whitespace-nowrap">{{ OperationCatalog::BIDDING[$c['bidding_strategy']] ?? ($c['bidding_strategy'] ?: '—') }}</td>
                 <td class="pp-col-num">{{ $m ? Format::money($m['cost_micros'], $project->currency) : '—' }}</td>
                 <td class="pp-col-num">{{ $m ? Format::number($m['clicks']) : '—' }}</td>
                 <td class="pp-col-num">{{ $m ? Format::conversions($m['conversions']) : '—' }}</td>
-                <td class="text-[12.5px] whitespace-nowrap">
+                <td class="text-caption whitespace-nowrap">
                   @if (! $c['external_id'])<span class="text-ink-mute">import – brak ID</span>
                   @elseif (! $search)<span class="text-ink-mute">tylko odczyt</span>
                   @else<span class="text-mint-dark">wyszukiwanie</span>@endif
@@ -73,7 +73,7 @@
     @if ($canPrepare)
       <section class="pp-card p-5" aria-labelledby="new-campaign">
         <h2 id="new-campaign" class="pp-card-title">Nowa kampania w sieci wyszukiwania</h2>
-        <p class="mt-1 text-[13px] text-ink-soft">Kampania powstanie jako <strong>wstrzymana</strong> razem z własnym (niewspółdzielonym) budżetem, lokalizacją i językiem – w jednej niepodzielnej operacji. Grupy reklam, słowa i reklamy dodasz potem albo wdrożysz cały plan z Campaign Plannera.</p>
+        <p class="mt-1 text-meta text-ink-soft">Kampania powstanie jako <strong>wstrzymana</strong> razem z własnym (niewspółdzielonym) budżetem, lokalizacją i językiem – w jednej niepodzielnej operacji. Grupy reklam, słowa i reklamy dodasz potem albo wdrożysz cały plan z Campaign Plannera.</p>
         <form method="post" action="{{ AppUrl::project($project->id, 'management/campaigns/new') }}" class="mt-3 grid gap-4 sm:grid-cols-2">
           <x-pp.nonce />
           <x-pp.field name="name" label="Nazwa kampanii" required class="sm:col-span-2" />
@@ -84,14 +84,14 @@
           <x-pp.field name="languages[]" label="Język" :options="BusinessContext::LANGUAGES" :value="$project->context()->language()" required />
           <x-pp.field name="presence" label="Kierowanie na lokalizację" :options="['presence' => 'Osoby w lokalizacji (zalecane)', 'interest' => 'Osoby w lokalizacji lub nią zainteresowane']" value="presence" required />
           <x-pp.field name="eu_political" label="Reklamy polityczne w UE" :options="['' => 'Wybierz…', 'no' => 'Nie zawiera reklam politycznych', 'yes' => 'Zawiera reklamy polityczne']" required help="Wymagane przez Google Ads przy tworzeniu kampanii." />
-          <label class="flex items-start gap-2 text-[13px] sm:col-span-2"><input type="checkbox" name="search_partners" value="1" class="mt-1"> <span>Partnerzy wyszukiwania Google (domyślnie wyłączone)</span></label>
+          <label class="flex items-start gap-2 text-meta sm:col-span-2"><input type="checkbox" name="search_partners" value="1" class="mt-1"> <span>Partnerzy wyszukiwania Google (domyślnie wyłączone)</span></label>
           @include('app.partials.changes.draft-select', ['id' => 'f-new-set'])
           <div class="sm:col-span-2"><x-pp.button icon="plus">Przygotuj kampanię (szkic)</x-pp.button></div>
         </form>
       </section>
     @endif
 
-    <section class="pp-card p-5 text-[13px] leading-6" aria-labelledby="supported">
+    <section class="pp-card p-5 text-meta leading-6" aria-labelledby="supported">
       <h2 id="supported" class="pp-card-title">Co można przygotować</h2>
       <ul class="mt-2 list-disc space-y-1 pl-5 text-ink-soft">
         <li><strong class="text-ink">Kampanie (wyszukiwanie):</strong> utworzenie (wstrzymana), nazwa, wstrzymanie/włączenie, budżet dzienny (z ostrzeżeniem o budżecie współdzielonym), sieci, strategia stawek (ręczny CPC, maks. kliknięć, maks. konwersji ± docelowy CPA), lokalizacje, języki, wykluczenia.</li>

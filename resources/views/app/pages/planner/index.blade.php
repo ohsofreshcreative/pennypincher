@@ -10,7 +10,7 @@
 @endphp
 
 @section('content')
-  <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+  <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
     <h2 class="pp-card-title">Campaign Planner</h2>
     <p class="mt-1">Przygotuj nowe kampanie: kampanie → grupy reklam → słowa kluczowe z dopasowaniem, wykluczenia, teksty reklam i podział budżetu. Plan to dokument roboczy – <strong class="text-ink">nic nie trafia automatycznie na konto Google Ads</strong>. Gotowy plan wyeksportujesz do CSV lub dokumentu do druku.</p>
     <p class="mt-1">Najszybciej: w <a href="{{ AppUrl::project($project->id, 'keywords', ['tab' => 'clusters']) }}" class="font-semibold text-mint underline">Keyword Opportunities → Klastry</a> wybierz „Dodaj klaster do planu”.</p>
@@ -43,16 +43,16 @@
                     <span class="font-semibold text-ink">{{ $plan['name'] }}</span>
                     <x-pp.status-badge :status="$statusTones[$plan['status']] ?? 'info'" :label="PlanStatus::LABELS[$plan['status']] ?? $plan['status']" />
                   </span>
-                  <span class="mt-0.5 block text-[13px] text-ink-mute">
+                  <span class="mt-0.5 block text-meta text-ink-mute">
                     {{ (int) $plan['campaign_count'] }} {{ Format::plural((int) $plan['campaign_count'], 'kampania', 'kampanie', 'kampanii') }} ·
                     {{ (int) $plan['keyword_count'] }} {{ Format::plural((int) $plan['keyword_count'], 'słowo', 'słowa', 'słów') }} ·
                     {{ $plan['author_name'] ?: '—' }} · {{ Format::datetime($plan['updated_at']) }}
                   </span>
                 </span>
-                <span class="pp-num text-right text-[13px] text-ink-soft">
+                <span class="pp-num text-right text-meta text-ink-soft">
                   {{ $plan['monthly_budget_micros'] !== null ? Format::money($plan['monthly_budget_micros'], $plan['currency'], 0) . ' / mies.' : 'bez budżetu' }}
                   @if ($plan['monthly_budget_micros'] !== null)
-                    <span class="block text-[12px] text-ink-mute">przydzielono {{ Format::money((int) $plan['allocated_micros'], $plan['currency'], 0) }}</span>
+                    <span class="block text-caption text-ink-mute">przydzielono {{ Format::money((int) $plan['allocated_micros'], $plan['currency'], 0) }}</span>
                   @endif
                 </span>
               </a>

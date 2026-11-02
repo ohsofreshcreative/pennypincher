@@ -11,7 +11,7 @@
 @endphp
 
 @section('content')
-  <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+  <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="max-w-3xl">
         <h2 class="pp-card-title">Change Center</h2>
@@ -81,14 +81,14 @@
                     <span class="pp-badge pp-badge-{{ $set['risk_level'] === 'high' ? 'danger' : 'warn' }}">Ryzyko: {{ ChangeStatus::RISKS[$set['risk_level']] }}</span>
                   @endif
                 </span>
-                <span class="mt-0.5 block text-[13px] text-ink-mute">
+                <span class="mt-0.5 block text-meta text-ink-mute">
                   {{ ChangeCenterService::SOURCES[$set['source_type']] ?? $set['source_type'] }}@if ($set['source_label']) · {{ $set['source_label'] }}@endif ·
                   {{ (int) $set['operation_count'] }} {{ Format::plural((int) $set['operation_count'], 'operacja', 'operacje', 'operacji') }} ·
                   konto {{ $set['customer_id'] ?: '—' }} · {{ $set['author_name'] ?: '—' }} · {{ Format::datetime($set['updated_at']) }}
                 </span>
               </span>
               @if ($set['budget_impact_micros'] !== null && (int) $set['budget_impact_micros'] !== 0)
-                <span class="pp-num text-right text-[13px] {{ (int) $set['budget_impact_micros'] > 0 ? 'text-warn' : 'text-ink-soft' }}">
+                <span class="pp-num text-right text-meta {{ (int) $set['budget_impact_micros'] > 0 ? 'text-warn' : 'text-ink-soft' }}">
                   {{ (int) $set['budget_impact_micros'] > 0 ? '+' : '' }}{{ Format::money((int) $set['budget_impact_micros'], $project->currency) }} / dzień
                 </span>
               @endif

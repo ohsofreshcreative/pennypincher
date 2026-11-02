@@ -2,6 +2,13 @@
 
 Stan na 12.10.2026 (etap 5 – Prompt 5; wcześniej Prompt 1, 1.1, 2, 3, 4 i poprawki diagnostyki/GAQL).
 
+## Penny Pincher 2.0 – przebudowa interfejsu (02.11.2026)
+
+Nowe ekrany za flagami `pp2_*` (domyślnie wyłączone), bez migracji; changelog, kolejność włączania, rollback
+i kryteria usunięcia legacy – `docs/WYDANIE_2_0.md`. Lokalnie: testy 145/145 unit, 344/344 wszystkie; próba
+włączania flag po kolei i wycofania – 0 błędów, po wyłączeniu HTML identyczny z wyjściowym. Na produkcji nie
+wdrożone; legacy nieusunięte (wymaga zgody).
+
 ## Prompt 5 – Google Ads Management, Change Center, One-Click Optimization
 
 ### Zrobione

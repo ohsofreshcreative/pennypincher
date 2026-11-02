@@ -53,7 +53,7 @@
       </x-pp.empty-state>
     </section>
   @elseif ($tab === 'opportunities')
-    <details class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+    <details class="pp-card p-5 text-meta leading-6 text-ink-soft">
       <summary class="cursor-pointer font-semibold text-ink">Jak czytać ocenę fraz?</summary>
       <p class="mt-2"><strong class="text-ink">Opportunity Score (0–100)</strong> mówi, jak atrakcyjna biznesowo jest fraza: dopasowanie do oferty, intencja zakupowa, wyniki w Google Ads, zgodność z grupą docelową, brak w obecnych kampaniach, koszt kliknięcia (liczy się tylko przy dobrej intencji), popularność i konkurencja. To heurystyka, nie prognoza zysku.</p>
       <p class="mt-1"><strong class="text-ink">Pewność</strong> mówi, na ile ocena opiera się na danych: brakujące dane (np. wolumen, CPC) dają 0 punktów i obniżają pewność – nie oznaczają, że popytu nie ma.</p>
@@ -135,7 +135,7 @@
 
           @if ($canDecide || $canPlan)
             <div class="flex flex-wrap items-end gap-2 border-b border-line px-5 py-3">
-              <p class="mr-2 text-[13px] text-ink-mute">Zaznaczone: <span class="pp-num font-semibold text-ink" x-text="count">0</span></p>
+              <p class="mr-2 text-meta text-ink-mute">Zaznaczone: <span class="pp-num font-semibold text-ink" x-text="count">0</span></p>
               @if ($canDecide)
                 <button type="submit" name="status" value="accepted" class="pp-btn pp-btn-secondary pp-btn-sm">Zaakceptuj</button>
                 <button type="submit" name="status" value="to_review" class="pp-btn pp-btn-secondary pp-btn-sm">Do sprawdzenia</button>
@@ -194,7 +194,7 @@
                           @if ($flag !== PhraseQuality::OWN_BRAND)<span class="pp-badge pp-badge-warn">{{ PhraseQuality::LABELS[$flag] ?? $flag }}</span>@endif
                         @endforeach
                       </span>
-                      <div x-show="open" x-cloak class="mt-3 space-y-2 text-[12.5px] leading-5 text-ink-soft">
+                      <div x-show="open" x-cloak class="mt-3 space-y-2 text-caption leading-5 text-ink-soft">
                         @if ($explanation['action'] ?? null)
                           <p class="rounded-[var(--radius-control)] bg-mint-soft px-2.5 py-1.5 text-ink"><strong>Sugerowane działanie:</strong> {{ $explanation['action'] }}</p>
                         @endif
@@ -233,7 +233,7 @@
                     </td>
                     <td class="pp-col-num">
                       <span class="text-ink">{{ Statistics::CONFIDENCE_LABELS[$row['confidence']] ?? $row['confidence'] }}</span>
-                      @if ($row['confidence_score'] !== null)<span class="block text-[11.5px] text-ink-mute">{{ $row['confidence_score'] }}/100</span>@endif
+                      @if ($row['confidence_score'] !== null)<span class="block text-2xs text-ink-mute">{{ $row['confidence_score'] }}/100</span>@endif
                     </td>
                     <td class="whitespace-nowrap text-ink-soft">{{ Text::INTENT_LABELS[$row['intent']] ?? 'Brak danych' }}</td>
                     <td class="pp-col-num">
@@ -242,7 +242,7 @@
                       @else
                         {{ Format::money($row['cpc_micros'], $row['cpc_currency'] ?? $currency) }}
                         @if (($row['cpc_currency'] ?? $currency) !== $currency)
-                          <span class="block text-[11.5px] text-ink-mute" title="{{ $row['fx_source'] ? 'Kurs ' . rtrim(rtrim(number_format((float) $row['fx_rate'], 4, ',', ''), '0'), ',') . ' z ' . Format::date($row['fx_date']) . ' (' . $row['fx_source'] . ')' : '' }}">
+                          <span class="block text-2xs text-ink-mute" title="{{ $row['fx_source'] ? 'Kurs ' . rtrim(rtrim(number_format((float) $row['fx_rate'], 4, ',', ''), '0'), ',') . ' z ' . Format::date($row['fx_date']) . ' (' . $row['fx_source'] . ')' : '' }}">
                             {{ $row['cpc_project_micros'] !== null ? '≈ ' . Format::money($row['cpc_project_micros'], $currency) . ' (kurs z ' . Format::date($row['fx_date']) . ')' : 'brak kursu – porównanie niedostępne' }}
                           </span>
                         @endif
@@ -258,14 +258,14 @@
                     <td class="max-w-[200px] text-ink-soft">
                       @if ($group)
                         <span class="block truncate">{{ $group['name'] }}</span>
-                        <span class="block truncate text-[12px] text-ink-mute">{{ $campaignOptions[$group['campaign_id']] ?? '—' }}</span>
+                        <span class="block truncate text-caption text-ink-mute">{{ $campaignOptions[$group['campaign_id']] ?? '—' }}</span>
                       @elseif ($row['suggested_campaign_id'])
                         <span class="block truncate">{{ $campaignOptions[(int) $row['suggested_campaign_id']] ?? '—' }}</span>
                       @else
                         <span class="text-ink-mute">Do przypisania</span>
                       @endif
                     </td>
-                    <td class="text-[12.5px] text-ink-soft">{{ implode(', ', array_map(fn ($s) => $sourceLabels[$s] ?? $s, explode(',', $row['sources']))) }}</td>
+                    <td class="text-caption text-ink-soft">{{ implode(', ', array_map(fn ($s) => $sourceLabels[$s] ?? $s, explode(',', $row['sources']))) }}</td>
                   </tr>
                 @endforeach
               </tbody>
@@ -274,14 +274,14 @@
         </form>
         <x-pp.pagination :paginator="$opportunities" label="fraz" />
       @endif
-      <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+      <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
         CPC z DataForSEO jest podawane w oryginalnej walucie (USD) i przeliczane na {{ $currency }} wyłącznie po kursie NBP z podaną datą; bez aktualnego kursu porównanie nie jest wykonywane.
         Słowa dodajesz samodzielnie w Google Ads – Penny Pincher niczego nie zmienia na koncie.
       </p>
     </section>
   @elseif ($tab === 'clusters')
     <section class="space-y-4" aria-label="Klastry słów kluczowych">
-      <p class="text-[13px] leading-6 text-ink-soft">
+      <p class="text-meta leading-6 text-ink-soft">
         Klaster łączy frazy o podobnym znaczeniu i tej samej intencji (np. różne sposoby pytania o cenę strony). Frazy z innym modyfikatorem – „cena”, „za darmo”, lokalizacja – albo inną intencją trafiają do osobnych klastrów.
         <strong class="text-ink">Wolumen klastra to szacunek:</strong> podajemy wolumen najpopularniejszej frazy i sumę jako górną granicę – podobne frazy mogą dotyczyć tych samych wyszukiwań.
       </p>
@@ -292,7 +292,7 @@
           <div class="flex flex-wrap items-start justify-between gap-3 px-5 pt-4">
             <div class="min-w-0">
               <h3 class="font-semibold text-ink">{{ $cluster['name'] }}</h3>
-              <p class="mt-0.5 text-[13px] text-ink-mute">
+              <p class="mt-0.5 text-meta text-ink-mute">
                 {{ $cluster['phrase_count'] }} {{ Format::plural((int) $cluster['phrase_count'], 'fraza', 'frazy', 'fraz') }}
                 · intencja: {{ Text::INTENT_LABELS[$cluster['intent']] ?? 'nieokreślona' }}
                 @if ($cluster['topic'] && $cluster['topic'] !== '—') · temat: {{ $cluster['topic'] }}@endif
@@ -301,15 +301,15 @@
             </div>
             <div class="text-right">
               <p class="pp-num text-xl font-semibold text-ink">{{ $cluster['score'] }}</p>
-              <p class="text-[12px] text-ink-mute">pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$cluster['confidence']] ?? $cluster['confidence']) }}</p>
+              <p class="text-caption text-ink-mute">pewność: {{ mb_strtolower(Statistics::CONFIDENCE_LABELS[$cluster['confidence']] ?? $cluster['confidence']) }}</p>
             </div>
           </div>
-          <dl class="grid gap-x-6 gap-y-1 px-5 py-3 text-[13px] sm:grid-cols-2 lg:grid-cols-4">
+          <dl class="grid gap-x-6 gap-y-1 px-5 py-3 text-meta sm:grid-cols-2 lg:grid-cols-4">
             <div><dt class="text-ink-mute">Wolumen (szacunek)</dt><dd class="pp-num text-ink">{{ $cluster['volume_max'] === null ? 'Brak danych' : 'od ' . Format::number($cluster['volume_max']) . ' do ' . Format::number($cluster['volume_sum']) . ' / mies.' }}</dd></div>
             <div><dt class="text-ink-mute">CPC (mediana)</dt><dd class="pp-num text-ink">
               {{ $cluster['cpc_project_micros'] !== null ? Format::money((int) $cluster['cpc_project_micros'], $currency) : 'Brak porównywalnych danych' }}
               @foreach ($cluster['cpc_original'] as $cur => $value)
-                @if ($cur !== $currency)<span class="block text-[11.5px] text-ink-mute">{{ Format::money((int) $value, $cur) }} ({{ $cur }}, oryginalnie)</span>@endif
+                @if ($cur !== $currency)<span class="block text-2xs text-ink-mute">{{ Format::money((int) $value, $cur) }} ({{ $cur }}, oryginalnie)</span>@endif
               @endforeach
             </dd></div>
             <div><dt class="text-ink-mute">Sugerowane miejsce</dt><dd class="text-ink">
@@ -364,7 +364,7 @@
           <input type="hidden" name="run" value="{{ $run['id'] }}">
         </form>
         @if ($deployableNegatives !== [])
-          <div class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3 text-[13px]">
+          <div class="flex flex-wrap items-center gap-3 border-b border-line px-5 py-3 text-meta">
             <x-pp.button variant="secondary" size="sm" icon="changes" form="negatives-change" class="max-w-full whitespace-normal text-left" data-busy-label="Przygotowywanie…">Przygotuj zaznaczone wykluczenia</x-pp.button>
             <span class="text-ink-mute">Tworzy szkic do przeglądu i zatwierdzenia. Penny Pincher sprawdzi konflikty z aktywnymi słowami – nic nie trafia do Google Ads automatycznie, także pojedyncze drogie zapytanie.</span>
           </div>
@@ -392,17 +392,17 @@
                   @endif
                   <td class="pp-col-sticky max-w-[260px] align-top">
                     <button type="button" class="text-left font-medium text-ink hover:text-mint" x-on:click="open = !open" x-bind:aria-expanded="open">{{ $row['phrase'] }}</button>
-                    <ul x-show="open" x-cloak class="mt-2 space-y-0.5 text-[12px] text-ink-soft">
+                    <ul x-show="open" x-cloak class="mt-2 space-y-0.5 text-caption text-ink-soft">
                       @foreach ($row['related_terms'] as $term)
                         <li><span class="text-ink">{{ $term['term'] }}</span> · <span class="pp-num">{{ Format::money((int) $term['cost_micros'], $currency) }}</span> · {{ $term['campaign'] }}</li>
                       @endforeach
                     </ul>
                   </td>
-                  <td class="max-w-[320px] align-top text-[13px] text-ink-soft">{{ $row['reason'] }}</td>
+                  <td class="max-w-[320px] align-top text-meta text-ink-soft">{{ $row['reason'] }}</td>
                   <td class="pp-col-num align-top">{{ Format::money($row['cost_micros'] === null ? null : (int) $row['cost_micros'], $currency) }}</td>
                   <td class="pp-col-num align-top">{{ Format::number($row['clicks']) }}</td>
                   <td class="align-top text-ink-soft">{{ Statistics::CONFIDENCE_LABELS[$row['confidence']] ?? $row['confidence'] }}</td>
-                  <td class="align-top text-ink-soft">{{ $levels[$row['level']] ?? $row['level'] }}@if ($row['level'] === 'campaign' && $row['campaign_id'])<span class="block text-[12px] text-ink-mute">{{ $campaignOptions[(int) $row['campaign_id']] ?? '' }}</span>@endif</td>
+                  <td class="align-top text-ink-soft">{{ $levels[$row['level']] ?? $row['level'] }}@if ($row['level'] === 'campaign' && $row['campaign_id'])<span class="block text-caption text-ink-mute">{{ $campaignOptions[(int) $row['campaign_id']] ?? '' }}</span>@endif</td>
                   <td class="align-top text-ink-soft">{{ $matchLabels[$row['match_type']] ?? $row['match_type'] }}</td>
                   <td class="align-top">
                     @if ((int) $row['already_excluded'])
@@ -417,7 +417,7 @@
           </table>
         </div>
       @endif
-      <p class="border-t border-line px-5 py-3 text-[12.5px] leading-5 text-ink-mute">
+      <p class="border-t border-line px-5 py-3 text-caption leading-5 text-ink-mute">
         Zapytania informacyjne mają niską pewność – część z nich może prowadzić do klientów. Wykluczenia na poziomie kampanii możesz przygotować w Change Center (zaznacz i kliknij przycisk) albo dodać do planu kampanii (Campaign Planner → Wykluczenia).
         Penny Pincher nie dodaje wykluczeń automatycznie. Status „Już wykluczona” wynika z wykluczeń zsynchronizowanych z Google Ads.
       </p>
@@ -429,10 +429,10 @@
         <section class="pp-card min-w-0" aria-labelledby="pp-seeds">
           <div class="pp-card-header">
             <h2 id="pp-seeds" class="pp-card-title">Frazy źródłowe ({{ $seedCount }} / {{ DataForSeoClient::MAX_SEEDS }})</h2>
-            <p class="text-[13px] text-ink-mute">{{ $plan['custom'] ? 'Twój zestaw' : 'Propozycje automatyczne' }}{{ $plan['seeds_updated_at'] ? ' · zmieniono ' . Format::datetime($plan['seeds_updated_at']) : '' }}</p>
+            <p class="text-meta text-ink-mute">{{ $plan['custom'] ? 'Twój zestaw' : 'Propozycje automatyczne' }}{{ $plan['seeds_updated_at'] ? ' · zmieniono ' . Format::datetime($plan['seeds_updated_at']) : '' }}</p>
           </div>
           <div class="space-y-4 p-5 text-sm leading-6">
-            <p class="text-[13px] text-ink-soft">DataForSEO zwraca frazy powiązane z frazami źródłowymi. Automatyczne propozycje pochodzą z usług priorytetowych, grupy docelowej i skutecznych zapytań – bez fraz w innym języku, nazw firm, marek konkurencji, zapytań informacyjnych i darmowych. Możesz usunąć dowolną frazę i dodać własne (maks. {{ DataForSeoClient::MAX_SEEDS }}, każda do 80 znaków).</p>
+            <p class="text-meta text-ink-soft">DataForSEO zwraca frazy powiązane z frazami źródłowymi. Automatyczne propozycje pochodzą z usług priorytetowych, grupy docelowej i skutecznych zapytań – bez fraz w innym języku, nazw firm, marek konkurencji, zapytań informacyjnych i darmowych. Możesz usunąć dowolną frazę i dodać własne (maks. {{ DataForSeoClient::MAX_SEEDS }}, każda do 80 znaków).</p>
 
             @if ($canManage)
               <form method="post" action="{{ AppUrl::project($project->id, 'keywords/dataforseo/seeds') }}" class="space-y-4">
@@ -448,13 +448,13 @@
                         <input id="seed-{{ $i }}" type="checkbox" name="seeds[]" value="{{ $seed['phrase'] }}" checked class="mt-1 size-4 accent-mint">
                         <label for="seed-{{ $i }}" class="min-w-0 flex-1">
                           <span class="text-ink">{{ $seed['phrase'] }}</span>
-                          <span class="ml-1 text-[12px] text-ink-mute">{{ ($seed['source'] ?? '') === 'manual' ? 'dodana ręcznie' : (($seed['source'] ?? '') === 'auto' ? 'automatyczna' : $seed['source']) }}</span>
-                          @if ($seed['warning'] ?? null)<span class="block text-[12px] text-warn">{{ $seed['warning'] }}</span>@endif
+                          <span class="ml-1 text-caption text-ink-mute">{{ ($seed['source'] ?? '') === 'manual' ? 'dodana ręcznie' : (($seed['source'] ?? '') === 'auto' ? 'automatyczna' : $seed['source']) }}</span>
+                          @if ($seed['warning'] ?? null)<span class="block text-caption text-warn">{{ $seed['warning'] }}</span>@endif
                         </label>
                       </li>
                     @endforeach
                   </ul>
-                  <p class="text-[12px] text-ink-mute">Odznacz frazę, aby ją usunąć z zestawu.</p>
+                  <p class="text-caption text-ink-mute">Odznacz frazę, aby ją usunąć z zestawu.</p>
                 @endif
                 <div>
                   <label for="new-seeds" class="pp-label">Dodaj własne frazy (jedna w linii)</label>
@@ -477,7 +477,7 @@
             @endif
 
             @if ($plan['rejected_seeds'])
-              <details class="text-[13px]">
+              <details class="text-meta">
                 <summary class="cursor-pointer text-ink-soft">Automatycznie pominięte frazy ({{ count($plan['rejected_seeds']) }})</summary>
                 <ul class="mt-2 space-y-1 text-ink-soft">
                   @foreach ($plan['rejected_seeds'] as $rejected)
@@ -492,7 +492,7 @@
         <section class="pp-card min-w-0" aria-labelledby="pp-dfs">
           <div class="pp-card-header">
             <h2 id="pp-dfs" class="pp-card-title">Pobranie pomysłów z DataForSEO</h2>
-            <p class="text-[13px] text-ink-mute">{{ $dfs['ideas'] }} zapisanych fraz{{ $dfs['last_fetched'] ? ' · ostatnie pobranie ' . Format::datetime($dfs['last_fetched']) : '' }}</p>
+            <p class="text-meta text-ink-mute">{{ $dfs['ideas'] }} zapisanych fraz{{ $dfs['last_fetched'] ? ' · ostatnie pobranie ' . Format::datetime($dfs['last_fetched']) : '' }}</p>
           </div>
           <div class="space-y-4 p-5 text-sm leading-6">
             @if (! $dfs['configured'])
@@ -500,7 +500,7 @@
                 Dodaj stałe <code>PP_DATAFORSEO_LOGIN</code> i <code>PP_DATAFORSEO_PASSWORD</code> w wp-config.php (poza repozytorium). Instrukcja: docs/DATAFORSEO.md. Frazy źródłowe możesz przygotować już teraz.
               </x-pp.alert>
             @else
-              <dl class="grid gap-x-6 gap-y-1 rounded-[var(--radius-control)] border border-line px-3 py-2.5 text-[13px] sm:grid-cols-2">
+              <dl class="grid gap-x-6 gap-y-1 rounded-[var(--radius-control)] border border-line px-3 py-2.5 text-meta sm:grid-cols-2">
                 <div><dt class="inline text-ink-mute">Endpoint:</dt> <dd class="inline text-ink">Google Ads Keywords For Keywords (live)</dd></div>
                 <div><dt class="inline text-ink-mute">Lokalizacja / język:</dt> <dd class="inline text-ink">{{ \App\PennyPincher\Domain\Projects\BusinessContext::LOCATIONS[$plan['location_code']] ?? $plan['location_code'] }} / {{ $plan['language_code'] }}</dd></div>
                 <div><dt class="inline text-ink-mute">Liczba fraz:</dt> <dd class="pp-num inline text-ink">{{ $seedCount }} / {{ DataForSeoClient::MAX_SEEDS }}</dd></div>
@@ -521,14 +521,14 @@
                   <x-pp.button icon="keyword" data-busy-label="Zlecanie…">Pobierz pomysły z DataForSEO</x-pp.button>
                 </form>
               @else
-                <p class="text-[13px] text-ink-mute">Pobranie danych może zlecić administrator projektu.</p>
+                <p class="text-meta text-ink-mute">Pobranie danych może zlecić administrator projektu.</p>
               @endif
             @endif
 
             @if ($dfs['tasks'])
               <div>
-                <h3 class="text-[13px] font-semibold text-ink">Ostatnie zadania</h3>
-                <ul class="mt-2 divide-y divide-line rounded-[var(--radius-control)] border border-line text-[13px]">
+                <h3 class="text-meta font-semibold text-ink">Ostatnie zadania</h3>
+                <ul class="mt-2 divide-y divide-line rounded-[var(--radius-control)] border border-line text-meta">
                   @foreach ($dfs['tasks'] as $task)
                     <li class="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
                       <span class="pp-num text-ink-soft">#{{ $task['id'] }} · {{ Format::datetime($task['created_at']) }} · {{ count($task['payload'][0]['keywords'] ?? []) }} fraz źródłowych</span>
@@ -536,7 +536,7 @@
                         <span class="pp-num text-ink-mute">{{ $task['cost'] !== null ? DataForSeoService::usd($task['cost']) . ' USD' : 'szac. ' . DataForSeoService::usd($task['estimated_cost']) . ' USD' }}{{ (int) $task['from_cache'] ? ' (cache)' : '' }}{{ $task['result_count'] !== null ? ' · ' . $task['result_count'] . ' wyników' : '' }}</span>
                         <x-pp.status-badge :status="$task['status']" :label="DataForSeoRepository::STATUSES[$task['status']] ?? $task['status']" />
                       </span>
-                      @if ($task['last_error'])<span class="w-full text-[12px] text-danger">{{ $task['last_error'] }}</span>@endif
+                      @if ($task['last_error'])<span class="w-full text-caption text-danger">{{ $task['last_error'] }}</span>@endif
                     </li>
                   @endforeach
                 </ul>
@@ -549,7 +549,7 @@
       <aside class="space-y-6">
         <section class="pp-card p-5 text-sm">
           <h2 class="pp-card-title">Limit i wykorzystanie ({{ $usage['month'] }})</h2>
-          <dl class="mt-3 space-y-1.5 text-[13px]">
+          <dl class="mt-3 space-y-1.5 text-meta">
             <div class="flex justify-between gap-3"><dt class="text-ink-mute">Wydano w projekcie</dt><dd class="pp-num text-ink">{{ DataForSeoService::usd($usage['project_spent']) }} USD</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-ink-mute">Zarezerwowano (w kolejce)</dt><dd class="pp-num text-ink">{{ DataForSeoService::usd($usage['project_reserved']) }} USD</dd></div>
             <div class="flex justify-between gap-3"><dt class="text-ink-mute">Limit projektu</dt><dd class="pp-num text-ink">{{ $usage['project_limit'] === null ? 'nie ustawiono (zapytania zablokowane)' : DataForSeoService::usd($usage['project_limit']) . ' USD' }}</dd></div>
@@ -572,7 +572,7 @@
             @endif
           @endif
         </section>
-        <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+        <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
           <h2 class="pp-card-title">Jak to działa</h2>
           <p class="mt-2">Wejście na stronę nie wysyła zapytań do DataForSEO. Płatne zapytanie powstaje tylko po Twojej zgodzie, w ramach miesięcznego limitu, i wykonuje je proces w tle. Ten sam zestaw fraz w ciągu 30 dni jest brany z pamięci podręcznej bez kosztu.</p>
           <p class="mt-2">Pobrane frazy są deduplikowane, porównywane z istniejącymi słowami i wykluczeniami, oceniane (oferta, intencja, grupa docelowa, CPC, popyt, konkurencja), grupowane w klastry i trafiają do „Nowych fraz”.</p>
@@ -583,7 +583,7 @@
 
   @if ($tab !== 'dataforseo' && $run && $canRun)
     <section class="pp-card flex flex-wrap items-center justify-between gap-4 p-5">
-      <p class="text-[13px] text-ink-mute">Analiza z {{ Format::datetime($run['created_at']) }} dla okresu {{ Format::period($run['date_from'], $run['date_to']) }} · {{ (int) ($run['summary']['terms_analyzed'] ?? 0) }} przeanalizowanych zapytań · {{ (int) ($run['summary']['ideas_available'] ?? 0) }} fraz z DataForSEO · ocena v{{ $run['summary']['score_version'] ?? '1.0' }}.</p>
+      <p class="text-meta text-ink-mute">Analiza z {{ Format::datetime($run['created_at']) }} dla okresu {{ Format::period($run['date_from'], $run['date_to']) }} · {{ (int) ($run['summary']['terms_analyzed'] ?? 0) }} przeanalizowanych zapytań · {{ (int) ($run['summary']['ideas_available'] ?? 0) }} fraz z DataForSEO · ocena v{{ $run['summary']['score_version'] ?? '1.0' }}.</p>
       @include('app.partials.analysis.run-form', ['return' => 'keywords', 'variant' => 'secondary', 'size' => 'sm', 'label' => 'Uruchom ponownie'])
     </section>
   @endif

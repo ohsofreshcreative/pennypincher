@@ -31,5 +31,5 @@
   </div>
 
   <noscript><x-pp.button variant="secondary" size="sm">Pokaż</x-pp.button></noscript>
-  <span class="pp-num hidden text-[13px] text-ink-mute lg:inline" x-show="preset !== 'custom'">{{ $range->label() }}</span>
+  <span class="pp-num hidden text-meta text-ink-mute lg:inline" x-show="preset !== 'custom'">{{ $range->label() }}</span>
 </form>

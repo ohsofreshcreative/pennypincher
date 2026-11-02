@@ -6,7 +6,7 @@
   $account = $w['account'] ?? null;
   $badge = fn (bool $ok, string $yesText, string $noText, string $noTone = 'neutral') => '<span class="pp-badge pp-badge-' . ($ok ? 'ok' : $noTone) . '">' . e($ok ? $yesText : $noText) . '</span>';
 @endphp
-<section id="write-access" class="pp-card p-5 text-[13px] leading-6" aria-labelledby="write-access-title">
+<section id="write-access" class="pp-card p-5 text-meta leading-6" aria-labelledby="write-access-title">
   <h2 id="write-access-title" class="pp-card-title flex items-center gap-2"><x-pp.icon name="shield" /> Uprawnienia do zapisu</h2>
   <p class="mt-1 text-ink-soft">Wdrożenie wymaga jednocześnie: trybu serwera <code>write_enabled</code> i konta na allowliście zapisu (obie rzeczy w konfiguracji serwera – nie da się ich zmienić z aplikacji), zgody właściciela dla tego konta, zatwierdzenia zestawu przez administratora i uruchomienia przez administratora z uprawnieniem „wykonawca zmian”.</p>
 

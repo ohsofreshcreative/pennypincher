@@ -87,12 +87,12 @@
                 <tr>
                   <td class="max-w-[240px]">
                     <a href="{{ AppUrl::project($project->id, 'imports/' . $import['id']) }}" class="block truncate font-medium text-ink hover:text-mint">{{ $import['original_filename'] }}</a>
-                    <span class="pp-num text-[12px] text-ink-mute">#{{ $import['id'] }}, {{ Format::datetime($import['created_at']) }}{{ $import['user_name'] ? ', ' . $import['user_name'] : '' }}</span>
+                    <span class="pp-num text-caption text-ink-mute">#{{ $import['id'] }}, {{ Format::datetime($import['created_at']) }}{{ $import['user_name'] ? ', ' . $import['user_name'] : '' }}</span>
                   </td>
                   <td class="whitespace-nowrap text-ink-soft">{{ $definitions[$import['report_type']] ?? null ? $definitions[$import['report_type']]->label() : 'Nierozpoznany' }}</td>
                   <td class="pp-num whitespace-nowrap text-ink-soft">
                     {{ Format::period($import['date_from'], $import['date_to']) }}
-                    @if ($import['granularity'])<span class="block text-[12px] text-ink-mute">{{ $import['granularity'] === 'day' ? 'dane dzienne' : 'suma za okres' }}</span>@endif
+                    @if ($import['granularity'])<span class="block text-caption text-ink-mute">{{ $import['granularity'] === 'day' ? 'dane dzienne' : 'suma za okres' }}</span>@endif
                   </td>
                   <td class="pp-col-num">{{ $import['status'] === 'completed' ? Format::number($import['rows_imported']) : Format::number($import['rows_total']) }}</td>
                   <td><x-pp.status-badge :status="$import['status']" /></td>

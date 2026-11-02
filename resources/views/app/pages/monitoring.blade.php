@@ -16,7 +16,7 @@
 @endphp
 
 @section('content')
-  <section class="pp-card p-5 text-[13px] leading-6 text-ink-soft">
+  <section class="pp-card p-5 text-meta leading-6 text-ink-soft">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div class="max-w-3xl">
         <h2 class="pp-card-title">Centrum powiadomień</h2>
@@ -70,7 +70,7 @@
                     <x-pp.status-badge :status="$alert['severity']" :label="AlertRepository::SEVERITIES[$alert['severity']]" />
                     <x-pp.status-badge :status="$statusTones[$alert['status']]" :label="AlertRepository::STATUSES[$alert['status']]" />
                     @unless ($alert['condition_active'])<span class="pp-badge pp-badge-neutral">warunek ustał</span>@endunless
-                    <span class="text-[12px] text-ink-mute">{{ AlertDetector::TYPES[$alert['type']] ?? $alert['type'] }} · wykryto {{ (int) $alert['occurrences'] }}× · ostatnio {{ Format::datetime($alert['last_detected_at']) }}</span>
+                    <span class="text-caption text-ink-mute">{{ AlertDetector::TYPES[$alert['type']] ?? $alert['type'] }} · wykryto {{ (int) $alert['occurrences'] }}× · ostatnio {{ Format::datetime($alert['last_detected_at']) }}</span>
                   </span>
                   <span class="mt-1.5 block font-semibold text-ink">{{ $alert['title'] }}</span>
                 </span>
@@ -87,11 +87,11 @@
                     @endforeach
                   </dl>
                 @endif
-                <p class="text-[12.5px] text-ink-mute">
+                <p class="text-caption text-ink-mute">
                   Okres: {{ Format::period($alert['period_from'], $alert['period_to']) }} · pierwsze wykrycie: {{ Format::datetime($alert['first_detected_at']) }}
                   @if ($alert['status'] === 'muted' && $alert['muted_until']) · wyciszony do {{ Format::datetime($alert['muted_until']) }}@endif
                 </p>
-                <div class="flex flex-wrap gap-3 text-[13px]">
+                <div class="flex flex-wrap gap-3 text-meta">
                   @if ($alert['campaign_id'])<a href="{{ AppUrl::project($project->id, 'campaigns/' . $alert['campaign_id']) }}" class="font-semibold text-mint underline">Kampania: {{ $campaignOptions[(int) $alert['campaign_id']] ?? '#' . $alert['campaign_id'] }}</a>
                     <a href="{{ AppUrl::project($project->id, 'management/campaigns/' . $alert['campaign_id']) }}" class="text-mint underline">Przygotuj zmianę kampanii</a>@endif
                   @if ($link !== '' && ! $alert['campaign_id'])<a href="{{ AppUrl::project($project->id, $link) }}" class="font-semibold text-mint underline">Przejdź do szczegółów</a>@endif
@@ -113,15 +113,15 @@
                 @endif
                 @if ($open === (int) $alert['id'] && $events)
                   <div>
-                    <h4 class="text-[13px] font-semibold text-ink">Historia</h4>
-                    <ol class="mt-2 space-y-1 border-l border-line pl-4 text-[12.5px] text-ink-soft">
+                    <h4 class="text-meta font-semibold text-ink">Historia</h4>
+                    <ol class="mt-2 space-y-1 border-l border-line pl-4 text-caption text-ink-soft">
                       @foreach ($events as $event)
                         <li><span class="pp-num text-ink-mute">{{ Format::datetime($event['created_at']) }}</span> · {{ $eventLabels[$event['event']] ?? $event['event'] }}@if ($event['from_status'] || $event['to_status']): {{ AlertRepository::STATUSES[$event['from_status']] ?? '—' }} → {{ AlertRepository::STATUSES[$event['to_status']] ?? '—' }}@endif @if ($event['user_name'])· {{ $event['user_name'] }}@endif @if ($event['note'])– {{ $event['note'] }}@endif</li>
                       @endforeach
                     </ol>
                   </div>
                 @elseif ($open !== (int) $alert['id'])
-                  <a href="{{ AppUrl::project($project->id, 'monitoring', array_filter(request()->query(), 'is_scalar') + ['open' => $alert['id']]) }}#alert-{{ $alert['id'] }}" class="text-[12.5px] text-mint underline">Pokaż historię</a>
+                  <a href="{{ AppUrl::project($project->id, 'monitoring', array_filter(request()->query(), 'is_scalar') + ['open' => $alert['id']]) }}#alert-{{ $alert['id'] }}" class="text-caption text-mint underline">Pokaż historię</a>
                 @endif
               </div>
             </li>
@@ -132,11 +132,11 @@
     </section>
 
     <section class="pp-card min-w-0" id="change-effects" aria-labelledby="change-effects-title">
-      <div class="pp-card-header"><h2 id="change-effects-title" class="pp-card-title">Efekty wdrożonych zmian</h2><a class="text-[12.5px] text-mint underline" href="{{ AppUrl::project($project->id, 'changes', ['status' => 'applied']) }}">Change Center</a></div>
+      <div class="pp-card-header"><h2 id="change-effects-title" class="pp-card-title">Efekty wdrożonych zmian</h2><a class="text-caption text-mint underline" href="{{ AppUrl::project($project->id, 'changes', ['status' => 'applied']) }}">Change Center</a></div>
       @if ($changeEffects === [])
-        <p class="px-5 py-4 text-[13px] text-ink-mute">W ostatnich 60 dniach nie wdrożono zmian przez Change Center.</p>
+        <p class="px-5 py-4 text-meta text-ink-mute">W ostatnich 60 dniach nie wdrożono zmian przez Change Center.</p>
       @else
-        <ul class="divide-y divide-line text-[13px] leading-6">
+        <ul class="divide-y divide-line text-meta leading-6">
           @foreach ($changeEffects as $row)
             @php $e = $row['effects']; @endphp
             <li class="px-5 py-3">
@@ -145,7 +145,7 @@
               @if ($e['available'])
                 @php $cpaB = (float) $e['before']['conversions'] > 0 ? $e['before']['cost_micros'] / $e['before']['conversions'] : null; $cpaA = (float) $e['after']['conversions'] > 0 ? $e['after']['cost_micros'] / $e['after']['conversions'] : null; @endphp
                 <span class="block text-ink-soft">Koszt {{ Format::money((int) $e['before']['cost_micros'], $project->currency, 0) }} → {{ Format::money((int) $e['after']['cost_micros'], $project->currency, 0) }} · konwersje {{ Format::conversions($e['before']['conversions']) }} → {{ Format::conversions($e['after']['conversions']) }}@if ($cpaB && $cpaA) · CPA {{ Format::money((int) round($cpaB), $project->currency, 0) }} → {{ Format::money((int) round($cpaA), $project->currency, 0) }}@endif</span>
-                <span class="block text-[12px] text-ink-mute">Porównanie, nie dowód przyczynowości – sezonowość i inne zmiany też wpływają na wynik.</span>
+                <span class="block text-caption text-ink-mute">Porównanie, nie dowód przyczynowości – sezonowość i inne zmiany też wpływają na wynik.</span>
               @else
                 <span class="block text-ink-mute">{{ $e['message'] }}</span>
               @endif
@@ -157,7 +157,7 @@
 
     <section class="pp-card p-5" id="notifications" aria-labelledby="notif">
       <h2 id="notif" class="pp-card-title">Powiadomienia e-mail</h2>
-      <p class="mt-1 text-[13px] leading-6 text-ink-soft">Domyślnie wyłączone. Po włączeniu dostaniesz najwyżej jeden zbiorczy e-mail na dobę z nowymi alertami tego projektu. Wyciszone i potwierdzone alerty nie są wysyłane, a ten sam alert nie trafia do skrzynki dwa razy.</p>
+      <p class="mt-1 text-meta leading-6 text-ink-soft">Domyślnie wyłączone. Po włączeniu dostaniesz najwyżej jeden zbiorczy e-mail na dobę z nowymi alertami tego projektu. Wyciszone i potwierdzone alerty nie są wysyłane, a ten sam alert nie trafia do skrzynki dwa razy.</p>
       <form method="post" action="{{ AppUrl::project($project->id, 'monitoring/preferences') }}" class="mt-4 space-y-3">
         <x-pp.nonce />
         <label class="flex items-start gap-2.5 text-sm"><input type="checkbox" name="enabled" value="1" class="mt-1 accent-mint" @checked($preferences['enabled'])> <span>Wysyłaj mi powiadomienia o nowych alertach</span></label>
@@ -165,7 +165,7 @@
           <label for="min-sev" class="pp-label">Minimalna ważność</label>
           <select id="min-sev" name="min_severity" class="pp-input pp-input-sm w-56"><option value="critical" @selected($preferences['min_severity'] === 'critical')>Tylko krytyczne</option><option value="warning" @selected($preferences['min_severity'] === 'warning')>Krytyczne i ostrzeżenia</option></select>
         </div>
-        @if ($preferences['last_sent'])<p class="text-[12px] text-ink-mute">Ostatnia wiadomość: {{ Format::datetime(gmdate('Y-m-d H:i:s', $preferences['last_sent'])) }}</p>@endif
+        @if ($preferences['last_sent'])<p class="text-caption text-ink-mute">Ostatnia wiadomość: {{ Format::datetime(gmdate('Y-m-d H:i:s', $preferences['last_sent'])) }}</p>@endif
         <x-pp.button variant="secondary" size="sm">Zapisz ustawienia</x-pp.button>
       </form>
     </section>

@@ -124,6 +124,17 @@ class ChangeSetRepository
 	 *
 	 * @return array<int, int>
 	 */
+	/**
+	 * Anulowanie zestawu z kolejki, którego worker jeszcze nie przejął (bez wyścigu z claim()).
+	 */
+	public function cancelQueued(int $id): bool
+	{
+		return $this->db->statement(
+			'UPDATE ' . $this->db->table('change_sets') . ' SET status = ?, deploy_key = NULL, next_attempt_at = NULL, updated_at = ? WHERE id = ? AND status = ? AND worker_token IS NULL',
+			[ChangeStatus::CANCELLED, $this->db->now(), $id, ChangeStatus::DEPLOYING]
+		) === 1;
+	}
+
 	public function due(int $limit = 10): array
 	{
 		return array_map('intval', $this->db->column(

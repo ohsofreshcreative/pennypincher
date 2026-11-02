@@ -8,8 +8,8 @@ use App\PennyPincher\Domain\Conversions\ConversionClass;
 use App\PennyPincher\Repositories\ConversionActionRepository;
 use App\PennyPincher\Services\AccessService;
 use App\PennyPincher\Services\Analysis\ConversionBreakdown;
+use App\PennyPincher\Services\Conversions\ConversionCenterService;
 use App\PennyPincher\Support\AnalysisPeriodRequest;
-use App\PennyPincher\Support\AppUrl;
 use Illuminate\Http\Request;
 
 /**
@@ -67,7 +67,7 @@ class ConversionsController extends Controller
 			}
 		}
 
-		return $this->redirect(AppUrl::project($project->id, 'conversions'), $changed > 0
+		return $this->redirect(ConversionCenterService::back($project->id, 'conversions'), $changed > 0
 			? "Zapisano klasyfikację ({$changed}). Uruchom ponownie analizę, aby uwzględnić zmiany w Budget Leaks i rekomendacjach."
 			: 'Bez zmian.');
 	}
