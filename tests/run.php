@@ -39,6 +39,11 @@ if (! defined('ABSPATH')) {
 
 require_once __DIR__ . '/TestCase.php';
 
+// Flagi 2.0 tylko z filtrów w testach – stałe PP2_* z lokalnego wp-config.php nie wpływają na wynik.
+if (class_exists(\App\PennyPincher\Support\Feature::class)) {
+	\App\PennyPincher\Support\Feature::$readConstants = false;
+}
+
 if (defined('ABSPATH')) {
 	require_once ABSPATH . 'wp-admin/includes/file.php';
 	require_once __DIR__ . '/IntegrationTestCase.php';

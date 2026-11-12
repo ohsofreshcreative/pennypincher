@@ -75,6 +75,9 @@ class NavigationTest extends TestCase
 		$this->assertFalse(Feature::enabled('pp2_unit_probe_off'));
 
 		define('PP2_UNIT_PROBE_ON', true);
+		$read = Feature::$readConstants;
+		Feature::$readConstants = true;
 		$this->assertTrue(Feature::enabled('pp2_unit_probe_on'));
+		Feature::$readConstants = $read;
 	}
 }

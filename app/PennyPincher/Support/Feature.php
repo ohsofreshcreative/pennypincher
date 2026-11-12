@@ -27,10 +27,13 @@ final class Feature
 
 	public const ASSISTANT = 'pp2_assistant';
 
+	/** Testy wyłączają odczyt stałych z wp-config.php, żeby wynik nie zależał od lokalnej konfiguracji. */
+	public static bool $readConstants = true;
+
 	public static function enabled(string $name): bool
 	{
 		$constant = strtoupper($name);
-		$default = defined($constant) && (bool) constant($constant);
+		$default = self::$readConstants && defined($constant) && (bool) constant($constant);
 
 		return (bool) apply_filters('pennypincher/feature/' . $name, $default);
 	}

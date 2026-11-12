@@ -194,4 +194,30 @@
       </main>
     </div>
   </div>
+
+  @if ($guide = \App\PennyPincher\Support\PageGuide::for($section, request()->path()))
+    {{-- Instrukcja strony: treść w App\PennyPincher\Support\PageGuide. --}}
+    <button type="button" class="pp-btn pp-btn-primary fixed bottom-5 right-5 z-30 rounded-full p-3 shadow-lg" x-data x-on:click="$dispatch('open-modal', 'pp-page-guide')" aria-label="Instrukcja: {{ $guide['title'] }}" title="Instrukcja tej strony" data-page-guide>
+      <x-pp.icon name="file" :size="20" />
+    </button>
+    <x-pp.modal id="pp-page-guide" :title="'Jak korzystać: ' . $guide['title']">
+      <div class="space-y-4 text-sm text-ink-soft">
+        <p>{{ $guide['intro'] }}</p>
+        <div>
+          <h3 class="font-semibold text-ink">Krok po kroku</h3>
+          <ol class="mt-1 list-decimal space-y-1 pl-5">
+            @foreach ($guide['steps'] as $step)<li>{{ $step }}</li>@endforeach
+          </ol>
+        </div>
+        @if (! empty($guide['notes']))
+          <div>
+            <h3 class="font-semibold text-ink">Dobrze wiedzieć</h3>
+            <ul class="mt-1 list-disc space-y-1 pl-5">
+              @foreach ($guide['notes'] as $note)<li>{{ $note }}</li>@endforeach
+            </ul>
+          </div>
+        @endif
+      </div>
+    </x-pp.modal>
+  @endif
 @endsection
