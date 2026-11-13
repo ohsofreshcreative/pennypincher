@@ -9,6 +9,7 @@
 
 use App\PennyPincher\Http\Controllers\ActionInboxController;
 use App\PennyPincher\Http\Controllers\AdministrationController;
+use App\PennyPincher\Http\Controllers\GuideController;
 use App\PennyPincher\Http\Controllers\AssistantController;
 use App\PennyPincher\Http\Controllers\ActionPlanController;
 use App\PennyPincher\Http\Controllers\AnalysisController;
@@ -185,6 +186,7 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 			Route::get('settings', [SettingsController::class, 'edit'])->name('pp.settings');
 			Route::post('settings', [SettingsController::class, 'update']);
 			Route::get('administration', [AdministrationController::class, 'index'])->name('pp.administration');
+			Route::get('guide', [GuideController::class, 'index'])->name('pp.guide');
 			// Adresy sekcji głównych nowej nawigacji bez własnego ekranu – przekierowanie do pierwszego podwidoku.
 			Route::get('{group}', [HomeController::class, 'group'])->whereIn('group', array_keys(Navigation::ALIASES));
 		});

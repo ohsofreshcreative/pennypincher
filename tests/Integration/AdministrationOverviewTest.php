@@ -145,7 +145,7 @@ class AdministrationOverviewTest extends ChangeCenterTestCase
 		$response = $this->get(AppUrl::project($this->project->id, 'administration', ['saved' => '1']));
 		$this->assertTrue($response->isRedirect(AppUrl::project($this->project->id, 'settings', ['saved' => '1'])), 'Bez flagi: Ustawienia jak dotąd.');
 		$this->assertSame('settings', Navigation::resolve('administration'));
-		$this->assertSame(Navigation::GROUPS['administration'], Navigation::groups()['administration']);
+		$this->assertSame(Navigation::GROUPS['administration']['items'] + Navigation::GUIDE, Navigation::groups()['administration']['items']);
 
 		$this->flag(true);
 		$this->assertSame('administration', Navigation::resolve('administration'));

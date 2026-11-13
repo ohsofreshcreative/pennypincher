@@ -23,6 +23,7 @@
         ['conversion-management', 'Conversion Management', 'flag', AppUrl::project($project->id, 'conversion-management')],
         ['google-ads', 'Google Ads', 'link', AppUrl::project($project->id, 'google-ads')],
         ['imports', 'Importy', 'import', AppUrl::project($project->id, 'imports')],
+        ['guide', 'Instrukcja', 'file', AppUrl::project($project->id, 'guide')],
       ]
     : [];
   $groupedProjects = collect($projects)->groupBy('organizationName');
@@ -216,6 +217,9 @@
               @foreach ($guide['notes'] as $note)<li>{{ $note }}</li>@endforeach
             </ul>
           </div>
+        @endif
+        @if (! empty($project))
+          <p><a class="text-mint-dark underline" href="{{ AppUrl::project($project->id, 'guide') }}">Pełna instrukcja: od czego zacząć →</a></p>
         @endif
       </div>
     </x-pp.modal>

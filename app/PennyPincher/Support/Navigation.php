@@ -113,6 +113,11 @@ final class Navigation
 	/**
 	 * Asystent (pp2_assistant) – wyjaśnienia istniejących wyników; ostatni podwidok sekcji Optymalizacja.
 	 */
+	/**
+	 * Instrukcja „Jak zacząć” – ogólny przewodnik krok po kroku; zawsze ostatni podwidok Zarządzania.
+	 */
+	public const GUIDE = ['guide' => ['label' => 'Instrukcja krok po kroku', 'path' => 'guide']];
+
 	public const ASSISTANT = ['assistant' => ['label' => 'Asystent', 'path' => 'assistant']];
 
 	/**
@@ -143,6 +148,8 @@ final class Navigation
 		if (Feature::enabled(Feature::ASSISTANT)) {
 			$groups['optimization']['items'] += self::ASSISTANT;
 		}
+
+		$groups['administration']['items'] += self::GUIDE;
 
 		return $groups;
 	}
