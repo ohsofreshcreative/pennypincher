@@ -224,4 +224,57 @@
       </div>
     </x-pp.modal>
   @endif
+
+  @if (! empty($project) && Feature::enabled(Feature::AI_CHAT) && app(\App\PennyPincher\Services\Assistant\AiChatService::class)->enabled())
+    {{-- „Zapytaj Claude” (pp2_ai_chat): historia rozmowy tylko w przeglądarce; odpowiedzi przez AiChatController. --}}
+    <div
+      x-data="{
+        open: false, busy: false, question: '', error: '', messages: [],
+        async send() {
+          const q = this.question.trim();
+          if (!q || this.busy) return;
+          this.error = ''; this.busy = true;
+          const history = JSON.stringify(this.messages);
+          this.messages.push({ role: 'user', text: q }); this.question = '';
+          const body = new FormData();
+          body.append('{{ \App\PennyPincher\Http\Middleware\VerifyNonce::FIELD }}', '{{ wp_create_nonce(\App\PennyPincher\Http\Middleware\VerifyNonce::ACTION) }}');
+          body.append('question', q); body.append('history', history);
+          body.append('section', @js($section ?? '')); body.append('path', @js(request()->path()));
+          try {
+            const res = await fetch(@js(AppUrl::project($project->id, 'ai-chat')), { method: 'POST', body, headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+            const data = await res.json().catch(() => ({}));
+            if (data.answer) { this.messages.push({ role: 'assistant', text: data.answer }); }
+            else { this.messages.pop(); this.question = q; this.error = data.error || 'Nie udało się uzyskać odpowiedzi (HTTP ' + res.status + ').'; }
+          } catch (e) { this.messages.pop(); this.question = q; this.error = 'Brak połączenia. Spróbuj ponownie.'; }
+          this.busy = false;
+          this.$nextTick(() => { this.$refs.log && (this.$refs.log.scrollTop = this.$refs.log.scrollHeight); });
+        }
+      }"
+      class="fixed bottom-20 right-5 z-30 flex flex-col items-end gap-2"
+      data-ai-chat
+    >
+      <section x-show="open" x-cloak class="pp-card flex w-[min(24rem,calc(100vw-2.5rem))] flex-col shadow-lg" aria-label="Zapytaj Claude">
+        <div class="pp-card-header">
+          <h2 class="pp-card-title">Zapytaj Claude</h2>
+          <button type="button" class="text-ink-mute" x-on:click="open = false" aria-label="Zamknij czat"><x-pp.icon name="close" :size="18" /></button>
+        </div>
+        <div x-ref="log" class="max-h-[55vh] space-y-3 overflow-y-auto px-5 py-4 text-sm">
+          <p x-show="messages.length === 0" class="text-ink-mute">Zapytaj, co zrobić na tym ekranie albo jak poprawić kampanię. Claude widzi bieżący ekran, opis projektu i listę kampanii – niczego nie zmienia na koncie.</p>
+          <template x-for="(m, i) in messages" :key="i">
+            <p class="whitespace-pre-line rounded-[var(--radius-card)] px-3 py-2" :class="m.role === 'user' ? 'ml-6 bg-mint/10 text-ink' : 'mr-6 border border-line text-ink-soft'" x-text="m.text"></p>
+          </template>
+          <p x-show="busy" class="text-ink-mute">Claude pisze…</p>
+          <p x-show="error" class="text-copper" x-text="error"></p>
+        </div>
+        <form class="flex gap-2 border-t border-line p-3" x-on:submit.prevent="send()">
+          <label for="pp-ai-question" class="sr-only">Pytanie</label>
+          <textarea id="pp-ai-question" x-model="question" rows="2" class="pp-input flex-1" placeholder="Np. co mam teraz zrobić na tym ekranie?" x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"></textarea>
+          <x-pp.button size="sm" x-bind:disabled="busy">Wyślij</x-pp.button>
+        </form>
+      </section>
+      <button type="button" class="pp-btn pp-btn-secondary rounded-full p-3 shadow-lg" x-on:click="open = !open" aria-label="Zapytaj Claude" title="Zapytaj Claude">
+        <x-pp.icon name="idea" :size="20" />
+      </button>
+    </div>
+  @endif
 @endsection

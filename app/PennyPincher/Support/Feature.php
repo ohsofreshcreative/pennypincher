@@ -27,6 +27,9 @@ final class Feature
 
 	public const ASSISTANT = 'pp2_assistant';
 
+	/** Czat z Claude (API Anthropic) – wymaga PP_ANTHROPIC_API_KEY i zgody właściciela na przekazywanie danych projektu. */
+	public const AI_CHAT = 'pp2_ai_chat';
+
 	/** Testy wyłączają odczyt stałych z wp-config.php, żeby wynik nie zależał od lokalnej konfiguracji. */
 	public static bool $readConstants = true;
 
