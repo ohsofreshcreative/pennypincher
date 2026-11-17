@@ -82,6 +82,17 @@ class AiChatTest extends IntegrationTestCase
 		$this->assertSame(['user', 'assistant', 'user'], array_column($sent['messages'], 'role'), 'Rola „system” z przeglądarki odrzucona.');
 		$this->assertContains('Projekt: Czat', $sent['messages'][2]['content'][0]['text']);
 		$this->assertFalse(str_contains((string) $response->getContent(), 'sk-test'), 'Klucz nie trafia do odpowiedzi.');
+
+		$png = 'data:image/png;base64,' . base64_encode(base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='));
+		$this->assertSame(200, $this->post($project->id, $owner, ['question' => 'Co tu widać?', 'images' => [$png]])->getStatusCode());
+		$sent = json_decode(end($this->requests)['args']['body'], true);
+		$this->assertSame('image', $sent['messages'][0]['content'][0]['type'], 'Zrzut trafia jako blok obrazu.');
+		$this->assertSame('image/png', $sent['messages'][0]['content'][0]['source']['media_type']);
+
+		$count = count($this->requests);
+		$this->assertSame(422, $this->post($project->id, $owner, ['question' => 'X', 'images' => ['data:text/html;base64,PGI+']])->getStatusCode(), 'Nie-obraz odrzucony.');
+		$this->assertSame(422, $this->post($project->id, $owner, ['question' => 'X', 'images' => [$png, $png, $png, $png]])->getStatusCode(), 'Limit zrzutów.');
+		$this->assertSame($count, count($this->requests), 'Odrzucone zrzuty nie łączą się z API.');
 	}
 
 	public function testLimitAndApiErrors(): void

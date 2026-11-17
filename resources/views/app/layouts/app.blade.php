@@ -226,54 +226,147 @@
   @endif
 
   @if (! empty($project) && Feature::enabled(Feature::AI_CHAT) && app(\App\PennyPincher\Services\Assistant\AiChatService::class)->enabled())
-    {{-- „Zapytaj Claude” (pp2_ai_chat): historia rozmowy tylko w przeglądarce; odpowiedzi przez AiChatController. --}}
+    {{-- „Zapytaj Claude” (pp2_ai_chat): historia rozmowy w sessionStorage karty (przetrwa zmianę podstrony, bez zrzutów);
+         zrzuty ekranu zmniejszane w przeglądarce i wysyłane tylko z bieżącym pytaniem; odpowiedzi przez AiChatController. --}}
     <div
       x-data="{
-        open: false, busy: false, question: '', error: '', messages: [],
+        open: false, busy: false, question: '', error: '', messages: [], images: [], dragging: false,
+        key: 'pp-ai-chat-{{ $project->id }}',
+        init() {
+          try { const s = JSON.parse(sessionStorage.getItem(this.key) || '{}'); this.messages = Array.isArray(s.messages) ? s.messages : []; this.open = !!s.open; } catch (e) {}
+          this.$watch('open', (v) => { this.save(); if (v) this.$nextTick(() => { this.scroll(); this.$refs.input && this.$refs.input.focus(); }); });
+          this.$nextTick(() => this.scroll());
+        },
+        scroll() { this.$refs.log && (this.$refs.log.scrollTop = this.$refs.log.scrollHeight); },
+        save() { try { sessionStorage.setItem(this.key, JSON.stringify({ open: this.open, messages: this.messages.slice(-20).map((m) => ({ role: m.role, text: m.text, shots: m.shots || (m.images ? m.images.length : 0) })) })); } catch (e) {} },
+        reset() { this.messages = []; this.images = []; this.error = ''; this.save(); },
+        ask(text) { this.question = text; this.send(); },
+        addFiles(list) {
+          this.error = '';
+          for (const file of Array.from(list || [])) {
+            if (!file.type.startsWith('image/')) { this.error = 'Można dodać tylko obrazy (PNG, JPG, WebP).'; continue; }
+            if (this.images.length >= 3) { this.error = 'Maksymalnie 3 zrzuty na pytanie.'; break; }
+            const img = new Image(); const url = URL.createObjectURL(file);
+            img.onload = () => {
+              const scale = Math.min(1, 1568 / Math.max(img.width, img.height));
+              const canvas = document.createElement('canvas');
+              canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale);
+              canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+              URL.revokeObjectURL(url);
+              if (this.images.length < 3) this.images.push(canvas.toDataURL('image/jpeg', 0.85));
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); this.error = 'Nie udało się odczytać obrazu.'; };
+            img.src = url;
+          }
+        },
+        paste(e) { const files = Array.from(e.clipboardData?.files || []).filter((f) => f.type.startsWith('image/')); if (files.length) { e.preventDefault(); this.addFiles(files); } },
         async send() {
           const q = this.question.trim();
-          if (!q || this.busy) return;
+          if ((!q && !this.images.length) || this.busy) return;
+          const text = q || 'Co widać na tym zrzucie i co powinienem zrobić?';
+          const shots = this.images; this.images = [];
           this.error = ''; this.busy = true;
-          const history = JSON.stringify(this.messages);
-          this.messages.push({ role: 'user', text: q }); this.question = '';
+          const history = JSON.stringify(this.messages.map((m) => ({ role: m.role, text: m.text })));
+          this.messages.push({ role: 'user', text, images: shots }); this.question = '';
+          this.$nextTick(() => this.scroll());
           const body = new FormData();
           body.append('{{ \App\PennyPincher\Http\Middleware\VerifyNonce::FIELD }}', '{{ wp_create_nonce(\App\PennyPincher\Http\Middleware\VerifyNonce::ACTION) }}');
-          body.append('question', q); body.append('history', history);
+          body.append('question', text); body.append('history', history);
+          shots.forEach((src) => body.append('images[]', src));
           body.append('section', @js($section ?? '')); body.append('path', @js(request()->path()));
+          const fail = (msg) => { this.messages.pop(); this.question = q; this.images = shots; this.error = msg; };
           try {
             const res = await fetch(@js(AppUrl::project($project->id, 'ai-chat')), { method: 'POST', body, headers: { Accept: 'application/json' }, credentials: 'same-origin' });
             const data = await res.json().catch(() => ({}));
             if (data.answer) { this.messages.push({ role: 'assistant', text: data.answer }); }
-            else { this.messages.pop(); this.question = q; this.error = data.error || 'Nie udało się uzyskać odpowiedzi (HTTP ' + res.status + ').'; }
-          } catch (e) { this.messages.pop(); this.question = q; this.error = 'Brak połączenia. Spróbuj ponownie.'; }
-          this.busy = false;
-          this.$nextTick(() => { this.$refs.log && (this.$refs.log.scrollTop = this.$refs.log.scrollHeight); });
+            else { fail(data.error || 'Nie udało się uzyskać odpowiedzi (HTTP ' + res.status + ').'); }
+          } catch (e) { fail('Brak połączenia. Spróbuj ponownie.'); }
+          this.busy = false; this.save();
+          this.$nextTick(() => this.scroll());
         }
       }"
-      class="fixed bottom-20 right-5 z-30 flex flex-col items-end gap-2"
+      class="fixed bottom-20 right-5 z-30 flex flex-col items-end gap-3"
       data-ai-chat
     >
-      <section x-show="open" x-cloak class="pp-card flex w-[min(24rem,calc(100vw-2.5rem))] flex-col shadow-lg" aria-label="Zapytaj Claude">
-        <div class="pp-card-header">
-          <h2 class="pp-card-title">Zapytaj Claude</h2>
-          <button type="button" class="text-ink-mute" x-on:click="open = false" aria-label="Zamknij czat"><x-pp.icon name="close" :size="18" /></button>
-        </div>
-        <div x-ref="log" class="max-h-[55vh] space-y-3 overflow-y-auto px-5 py-4 text-sm">
-          <p x-show="messages.length === 0" class="text-ink-mute">Zapytaj, co zrobić na tym ekranie albo jak poprawić kampanię. Claude widzi bieżący ekran, opis projektu i listę kampanii – niczego nie zmienia na koncie.</p>
+      <section
+        x-show="open" x-cloak
+        x-transition:enter="transition duration-200 ease-out" x-transition:enter-start="translate-y-3 opacity-0" x-transition:enter-end="translate-y-0 opacity-100"
+        x-transition:leave="transition duration-150 ease-in" x-transition:leave-start="opacity-100" x-transition:leave-end="translate-y-3 opacity-0"
+        class="relative flex h-[min(44rem,calc(100vh-7rem))] w-[min(27rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl"
+        aria-label="Zapytaj Claude"
+        x-on:dragover.prevent="dragging = true" x-on:dragleave.self="dragging = false" x-on:drop.prevent="dragging = false; addFiles($event.dataTransfer.files)"
+      >
+        <header class="flex items-center gap-3 bg-sidebar px-4 py-3 text-white">
+          <span class="flex size-9 shrink-0 items-center justify-center rounded-full bg-mint"><x-pp.icon name="idea" :size="18" /></span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-semibold leading-tight">Zapytaj Claude</h2>
+            <p class="text-xs text-sidebar-text">Doradca Penny Pincher · widzi ten ekran</p>
+          </div>
+          <button type="button" class="rounded-full px-2.5 py-1 text-xs text-sidebar-text hover:bg-white/10" x-show="messages.length" x-on:click="reset()" title="Wyczyść rozmowę">Nowa rozmowa</button>
+          <button type="button" class="rounded-full p-1.5 text-sidebar-text hover:bg-white/10" x-on:click="open = false" aria-label="Zamknij czat"><x-pp.icon name="close" :size="18" /></button>
+        </header>
+
+        <div x-ref="log" class="flex-1 space-y-4 overflow-y-auto bg-paper px-4 py-5 text-sm">
+          <div x-show="messages.length === 0" class="space-y-4">
+            <p class="text-ink-soft">Cześć! Zapytaj, co zrobić na tym ekranie albo jak poprawić kampanię. Możesz też dodać zrzut ekranu (przycisk <strong>+</strong>, wklejenie Ctrl/Cmd+V albo przeciągnięcie). Niczego nie zmieniam na koncie – podpowiadam, co kliknąć.</p>
+            <div class="flex flex-wrap gap-2">
+              <template x-for="hint in ['Co mam zrobić na tym ekranie?', 'Poprowadź mnie krok po kroku do uruchomienia kampanii', 'Co tu jest najważniejsze do poprawy?']">
+                <button type="button" class="rounded-full border border-line bg-surface px-3 py-1.5 text-left text-ink-soft hover:border-mint hover:text-mint" x-on:click="ask(hint)" x-text="hint"></button>
+              </template>
+            </div>
+          </div>
           <template x-for="(m, i) in messages" :key="i">
-            <p class="whitespace-pre-line rounded-[var(--radius-card)] px-3 py-2" :class="m.role === 'user' ? 'ml-6 bg-mint/10 text-ink' : 'mr-6 border border-line text-ink-soft'" x-text="m.text"></p>
+            <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
+              <div class="max-w-[85%] space-y-2">
+                <div x-show="m.images && m.images.length" class="flex flex-wrap justify-end gap-1.5">
+                  <template x-for="src in (m.images || [])"><img :src="src" alt="Zrzut ekranu" class="h-20 rounded-lg border border-line object-cover"></template>
+                </div>
+                <p x-show="!m.images && m.shots" class="text-right text-xs text-ink-mute" x-text="'Załączono zrzutów: ' + m.shots"></p>
+                <p class="whitespace-pre-line px-3.5 py-2.5 leading-relaxed" :class="m.role === 'user' ? 'rounded-2xl rounded-br-md bg-mint text-white' : 'rounded-2xl rounded-bl-md border border-line bg-surface text-ink shadow-sm'" x-text="m.text"></p>
+              </div>
+            </div>
           </template>
-          <p x-show="busy" class="text-ink-mute">Claude pisze…</p>
-          <p x-show="error" class="text-copper" x-text="error"></p>
+          <div x-show="busy" class="flex">
+            <span class="flex items-center gap-1 rounded-2xl rounded-bl-md border border-line bg-surface px-4 py-3" aria-label="Claude pisze">
+              <span class="size-1.5 animate-bounce rounded-full bg-ink-mute"></span>
+              <span class="size-1.5 animate-bounce rounded-full bg-ink-mute [animation-delay:150ms]"></span>
+              <span class="size-1.5 animate-bounce rounded-full bg-ink-mute [animation-delay:300ms]"></span>
+            </span>
+          </div>
+          <p x-show="error" class="rounded-lg bg-danger-soft px-3 py-2 text-danger" x-text="error"></p>
         </div>
-        <form class="flex gap-2 border-t border-line p-3" x-on:submit.prevent="send()">
-          <label for="pp-ai-question" class="sr-only">Pytanie</label>
-          <textarea id="pp-ai-question" x-model="question" rows="2" class="pp-input flex-1" placeholder="Np. co mam teraz zrobić na tym ekranie?" x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"></textarea>
-          <x-pp.button size="sm" x-bind:disabled="busy">Wyślij</x-pp.button>
+
+        <form class="border-t border-line bg-surface p-3" x-on:submit.prevent="send()">
+          <div x-show="images.length" class="mb-2 flex gap-2">
+            <template x-for="(src, i) in images" :key="i">
+              <div class="relative">
+                <img :src="src" alt="Zrzut do wysłania" class="size-16 rounded-lg border border-line object-cover">
+                <button type="button" class="absolute -right-1.5 -top-1.5 rounded-full bg-ink p-0.5 text-white" x-on:click="images.splice(i, 1)" aria-label="Usuń zrzut"><x-pp.icon name="close" :size="12" /></button>
+              </div>
+            </template>
+          </div>
+          <div class="flex items-end gap-2 rounded-xl border border-line-strong bg-surface px-2 py-1.5 focus-within:border-mint focus-within:ring-2 focus-within:ring-mint/20">
+            <input x-ref="file" type="file" accept="image/png,image/jpeg,image/webp" multiple class="hidden" x-on:change="addFiles($event.target.files); $event.target.value = ''">
+            <button type="button" class="rounded-lg p-2 text-ink-mute hover:bg-paper hover:text-mint" x-on:click="$refs.file.click()" aria-label="Dodaj zrzut ekranu" title="Dodaj zrzut ekranu"><x-pp.icon name="plus" :size="18" /></button>
+            <label for="pp-ai-question" class="sr-only">Pytanie</label>
+            <textarea
+              id="pp-ai-question" x-ref="input" x-model="question" rows="1"
+              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm focus:ring-0"
+              placeholder="Napisz pytanie albo wklej zrzut…"
+              x-on:input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
+              x-on:paste="paste($event)"
+              x-on:keydown.enter="if (!$event.shiftKey) { $event.preventDefault(); send(); }"
+            ></textarea>
+            <button type="submit" class="rounded-lg bg-mint p-2 text-white hover:bg-mint-dark disabled:opacity-40" x-bind:disabled="busy || (!question.trim() && !images.length)" aria-label="Wyślij"><x-pp.icon name="chevron-right" :size="18" /></button>
+          </div>
+          <p class="mt-1.5 px-1 text-2xs text-ink-mute">Enter – wyślij · Shift+Enter – nowa linia · do 3 zrzutów</p>
         </form>
+
+        <div x-show="dragging" class="pointer-events-none absolute inset-0 flex items-center justify-center rounded-2xl border-2 border-dashed border-mint bg-mint-soft/90 font-semibold text-mint">Upuść zrzut ekranu</div>
       </section>
-      <button type="button" class="pp-btn pp-btn-secondary rounded-full p-3 shadow-lg" x-on:click="open = !open" aria-label="Zapytaj Claude" title="Zapytaj Claude">
-        <x-pp.icon name="idea" :size="20" />
+      <button type="button" class="flex size-12 items-center justify-center rounded-full bg-mint text-white shadow-lg transition hover:scale-105 hover:bg-mint-dark" x-on:click="open = !open" :aria-expanded="open" aria-label="Zapytaj Claude" title="Zapytaj Claude">
+        <span x-show="!open"><x-pp.icon name="idea" :size="22" /></span>
+        <span x-show="open" x-cloak><x-pp.icon name="close" :size="22" /></span>
       </button>
     </div>
   @endif

@@ -31,7 +31,7 @@ class AiChatController extends Controller
 		$history = json_decode((string) $request->input('history', '[]'), true);
 
 		try {
-			$answer = $this->chat->ask($project, (string) $request->input('question', ''), is_array($history) ? $history : [], (string) $request->input('section', '') ?: null, (string) $request->input('path', ''));
+			$answer = $this->chat->ask($project, (string) $request->input('question', ''), is_array($history) ? $history : [], (string) $request->input('section', '') ?: null, (string) $request->input('path', ''), array_values((array) $request->input('images', [])));
 		} catch (RuntimeException $e) {
 			return response()->json(['error' => $e->getMessage()], 422);
 		}
