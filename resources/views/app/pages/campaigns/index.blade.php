@@ -12,6 +12,15 @@
 @section('content')
   @include('app.partials.coverage', ['resolved' => $resolved, 'reportLabel' => 'raportu kampanii'])
 
+  @if ($canSync)
+    {{-- Stany i budżety pochodzą z synchronizacji – ręczne odświeżenie (część od razu, reszta w tle przez worker). --}}
+    <form method="post" action="{{ AppUrl::project($project->id, 'google-ads/sync') }}" class="flex flex-wrap items-center justify-end gap-3">
+      <x-pp.nonce /><input type="hidden" name="back" value="campaigns">
+      @if ($lastSync)<span class="text-meta text-ink-mute">Ostatnia synchronizacja: {{ Format::datetime($lastSync) }}</span>@endif
+      <x-pp.button variant="secondary" size="sm" icon="refresh" data-busy-label="Synchronizacja…">Odśwież z Google Ads</x-pp.button>
+    </form>
+  @endif
+
   <section class="pp-card min-w-0" aria-label="Lista kampanii">
     <x-pp.filter-bar :action="AppUrl::project($project->id, 'campaigns')">
       <input type="hidden" name="sort" value="{{ $sort }}">

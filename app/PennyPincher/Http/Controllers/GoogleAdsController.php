@@ -193,7 +193,8 @@ class GoogleAdsController extends Controller
 	private function enqueueSync(int $project, string $type)
 	{
 		$project = $this->access->project($project, Ability::UpdateProject);
-		$back = AppUrl::project($project->id, 'google-ads');
+		// Powrót tylko na znane ekrany projektu (np. przycisk na liście kampanii) – bez dowolnych adresów.
+		$back = AppUrl::project($project->id, request()->input('back') === 'campaigns' ? 'campaigns' : 'google-ads');
 		$connection = $this->connections->currentForProject($project->id);
 
 		if ($connection === null || $connection['status'] !== GoogleAdsConnectionRepository::STATUS_ACTIVE) {

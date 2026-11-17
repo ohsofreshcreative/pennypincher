@@ -67,6 +67,8 @@ class CampaignsController extends Controller
 
 		return $this->render('app.pages.campaigns.index', [
 			'pendingChanges' => $pending,
+			'canSync' => ($c = $this->connections->currentForProject($project->id)) !== null && $c['status'] === GoogleAdsConnectionRepository::STATUS_ACTIVE && \App\PennyPincher\Domain\Access\Policy::allows($project->role, \App\PennyPincher\Domain\Access\Ability::UpdateProject),
+			'lastSync' => $this->db->scalar('SELECT MAX(finished_at) FROM ' . $this->db->table('sync_runs') . ' WHERE project_id = ? AND status = ?', [$project->id, 'completed']),
 			'project' => $project,
 			'range' => $range,
 			'resolved' => $resolved,
