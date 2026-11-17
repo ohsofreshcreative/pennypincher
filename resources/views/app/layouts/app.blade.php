@@ -234,10 +234,29 @@
         key: 'pp-ai-chat-{{ $project->id }}',
         init() {
           try { const s = JSON.parse(sessionStorage.getItem(this.key) || '{}'); this.messages = Array.isArray(s.messages) ? s.messages : []; this.open = !!s.open; } catch (e) {}
-          this.$watch('open', (v) => { this.save(); if (v) this.$nextTick(() => { this.scroll(); this.$refs.input && this.$refs.input.focus(); }); });
-          this.$nextTick(() => this.scroll());
+          this.$watch('open', (v) => { this.save(); if (v) this.$nextTick(() => { this.restore(); this.$refs.input && this.$refs.input.focus(); }); });
+          this.$nextTick(() => this.restore());
         },
+        {{-- Przewijanie: pozycja zapamiętana między podstronami; automatycznie tylko gdy użytkownik był na dole. --}}
+        stick: true,
         scroll() { this.$refs.log && (this.$refs.log.scrollTop = this.$refs.log.scrollHeight); },
+        restore() {
+          const log = this.$refs.log; if (!log) return;
+          let pos = null; try { pos = sessionStorage.getItem(this.key + '-scroll'); } catch (e) {}
+          if (pos === null) this.scroll(); else log.scrollTop = Number(pos);
+          this.onScroll();
+        },
+        onScroll() {
+          const log = this.$refs.log; if (!log) return;
+          this.stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+          try { sessionStorage.setItem(this.key + '-scroll', String(log.scrollTop)); } catch (e) {}
+        },
+        showAnswer() {
+          const log = this.$refs.log; const all = log ? log.querySelectorAll('[data-msg]') : []; const last = all[all.length - 1];
+          if (!last) return;
+          log.scrollTop = Math.max(0, last.offsetTop - 12);
+          this.onScroll();
+        },
         save() { try { sessionStorage.setItem(this.key, JSON.stringify({ open: this.open, messages: this.messages.slice(-20).map((m) => ({ role: m.role, text: m.text, shots: m.shots || (m.images ? m.images.length : 0) })) })); } catch (e) {} },
         reset() { this.messages = []; this.images = []; this.error = ''; this.save(); },
         ask(text) { this.question = text; this.send(); },
@@ -297,7 +316,7 @@
           this.error = ''; this.busy = true;
           const history = JSON.stringify(this.messages.map((m) => ({ role: m.role, text: m.text })));
           this.messages.push({ role: 'user', text, images: shots }); this.question = '';
-          this.$nextTick(() => this.scroll());
+          if (this.stick) this.$nextTick(() => this.scroll());
           const body = new FormData();
           body.append('{{ \App\PennyPincher\Http\Middleware\VerifyNonce::FIELD }}', '{{ wp_create_nonce(\App\PennyPincher\Http\Middleware\VerifyNonce::ACTION) }}');
           body.append('question', text); body.append('history', history);
@@ -310,8 +329,8 @@
             if (data.answer) { this.messages.push({ role: 'assistant', text: data.answer }); }
             else { fail(data.error || 'Nie udało się uzyskać odpowiedzi (HTTP ' + res.status + ').'); }
           } catch (e) { fail('Brak połączenia. Spróbuj ponownie.'); }
-          this.busy = false; this.save();
-          this.$nextTick(() => this.scroll());
+          const follow = this.stick; this.busy = false; this.save();
+          if (follow) this.$nextTick(() => this.showAnswer());
         }
       }"
       class="fixed bottom-20 right-5 z-30 flex flex-col items-end gap-3"
@@ -335,7 +354,7 @@
           <button type="button" class="rounded-full p-1.5 text-sidebar-text hover:bg-white/10" x-on:click="open = false" aria-label="Zamknij czat"><x-pp.icon name="close" :size="18" /></button>
         </header>
 
-        <div x-ref="log" class="flex-1 space-y-4 overflow-y-auto bg-paper px-4 py-5 text-sm">
+        <div x-ref="log" x-on:scroll.debounce.100ms="onScroll()" class="relative flex-1 space-y-4 overflow-y-auto bg-paper px-4 py-5 text-sm">
           <div x-show="messages.length === 0" class="space-y-4">
             <p class="text-ink-soft">Cześć! Zapytaj, co zrobić na tym ekranie albo jak poprawić kampanię. Możesz też dodać zrzut ekranu (przycisk <strong>+</strong>, wklejenie Ctrl/Cmd+V albo przeciągnięcie). Niczego nie zmieniam na koncie – podpowiadam, co kliknąć.</p>
             <div class="flex flex-wrap gap-2">
@@ -345,7 +364,7 @@
             </div>
           </div>
           <template x-for="(m, i) in messages" :key="i">
-            <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
+            <div data-msg class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
               <div class="max-w-[85%] space-y-2">
                 <div x-show="m.images && m.images.length" class="flex flex-wrap justify-end gap-1.5">
                   <template x-for="src in (m.images || [])"><img :src="src" alt="Zrzut ekranu" class="h-20 rounded-lg border border-line object-cover"></template>
