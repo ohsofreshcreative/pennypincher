@@ -48,7 +48,7 @@
                     <span class="text-ink-mute"><x-pp.icon name="lock" :size="14" class="inline" /> Tylko odczyt: {{ $a['locked_reason'] ?? 'Google Ads API nie pozwala edytować tego działania.' }}</span>
                   @elseif ($canPrepare)
                     <details>
-                      <summary class="cursor-pointer font-semibold text-mint">Przygotuj zmianę</summary>
+                      <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Przygotuj zmianę</summary>
                       <form method="post" action="{{ $base }}/{{ $a['id'] }}/update" class="mt-2 w-64 space-y-2">
                         <x-pp.nonce />@isset($returnTo)<input type="hidden" name="return" value="{{ $returnTo }}">@endisset
                         @if (in_array('primary_for_goal', $a['editable'], true))

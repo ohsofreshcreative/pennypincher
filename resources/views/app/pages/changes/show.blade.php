@@ -426,8 +426,8 @@
                 @endif
                 @if ($editable && ($fields !== []))
                   <details class="mt-2">
-                    <summary class="cursor-pointer text-meta font-semibold text-mint">Edytuj operację</summary>
-                    <form method="post" action="{{ $base }}/operations/{{ $op['id'] }}" class="mt-2 grid gap-3 sm:grid-cols-2">
+                    <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Edytuj operację</summary>
+                    <form method="post" action="{{ $base }}/operations/{{ $op['id'] }}" class="pp-edit-panel grid gap-3 space-y-0 sm:grid-cols-2">
                       <x-pp.nonce />
                       @foreach ($fields as $field)
                         @php $value = $op['payload'][$field]; $label = OperationCatalog::FIELD_LABELS[$field] ?? ($boolLabels[$field] ?? str_replace('_', ' ', $field)); @endphp

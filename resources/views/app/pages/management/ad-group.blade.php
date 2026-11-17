@@ -93,7 +93,7 @@
                   <td class="min-w-[12rem]">
                     @if ($k['external_id'] && $k['status'] !== 'removed')
                       <details>
-                        <summary class="cursor-pointer text-meta font-semibold text-mint">Przygotuj…</summary>
+                        <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Przygotuj…</summary>
                         <div class="mt-2 space-y-2">
                           <form method="post" action="{{ $action }}">
                             <x-pp.nonce /><input type="hidden" name="keyword" value="{{ $k['id'] }}">

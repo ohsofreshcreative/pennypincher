@@ -131,6 +131,23 @@
     @apply min-h-8 px-3 text-meta;
   }
 
+  /* Rozwijana edycja (<details>): wyraźny przycisk zamiast małego linku. */
+  .pp-edit-toggle {
+    @apply inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5 rounded-[var(--radius-control)] border border-mint/40 bg-mint-soft px-3 text-meta font-semibold whitespace-nowrap text-mint-dark transition-colors select-none hover:border-mint hover:bg-mint hover:text-white;
+  }
+
+  .pp-edit-toggle::-webkit-details-marker {
+    display: none;
+  }
+
+  details[open] > .pp-edit-toggle {
+    @apply border-mint bg-mint text-white;
+  }
+
+  .pp-edit-panel {
+    @apply mt-3 space-y-3 rounded-[var(--radius-card)] border border-line bg-paper p-4;
+  }
+
   /* Formularze */
   .pp-label {
     @apply mb-1.5 block text-sm font-semibold text-ink;

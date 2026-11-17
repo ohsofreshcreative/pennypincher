@@ -76,7 +76,7 @@
           @if ($deployedLinks !== [])<p class="mt-1 text-ink-mute">W Google Ads utworzono {{ count($deployedLinks) }} z {{ count($tree['campaigns']) }} kampanii planu – ponowne przygotowanie pominie już utworzone.</p>@endif
         @elseif ($changes['canPrepare'])
           <details>
-            <summary class="cursor-pointer font-semibold text-ink"><x-pp.icon name="changes" :size="16" class="inline" /> Przygotuj wdrożenie do Google Ads</summary>
+            <summary class="pp-edit-toggle"><x-pp.icon name="changes" :size="14" />Przygotuj wdrożenie do Google Ads</summary>
             <form method="post" action="{{ $base }}/deploy" class="mt-3 grid gap-4 lg:grid-cols-4" data-busy>
               <x-pp.nonce />
               <x-pp.field name="geo_ids" label="Lokalizacje (ID geo)" value="2616" required help="Np. 2616 = Polska." />
@@ -93,8 +93,8 @@
 
     @if ($canEdit)
       <details class="border-t border-line px-5 py-3">
-        <summary class="cursor-pointer text-meta font-semibold text-ink">Edytuj dane planu</summary>
-        <form method="post" action="{{ $base }}" class="mt-3 grid gap-4 lg:grid-cols-3">
+        <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Edytuj dane planu</summary>
+        <form method="post" action="{{ $base }}" class="pp-edit-panel grid space-y-0 gap-4 lg:grid-cols-3">
           <x-pp.nonce />
           <x-pp.field name="name" label="Nazwa" required :value="$plan['name']" />
           <x-pp.field name="goal" label="Cel biznesowy" :options="['' => 'Wybierz…'] + BusinessContext::GOALS" :value="$plan['goal']" />
@@ -143,16 +143,24 @@
             <p class="text-caption text-ink-mute">{{ $campaign['kind'] === 'brand' ? 'Kampania brandowa' : 'Kampania w wyszukiwarce' }} · budżet: {{ $campaign['budget_micros'] !== null ? $money($campaign['budget_micros']) . ' / mies.' : 'nie przydzielono' }} · {{ count($campaign['groups']) }} {{ Format::plural(count($campaign['groups']), 'grupa', 'grupy', 'grup') }}</p>
           </div>
           @if ($canEdit)
-            <details class="text-meta">
-              <summary class="cursor-pointer text-ink-soft">Edytuj kampanię</summary>
-              <div class="mt-2 space-y-2">
+            <details class="text-meta open:basis-full">
+              <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Edytuj kampanię</summary>
+              <div class="pp-edit-panel">
                 <form method="post" action="{{ $base }}/campaigns/{{ $campaign['id'] }}" class="flex flex-wrap items-end gap-2">
                   <x-pp.nonce />
                   <div><label class="pp-label" for="cn-{{ $campaign['id'] }}">Nazwa</label><input id="cn-{{ $campaign['id'] }}" name="name" value="{{ $campaign['name'] }}" class="pp-input pp-input-sm w-56" required maxlength="190"></div>
                   <div><label class="pp-label" for="ck-{{ $campaign['id'] }}">Typ</label><select id="ck-{{ $campaign['id'] }}" name="kind" class="pp-input pp-input-sm"><option value="search" @selected($campaign['kind'] === 'search')>Wyszukiwarka</option><option value="brand" @selected($campaign['kind'] === 'brand')>Brandowa</option></select></div>
                   <div><label class="pp-label" for="cu-{{ $campaign['id'] }}">URL docelowy</label><input id="cu-{{ $campaign['id'] }}" name="final_url" type="url" value="{{ $campaign['final_url'] }}" class="pp-input pp-input-sm w-56" placeholder="https://"></div>
-                  <x-pp.button variant="secondary" size="sm">Zapisz</x-pp.button>
+                  <x-pp.button size="sm">Zapisz</x-pp.button>
                 </form>
+                @if ($canBudget)
+                  <form method="post" action="{{ $base }}/campaigns/{{ $campaign['id'] }}/budget" class="flex flex-wrap items-end gap-2">
+                    <x-pp.nonce /><input type="hidden" name="tab" value="structure">
+                    <div><label class="pp-label" for="cbs-{{ $campaign['id'] }}">Budżet miesięczny ({{ $plan['currency'] }})</label><input id="cbs-{{ $campaign['id'] }}" name="budget" inputmode="decimal" value="{{ Format::moneyInput($campaign['budget_micros']) }}" class="pp-input pp-input-sm w-36 text-right" placeholder="np. 1500"></div>
+                    <x-pp.button size="sm">Zapisz budżet</x-pp.button>
+                    <a href="?tab=budget" class="pb-1.5 text-meta text-mint hover:underline">Podział całego budżetu →</a>
+                  </form>
+                @endif
                 <form method="post" action="{{ $base }}/campaigns/{{ $campaign['id'] }}/delete" onsubmit="return confirm('Usunąć kampanię z planu razem z grupami i słowami?')">
                   <x-pp.nonce /><button class="pp-btn pp-btn-ghost pp-btn-sm text-danger">Usuń kampanię z planu</button>
                 </form>
@@ -166,15 +174,15 @@
             <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
               <h3 class="font-semibold text-ink">{{ $group['name'] }} <span class="pp-num text-meta font-normal text-ink-mute">({{ count($group['keywords']) }} słów)</span></h3>
               @if ($canEdit)
-                <details class="text-meta">
-                  <summary class="cursor-pointer text-ink-soft">Edytuj grupę</summary>
-                  <div class="mt-2 space-y-2">
+                <details class="text-meta open:basis-full">
+                  <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Edytuj grupę</summary>
+                  <div class="pp-edit-panel">
                     <form method="post" action="{{ $base }}/groups/{{ $group['id'] }}" class="flex flex-wrap items-end gap-2">
                       <x-pp.nonce />
                       <div><label class="pp-label" for="gn-{{ $group['id'] }}">Nazwa</label><input id="gn-{{ $group['id'] }}" name="name" value="{{ $group['name'] }}" class="pp-input pp-input-sm w-52" required maxlength="190"></div>
                       <div><label class="pp-label" for="gc-{{ $group['id'] }}">Kampania</label><select id="gc-{{ $group['id'] }}" name="plan_campaign_id" class="pp-input pp-input-sm w-44">@foreach ($tree['campaigns'] as $c)<option value="{{ $c['id'] }}" @selected((int) $c['id'] === (int) $campaign['id'])>{{ $c['name'] }}</option>@endforeach</select></div>
                       <div><label class="pp-label" for="gu-{{ $group['id'] }}">URL docelowy</label><input id="gu-{{ $group['id'] }}" name="final_url" type="url" value="{{ $group['final_url'] }}" class="pp-input pp-input-sm w-52" placeholder="https://"></div>
-                      <x-pp.button variant="secondary" size="sm">Zapisz</x-pp.button>
+                      <x-pp.button size="sm">Zapisz</x-pp.button>
                     </form>
                     <form method="post" action="{{ $base }}/groups/{{ $group['id'] }}/delete" onsubmit="return confirm('Usunąć grupę reklam z planu?')"><x-pp.nonce /><button class="pp-btn pp-btn-ghost pp-btn-sm text-danger">Usuń grupę</button></form>
                   </div>
@@ -400,7 +408,7 @@
               @endforeach
             </div>
             <details>
-              <summary class="cursor-pointer text-meta font-semibold text-ink">Dostosuj scenariusz (%)</summary>
+              <summary class="pp-edit-toggle"><x-pp.icon name="sliders" :size="14" />Dostosuj scenariusz (%)</summary>
               <div class="mt-3 grid grid-cols-2 gap-3">
                 @foreach (['proven_share' => 'Udział sprawdzonych kampanii', 'priority' => 'Waga: priorytet biznesowy', 'potential' => 'Waga: potencjał fraz', 'performance' => 'Waga: wyniki historyczne'] as $key => $label)
                   <div>
