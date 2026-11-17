@@ -147,6 +147,104 @@ TXT;
 			}
 		}
 
+		$path = '/' . trim($path, '/');
+		$lines = array_merge($lines, $this->planContext($project, preg_match('#/planner/(\d+)#', $path, $m) ? (int) $m[1] : null));
+		$lines = array_merge($lines, $this->changesContext($project, preg_match('#/changes/(\d+)#', $path, $m) ? (int) $m[1] : null));
+
 		return implode("\n", $lines);
+	}
+
+	/** Plany kampanii projektu; dla otwartego planu pełna struktura (kampanie, grupy, słowa, wykluczenia, reklamy). */
+	private function planContext(Project $project, ?int $planId): array
+	{
+		$plans = $this->db->select('SELECT id, name, status, monthly_budget_micros, currency, approved_at FROM ' . $this->db->table('campaign_plans') . ' WHERE project_id = ? ORDER BY updated_at DESC LIMIT 10', [$project->id]);
+		if ($plans === []) {
+			return ['Plany kampanii: brak.'];
+		}
+
+		$lines = ['Plany kampanii (nr · nazwa · status · budżet miesięczny):'];
+		foreach ($plans as $p) {
+			$lines[] = '- nr ' . $p['id'] . ' · ' . $p['name'] . ' · ' . $p['status'] . ' · ' . $this->money($p['monthly_budget_micros'], $p['currency']) . ($p['approved_at'] ? ' · zatwierdzony ' . $p['approved_at'] : '');
+		}
+
+		$plan = $planId !== null ? $this->db->first('SELECT * FROM ' . $this->db->table('campaign_plans') . ' WHERE id = ? AND project_id = ?', [$planId, $project->id]) : null;
+		if ($plan === null) {
+			return $lines;
+		}
+
+		$lines[] = 'Otwarty plan nr ' . $plan['id'] . ' „' . $plan['name'] . '”: status ' . $plan['status'] . ', cel ' . ($plan['goal'] ?: '—') . ', usługa ' . ($plan['service'] ?: '—') . ', lokalizacja ' . ($plan['location'] ?: '—') . ', język ' . ($plan['language'] ?: '—') . ', budżet ' . $this->money($plan['monthly_budget_micros'], $plan['currency']) . '/mies., scenariusz ' . $plan['scenario'] . '.';
+
+		$where = ' WHERE plan_id = ? AND project_id = ?';
+		$args = [$plan['id'], $project->id];
+		$groups = [];
+		foreach ($this->db->select('SELECT id, plan_campaign_id, name, final_url FROM ' . $this->db->table('plan_ad_groups') . $where . ' ORDER BY position, id', $args) as $g) {
+			$groups[(int) $g['plan_campaign_id']][] = $g;
+		}
+		$keywords = [];
+		foreach ($this->db->select('SELECT plan_ad_group_id, phrase, match_type FROM ' . $this->db->table('plan_keywords') . $where . ' ORDER BY id LIMIT 300', $args) as $k) {
+			$keywords[(int) $k['plan_ad_group_id']][] = $k['phrase'] . ' [' . $k['match_type'] . ']';
+		}
+		$ads = [];
+		foreach ($this->db->select('SELECT plan_ad_group_id, headlines FROM ' . $this->db->table('plan_ads') . $where, $args) as $a) {
+			$ads[(int) $a['plan_ad_group_id']][] = count(array_filter((array) json_decode((string) $a['headlines'], true)));
+		}
+
+		$campaigns = $this->db->select('SELECT id, name, kind, budget_micros, final_url FROM ' . $this->db->table('plan_campaigns') . $where . ' ORDER BY position, id', $args);
+		if ($campaigns === []) {
+			$lines[] = 'Plan nie ma jeszcze kampanii.';
+		}
+		foreach ($campaigns as $c) {
+			$lines[] = 'Kampania w planie: ' . $c['name'] . ' (' . $c['kind'] . ', budżet dzienny ' . $this->money($c['budget_micros'], $plan['currency']) . ', URL ' . ($c['final_url'] ?: '—') . ')';
+			foreach ($groups[(int) $c['id']] ?? [] as $g) {
+				$kw = $keywords[(int) $g['id']] ?? [];
+				$adInfo = isset($ads[(int) $g['id']]) ? count($ads[(int) $g['id']]) . ' (nagłówki: ' . implode('/', $ads[(int) $g['id']]) . ')' : '0';
+				$lines[] = '  - grupa „' . $g['name'] . '”: słowa ' . count($kw) . ($kw ? ' – ' . implode(', ', array_slice($kw, 0, 25)) . (count($kw) > 25 ? ', …' : '') : '') . '; reklamy ' . $adInfo;
+			}
+			if (empty($groups[(int) $c['id']])) {
+				$lines[] = '  - brak grup reklam';
+			}
+		}
+
+		$negatives = $this->db->select('SELECT level, phrase, match_type FROM ' . $this->db->table('plan_negatives') . $where . ' ORDER BY id LIMIT 60', $args);
+		$lines[] = 'Wykluczenia w planie: ' . ($negatives === [] ? 'brak' : count($negatives) . ' – ' . implode(', ', array_map(fn ($n) => $n['phrase'] . ' [' . $n['match_type'] . ', ' . $n['level'] . ']', array_slice($negatives, 0, 30))));
+
+		return $lines;
+	}
+
+	/** Ostatnie zestawy zmian Change Center; dla otwartego zestawu – operacje i błędy. */
+	private function changesContext(Project $project, ?int $setId): array
+	{
+		$sets = $this->db->select('SELECT id, title, status, source_type, source_id, deploy_requested_at, deploy_started_at, deploy_finished_at, attempts, last_error, updated_at FROM ' . $this->db->table('change_sets') . ' WHERE project_id = ? ORDER BY id DESC LIMIT 8', [$project->id]);
+		if ($sets === []) {
+			return ['Zestawy zmian (Change Center): brak.'];
+		}
+
+		$lines = ['Zestawy zmian (nr · tytuł · status · źródło · terminy):'];
+		foreach ($sets as $c) {
+			$lines[] = '- nr ' . $c['id'] . ' · ' . $c['title'] . ' · ' . $c['status'] . ' · ' . $c['source_type'] . ($c['source_id'] ? ' ' . $c['source_id'] : '')
+				. ($c['deploy_requested_at'] ? ' · zlecono wdrożenie ' . $c['deploy_requested_at'] : '')
+				. ($c['deploy_started_at'] ? ' · worker start ' . $c['deploy_started_at'] : '')
+				. ($c['deploy_finished_at'] ? ' · koniec ' . $c['deploy_finished_at'] : '')
+				. ' · próby ' . $c['attempts']
+				. ($c['last_error'] ? ' · błąd: ' . mb_substr((string) $c['last_error'], 0, 300) : '');
+		}
+		$lines[] = 'Czas serwera (UTC): ' . gmdate('Y-m-d H:i:s');
+
+		if ($setId !== null) {
+			$ops = $this->db->select('SELECT label, type, status, error_message FROM ' . $this->db->table('change_operations') . ' WHERE change_set_id = ? AND project_id = ? ORDER BY position, id LIMIT 40', [$setId, $project->id]);
+			if ($ops !== []) {
+				$lines[] = 'Operacje otwartego zestawu nr ' . $setId . ':';
+				foreach ($ops as $o) {
+					$lines[] = '  - ' . $o['label'] . ' (' . $o['type'] . ') · ' . $o['status'] . ($o['error_message'] ? ' · błąd: ' . mb_substr((string) $o['error_message'], 0, 200) : '');
+				}
+			}
+		}
+
+		return $lines;
+	}
+
+	private function money(mixed $micros, string $currency): string
+	{
+		return $micros !== null ? number_format((int) $micros / 1_000_000, 2, ',', ' ') . ' ' . $currency : '—';
 	}
 }

@@ -59,7 +59,7 @@ class ClaudeClient
 			],
 			'body' => wp_json_encode([
 				'model' => self::MODEL,
-				'max_tokens' => 4000,
+				'max_tokens' => 16000,
 				'output_config' => ['effort' => 'low'],
 				'fallbacks' => 'default',
 				'system' => [['type' => 'text', 'text' => $system, 'cache_control' => ['type' => 'ephemeral']]],
@@ -101,7 +101,12 @@ class ClaudeClient
 			}
 		}
 
-		return ['text' => trim($text) !== '' ? trim($text) : 'Brak odpowiedzi – spróbuj ponownie.', 'cost' => $cost];
+		$text = trim($text);
+		if (($body['stop_reason'] ?? null) === 'max_tokens') {
+			$text .= ($text !== '' ? "\n\n" : '') . '(Odpowiedź została ucięta – napisz „kontynuuj”, a Claude dokończy.)';
+		}
+
+		return ['text' => $text !== '' ? $text : 'Brak odpowiedzi – spróbuj ponownie.', 'cost' => $cost];
 	}
 
 	private static function value(string $name): ?string

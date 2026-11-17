@@ -230,7 +230,7 @@
          zrzuty ekranu zmniejszane w przeglądarce i wysyłane tylko z bieżącym pytaniem; odpowiedzi przez AiChatController. --}}
     <div
       x-data="{
-        open: false, busy: false, question: '', error: '', messages: [], images: [], dragging: false,
+        open: false, busy: false, question: '', error: '', messages: [], images: [], dragging: false, copied: null,
         key: 'pp-ai-chat-{{ $project->id }}',
         init() {
           try { const s = JSON.parse(sessionStorage.getItem(this.key) || '{}'); this.messages = Array.isArray(s.messages) ? s.messages : []; this.open = !!s.open; } catch (e) {}
@@ -241,6 +241,35 @@
         save() { try { sessionStorage.setItem(this.key, JSON.stringify({ open: this.open, messages: this.messages.slice(-20).map((m) => ({ role: m.role, text: m.text, shots: m.shots || (m.images ? m.images.length : 0) })) })); } catch (e) {} },
         reset() { this.messages = []; this.images = []; this.error = ''; this.save(); },
         ask(text) { this.question = text; this.send(); },
+        copy(text, i) { navigator.clipboard?.writeText(text).then(() => { this.copied = i; setTimeout(() => { this.copied = null; }, 1500); }); },
+        md(src) {
+          const esc = (t) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const inline = (t) => esc(t)
+            .replace(/\*\*(.+?)\*\*/g, '<strong class=\x22font-semibold text-ink\x22>$1</strong>')
+            .replace(/`([^`]+)`/g, '<code class=\x22rounded bg-paper px-1 py-0.5 font-mono text-xs text-ink\x22>$1</code>')
+            .replace(/„([^”\n]{1,60})”/g, '<span class=\x22whitespace-nowrap rounded-md bg-mint-soft px-1.5 py-0.5 font-medium text-mint-dark\x22>$1</span>');
+          const cls = { ul: 'list-disc space-y-1 pl-5 marker:text-mint', ol: 'list-decimal space-y-1.5 pl-5 marker:font-semibold marker:text-mint' };
+          let html = ''; const stack = [];
+          const close = (depth) => { while (stack.length && stack[stack.length - 1].depth >= depth) html += '</li></' + stack.pop().type + '>'; };
+          for (const line of String(src).split('\n')) {
+            const item = line.match(/^(\s*)([-*•]|\d+[.)])\s+(.*)$/);
+            const head = line.match(/^#{1,4}\s+(.*)$/);
+            if (item) {
+              const depth = item[1].length >= 2 ? 1 : 0; const type = /\d/.test(item[2]) ? 'ol' : 'ul';
+              close(depth + 1);
+              const top = stack[stack.length - 1];
+              if (top && top.depth === depth && top.type !== type) close(depth);
+              if (!stack.length || stack[stack.length - 1].depth < depth) { html += '<' + type + ' class=\x22' + cls[type] + (depth ? ' mt-1' : '') + '\x22>'; stack.push({ type, depth }); }
+              else html += '</li>';
+              html += '<li class=\x22pl-1\x22>' + inline(item[3]);
+            } else if (!line.trim()) { close(0); }
+            else if (head) { close(0); html += '<p class=\x22pt-1 font-semibold text-ink\x22>' + inline(head[1]) + '</p>'; }
+            else if (stack.length && /^\s/.test(line)) { html += '<br>' + inline(line.trim()); }
+            else { close(0); html += '<p>' + inline(line) + '</p>'; }
+          }
+          close(0);
+          return html;
+        },
         addFiles(list) {
           this.error = '';
           for (const file of Array.from(list || [])) {
@@ -322,7 +351,11 @@
                   <template x-for="src in (m.images || [])"><img :src="src" alt="Zrzut ekranu" class="h-20 rounded-lg border border-line object-cover"></template>
                 </div>
                 <p x-show="!m.images && m.shots" class="text-right text-xs text-ink-mute" x-text="'Załączono zrzutów: ' + m.shots"></p>
-                <p class="whitespace-pre-line px-3.5 py-2.5 leading-relaxed" :class="m.role === 'user' ? 'rounded-2xl rounded-br-md bg-mint text-white' : 'rounded-2xl rounded-bl-md border border-line bg-surface text-ink shadow-sm'" x-text="m.text"></p>
+                <p x-show="m.role === 'user'" class="whitespace-pre-line rounded-2xl rounded-br-md bg-mint px-3.5 py-2.5 leading-relaxed text-white" x-text="m.text"></p>
+                <div x-show="m.role === 'assistant'" class="group relative">
+                  <div class="space-y-2.5 rounded-2xl rounded-bl-md border border-line bg-surface px-4 py-3 leading-relaxed text-ink-soft shadow-sm" x-html="m.role === 'assistant' ? md(m.text) : ''"></div>
+                  <button type="button" class="mt-1 px-1 text-2xs text-ink-mute opacity-0 transition hover:text-mint group-hover:opacity-100 focus:opacity-100" x-on:click="copy(m.text, i)" x-text="copied === i ? 'Skopiowano' : 'Kopiuj'"></button>
+                </div>
               </div>
             </div>
           </template>
@@ -351,7 +384,7 @@
             <label for="pp-ai-question" class="sr-only">Pytanie</label>
             <textarea
               id="pp-ai-question" x-ref="input" x-model="question" rows="1"
-              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm focus:ring-0"
+              class="max-h-40 flex-1 resize-none border-0 bg-transparent px-1 py-2 text-sm shadow-none outline-none focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
               placeholder="Napisz pytanie albo wklej zrzut…"
               x-on:input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
               x-on:paste="paste($event)"
