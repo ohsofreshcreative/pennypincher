@@ -112,6 +112,33 @@ class PlannerDomainTest extends TestCase
 		$this->assertSame('Projektujemy szybkie', AdTemplates::truncate('Projektujemy szybkie strony', 22));
 	}
 
+	public function testAiAdParserEnforcesLimits(): void
+	{
+		$long = str_repeat('a', 40);
+		$ad = \App\PennyPincher\Services\Assistant\AiAdWriter::parse('Oto propozycja: {"headlines": ["Strony www", "strony WWW", "Poproś o wycenę", "' . $long . '"], "descriptions": ["Opis pierwszy.", "Opis drugi."], "path1": "Strony WWW", "path2": "wycena-łódź"}');
+
+		$this->assertSame(['Strony www', 'Poproś o wycenę', str_repeat('a', 30)], $ad['headlines'], 'Duplikaty usunięte, za długie przycięte.');
+		$this->assertSame('strony-www', $ad['path1']);
+		$this->assertSame('wycena-lodz', $ad['path2']);
+
+		try {
+			\App\PennyPincher\Services\Assistant\AiAdWriter::parse('{"headlines": ["A"], "descriptions": []}');
+			$this->assertTrue(false, 'Niepełna propozycja powinna być odrzucona.');
+		} catch (\RuntimeException) {
+			$this->assertTrue(true);
+		}
+	}
+
+	public function testAdTemplatesFillMinimumWithEmptyContext(): void
+	{
+		$ad = AdTemplates::suggest(new BusinessContext(), 'Tworzenie stron internetowych', ['tworzenie stron internetowych cena', 'strona internetowa dla firmy', 'projektowanie stron www'], 'Polska');
+		$validation = AdValidator::validate($ad['headlines'], $ad['descriptions'], null, null, null);
+
+		$this->assertSame([], $validation['errors'], 'Pusty kontekst nadal daje reklamę spełniającą minimum (3 nagłówki, 2 opisy).');
+		$this->assertTrue(count($ad['headlines']) >= 8, 'Nagłówki także z fraz, lokalizacji i wezwań do działania.');
+		$this->assertTrue(in_array('Tworzenie stron internetowych', $ad['headlines'], true));
+	}
+
 	// --- Eksport --------------------------------------------------------------------------------
 
 	public function testCsvExportIsUtf8BomSemicolonAndFormulaSafe(): void

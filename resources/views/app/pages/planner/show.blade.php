@@ -496,13 +496,47 @@
         $descriptions = array_pad($ad['descriptions'] ?? [], 4, '');
       @endphp
       <section class="pp-card scroll-mt-24" id="ad-{{ $gid }}" aria-label="Reklama {{ $glabel }}">
-        <div class="pp-card-header">
+        <div class="pp-card-header flex-wrap gap-2">
           <h2 class="pp-card-title">{{ $glabel }}</h2>
-          @if ($canEdit && ! $ad)
-            <form method="post" action="{{ $base }}/groups/{{ $gid }}/ad/suggest"><x-pp.nonce /><input type="hidden" name="tab" value="ads"><x-pp.button variant="secondary" size="sm">Zaproponuj teksty z kontekstu</x-pp.button></form>
-          @endif
+          <div class="flex flex-wrap items-center gap-2">
+            @if ($canAiAd)
+              {{-- Claude wypełnia pola formularza (bez zapisu) – użytkownik sprawdza i klika „Zapisz reklamę”. --}}
+              <div x-data="{
+                busy: false, error: '',
+                async write() {
+                  if (this.busy) return;
+                  const form = document.getElementById('ad-form-{{ $gid }}');
+                  const filled = [...form.querySelectorAll('[name=\'headlines[]\'], [name=\'descriptions[]\']')].some((el) => el.value.trim());
+                  if (filled && !confirm('Zastąpić obecne teksty w formularzu propozycją Claude? Zmiany zapiszesz dopiero przyciskiem „Zapisz reklamę”.')) return;
+                  this.busy = true; this.error = '';
+                  const body = new FormData();
+                  body.append('{{ \App\PennyPincher\Http\Middleware\VerifyNonce::FIELD }}', '{{ wp_create_nonce(\App\PennyPincher\Http\Middleware\VerifyNonce::ACTION) }}');
+                  try {
+                    const res = await fetch(@js($base . '/groups/' . $gid . '/ad/ai'), { method: 'POST', body, headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+                    const data = await res.json().catch(() => ({}));
+                    if (!data.ad) { this.error = data.error || 'Nie udało się (HTTP ' + res.status + ').'; }
+                    else {
+                      const set = (el, v) => { el.value = v || ''; el.dispatchEvent(new Event('input', { bubbles: true })); };
+                      form.querySelectorAll('[name=\'headlines[]\']').forEach((el, i) => set(el, data.ad.headlines[i]));
+                      form.querySelectorAll('[name=\'descriptions[]\']').forEach((el, i) => set(el, data.ad.descriptions[i]));
+                      if (data.ad.path1) set(form.querySelector('[name=path1]'), data.ad.path1);
+                      if (data.ad.path2) set(form.querySelector('[name=path2]'), data.ad.path2);
+                      this.error = 'Gotowe – sprawdź teksty i kliknij „Zapisz reklamę”.';
+                    }
+                  } catch (e) { this.error = 'Brak połączenia. Spróbuj ponownie.'; }
+                  this.busy = false;
+                }
+              }" class="flex items-center gap-2">
+                <span x-show="error" x-text="error" class="text-meta text-ink-soft"></span>
+                <x-pp.button size="sm" icon="idea" type="button" x-on:click="write()" x-bind:disabled="busy"><span x-text="busy ? 'Claude pisze…' : 'Napisz z Claude'">Napisz z Claude</span></x-pp.button>
+              </div>
+            @endif
+            @if ($canEdit && ! $ad)
+              <form method="post" action="{{ $base }}/groups/{{ $gid }}/ad/suggest"><x-pp.nonce /><input type="hidden" name="tab" value="ads"><x-pp.button variant="secondary" size="sm">Zaproponuj teksty z kontekstu</x-pp.button></form>
+            @endif
+          </div>
         </div>
-        <form method="post" action="{{ $base }}/groups/{{ $gid }}/ad" class="space-y-4 p-5">
+        <form method="post" action="{{ $base }}/groups/{{ $gid }}/ad" id="ad-form-{{ $gid }}" class="space-y-4 p-5">
           <x-pp.nonce /><input type="hidden" name="tab" value="ads">
           <fieldset @disabled(! $canEdit) class="space-y-4">
             <div>

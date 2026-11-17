@@ -614,6 +614,20 @@ class CampaignPlanService
 		return $this->saveAd($project, (int) $plan['id'], $groupId, $suggestion + ['final_url' => $group['final_url'] ?? $project->landingPageUrl, 'cta' => AdTemplates::CTAS[0]]);
 	}
 
+	/**
+	 * Dane grupy do propozycji reklamy od Claude (plan musi być edytowalny, grupa z tego planu i projektu).
+	 *
+	 * @return array{plan: array, group: array, keywords: array<int, string>}
+	 */
+	public function adInput(Project $project, int $planId, int $groupId): array
+	{
+		$plan = $this->editable($project, $planId);
+		$group = $this->item('plan_ad_groups', $project, $plan, $groupId);
+		$keywords = array_column($this->db->select('SELECT phrase FROM ' . $this->db->table('plan_keywords') . ' WHERE plan_ad_group_id = ? AND project_id = ? ORDER BY score DESC LIMIT 20', [$groupId, $project->id]), 'phrase');
+
+		return ['plan' => $plan, 'group' => $group, 'keywords' => $keywords];
+	}
+
 	// --- Pomiar ---------------------------------------------------------------------------------
 
 	/**

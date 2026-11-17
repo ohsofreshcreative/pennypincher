@@ -67,11 +67,7 @@ TXT;
 			throw new RuntimeException('Wpisz pytanie.');
 		}
 
-		$usageKey = 'pp_ai_usage_' . $project->organizationId . '_' . gmdate('Ym');
-		$spent = (float) get_option($usageKey, 0);
-		if ($spent >= $this->claude->monthlyLimit()) {
-			throw new RuntimeException('Wykorzystano miesięczny limit czatu dla organizacji. Limit ustawia administrator serwera (PP_AI_MONTHLY_LIMIT_USD).');
-		}
+		$this->assertWithinLimit($project);
 
 		$messages = [];
 		foreach (array_slice($history, -self::MAX_MESSAGES) as $item) {
@@ -92,7 +88,7 @@ TXT;
 		]];
 
 		$result = $this->claude->send(self::SYSTEM, $messages);
-		update_option($usageKey, $spent + $result['cost'], false);
+		$this->addCost($project, $result['cost']);
 
 		return $result['text'];
 	}
@@ -121,6 +117,24 @@ TXT;
 		}
 
 		return $blocks;
+	}
+
+	/** Wspólny miesięczny limit kosztów Claude (czat i propozycje reklam) per organizacja. */
+	public function assertWithinLimit(Project $project): void
+	{
+		if ((float) get_option(self::usageKey($project), 0) >= $this->claude->monthlyLimit()) {
+			throw new RuntimeException('Wykorzystano miesięczny limit Claude dla organizacji. Limit ustawia administrator serwera (PP_AI_MONTHLY_LIMIT_USD).');
+		}
+	}
+
+	public function addCost(Project $project, float $cost): void
+	{
+		update_option(self::usageKey($project), (float) get_option(self::usageKey($project), 0) + $cost, false);
+	}
+
+	private static function usageKey(Project $project): string
+	{
+		return 'pp_ai_usage_' . $project->organizationId . '_' . gmdate('Ym');
 	}
 
 	public function context(Project $project, ?string $section, string $path): string

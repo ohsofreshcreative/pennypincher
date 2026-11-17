@@ -234,22 +234,23 @@
         key: 'pp-ai-chat-{{ $project->id }}',
         init() {
           try { const s = JSON.parse(sessionStorage.getItem(this.key) || '{}'); this.messages = Array.isArray(s.messages) ? s.messages : []; this.open = !!s.open; } catch (e) {}
-          this.$watch('open', (v) => { this.save(); if (v) this.$nextTick(() => { this.restore(); this.$refs.input && this.$refs.input.focus(); }); });
+          this.$watch('open', (v) => { this.save(); if (v) this.$nextTick(() => { this.scroll(); this.onScroll(); this.$refs.input && this.$refs.input.focus(); }); });
           this.$nextTick(() => this.restore());
         },
-        {{-- Przewijanie: pozycja zapamiętana między podstronami; automatycznie tylko gdy użytkownik był na dole. --}}
+        {{-- Przewijanie: otwarcie czatu i wysłanie pytania → na dół; przy zmianie podstrony pozycja zostaje tylko,
+             gdy użytkownik sam przewinął wyżej; odpowiedź przewija do swojego początku tylko, gdy był na dole. --}}
         stick: true,
         scroll() { this.$refs.log && (this.$refs.log.scrollTop = this.$refs.log.scrollHeight); },
         restore() {
           const log = this.$refs.log; if (!log) return;
-          let pos = null; try { pos = sessionStorage.getItem(this.key + '-scroll'); } catch (e) {}
-          if (pos === null) this.scroll(); else log.scrollTop = Number(pos);
+          let saved = null; try { saved = JSON.parse(sessionStorage.getItem(this.key + '-scroll') || 'null'); } catch (e) {}
+          if (saved && saved.stick === false) log.scrollTop = Number(saved.top) || 0; else this.scroll();
           this.onScroll();
         },
         onScroll() {
           const log = this.$refs.log; if (!log) return;
           this.stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-          try { sessionStorage.setItem(this.key + '-scroll', String(log.scrollTop)); } catch (e) {}
+          try { sessionStorage.setItem(this.key + '-scroll', JSON.stringify({ top: log.scrollTop, stick: this.stick })); } catch (e) {}
         },
         showAnswer() {
           const log = this.$refs.log; const all = log ? log.querySelectorAll('[data-msg]') : []; const last = all[all.length - 1];
@@ -316,7 +317,7 @@
           this.error = ''; this.busy = true;
           const history = JSON.stringify(this.messages.map((m) => ({ role: m.role, text: m.text })));
           this.messages.push({ role: 'user', text, images: shots }); this.question = '';
-          if (this.stick) this.$nextTick(() => this.scroll());
+          this.stick = true; this.$nextTick(() => { this.scroll(); this.onScroll(); });
           const body = new FormData();
           body.append('{{ \App\PennyPincher\Http\Middleware\VerifyNonce::FIELD }}', '{{ wp_create_nonce(\App\PennyPincher\Http\Middleware\VerifyNonce::ACTION) }}');
           body.append('question', text); body.append('history', history);

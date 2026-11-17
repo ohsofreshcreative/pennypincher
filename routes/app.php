@@ -134,6 +134,7 @@ Route::prefix('app')->middleware([PrepareAppRequest::class, VerifyNonce::class])
 				Route::post('groups/{group}/keywords', [CampaignPlannerController::class, 'addKeywords'])->whereNumber('group');
 				Route::post('groups/{group}/ad', [CampaignPlannerController::class, 'saveAd'])->whereNumber('group');
 				Route::post('groups/{group}/ad/suggest', [CampaignPlannerController::class, 'suggestAd'])->whereNumber('group');
+				Route::post('groups/{group}/ad/ai', [CampaignPlannerController::class, 'aiAd'])->whereNumber('group');
 				Route::post('keywords/{keyword}', [CampaignPlannerController::class, 'updateKeyword'])->whereNumber('keyword');
 				Route::post('negatives', [CampaignPlannerController::class, 'addNegatives']);
 				Route::post('negatives/{negative}/delete', [CampaignPlannerController::class, 'deleteNegative'])->whereNumber('negative');

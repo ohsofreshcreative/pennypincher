@@ -28,13 +28,21 @@ final class AdTemplates
 			}
 		};
 
-		$add($groupName);
+		$services = array_slice(array_values(array_unique([...$context->priorityTexts(), ...BusinessContext::lines($context->get('products_services'))])), 0, 4);
+		$advantages = array_slice(BusinessContext::lines($context->get('advantages')), 0, 6);
 
-		foreach (array_slice($keywords, 0, 4) as $keyword) {
-			$add((string) $keyword);
+		$add($groupName);
+		if ($location) {
+			$add($groupName . ' ' . $location);
 		}
 
-		foreach (array_slice($context->priorityTexts(), 0, 3) as $service) {
+		foreach (array_slice($keywords, 0, 8) as $keyword) {
+			$add((string) $keyword);
+			// Fraza za długa na nagłówek – bez ostatnich słów (np. „… cena”), nadal tylko słowa użytkownika.
+			$add(self::truncate((string) $keyword, AdValidator::HEADLINE_MAX));
+		}
+
+		foreach ($services as $service) {
 			$add($service);
 
 			if ($location) {
@@ -42,22 +50,34 @@ final class AdTemplates
 			}
 		}
 
-		foreach (array_slice(BusinessContext::lines($context->get('advantages')), 0, 4) as $advantage) {
+		foreach ($advantages as $advantage) {
 			$add($advantage);
 		}
 
-		foreach (array_slice(self::CTAS, 0, 2) as $cta) {
+		foreach (self::CTAS as $cta) {
 			$add($cta);
 		}
 
 		$descriptions = [];
-
-		foreach ([$context->businessDescription, implode('. ', BusinessContext::lines($context->get('advantages')))] as $text) {
-			$text = self::truncate((string) $text, AdValidator::DESCRIPTION_MAX);
-
-			if ($text !== '') {
+		$addDescription = function (string $text) use (&$descriptions) {
+			$text = self::truncate($text, AdValidator::DESCRIPTION_MAX);
+			if ($text !== '' && ! in_array($text, $descriptions, true)) {
 				$descriptions[] = $text;
 			}
+		};
+
+		$addDescription((string) $context->businessDescription);
+		if ($advantages !== []) {
+			$addDescription(implode('. ', $advantages) . '.');
+		}
+		// Szablony złożone wyłącznie z nazw usług, fraz, lokalizacji i wezwań do działania – bez nowych obietnic.
+		$subject = mb_strtoupper(mb_substr($groupName, 0, 1)) . mb_substr($groupName, 1);
+		$addDescription($subject . ($location ? ' – ' . $location : '') . '. ' . self::CTAS[0] . '.');
+		if ($services !== []) {
+			$addDescription(implode(', ', array_slice($services, 0, 3)) . '. ' . self::CTAS[1] . '.');
+		}
+		if (count($keywords) > 1) {
+			$addDescription(mb_strtoupper(mb_substr((string) $keywords[0], 0, 1)) . mb_substr(implode(', ', array_slice($keywords, 0, 3)), 1) . '. ' . self::CTAS[2] . '.');
 		}
 
 		return ['headlines' => array_slice($headlines, 0, 15), 'descriptions' => array_slice($descriptions, 0, 4)];

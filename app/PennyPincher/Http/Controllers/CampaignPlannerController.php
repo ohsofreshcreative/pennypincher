@@ -35,6 +35,7 @@ class CampaignPlannerController extends Controller
 		private AnalysisRepository $analyses,
 		private \App\PennyPincher\Services\Changes\ChangeLinkService $changeLinks,
 		private \App\PennyPincher\Services\Changes\PlanDeploymentService $deployments,
+		private \App\PennyPincher\Services\Assistant\AiAdWriter $aiAds,
 	) {
 		parent::__construct($access);
 	}
@@ -121,6 +122,7 @@ class CampaignPlannerController extends Controller
 			'events' => $tab === 'history' ? $this->plans->events($project->id, $plan) : [],
 			'editable' => $editable,
 			'canEdit' => $editable && Policy::allows($project->role, Ability::EditPlans),
+			'canAiAd' => $editable && Policy::allows($project->role, Ability::EditPlans) && \App\PennyPincher\Support\Feature::enabled(\App\PennyPincher\Support\Feature::AI_CHAT) && $this->aiAds->enabled(),
 			'canApprove' => Policy::allows($project->role, Ability::ApprovePlans),
 			'canBudget' => $editable && Policy::allows($project->role, Ability::ManageBudget),
 			'canEditStatus' => Policy::allows($project->role, Ability::EditPlans),
@@ -290,6 +292,28 @@ class CampaignPlannerController extends Controller
 
 			return 'Utworzono propozycję reklamy z kontekstu biznesowego – sprawdź i popraw teksty.' . ($result['warnings'] !== [] ? ' ' . implode(' ', $result['warnings']) : '');
 		}, null, $request, "ad-{$group}");
+	}
+
+	/**
+	 * Propozycja tekstów reklamy od Claude (pp2_ai_chat) – JSON do wypełnienia formularza; nic nie zapisuje.
+	 */
+	public function aiAd(int $project, int $plan, int $group): \Illuminate\Http\JsonResponse
+	{
+		$projectModel = $this->access->project($project, Ability::EditPlans);
+
+		if (! \App\PennyPincher\Support\Feature::enabled(\App\PennyPincher\Support\Feature::AI_CHAT) || ! $this->aiAds->enabled()) {
+			abort(404);
+		}
+
+		try {
+			$input = $this->planner->adInput($projectModel, $plan, $group);
+
+			return response()->json(['ad' => $this->aiAds->write($projectModel, $input['plan'], $input['group'], $input['keywords'])]);
+		} catch (ValidationFailed $e) {
+			return response()->json(['error' => self::first($e)], 422);
+		} catch (\RuntimeException $e) {
+			return response()->json(['error' => $e->getMessage()], 422);
+		}
 	}
 
 	// --- Budżet ---------------------------------------------------------------------------------
