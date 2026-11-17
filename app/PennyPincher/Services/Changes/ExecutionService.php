@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Services\Changes;
 
+use App\PennyPincher\Domain\GoogleAds\Enums;
 use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\GoogleAds\Changes\OperationCatalog;
 use App\PennyPincher\Domain\GoogleAds\Changes\ServingGuard;
@@ -427,6 +428,14 @@ class ExecutionService
 				'verification' => ['diff' => $diff, 'at' => $this->db->now()],
 			]);
 			$diff === [] ? $verified++ : $mismatch++;
+
+			// Stan odczytany właśnie z Google Ads od razu w lokalnej kopii kampanii (lista nie czeka na synchronizację).
+			if (OperationCatalog::resource($op['type']) === 'campaign' && is_array($state) && ! empty($state['id']) && ! empty($state['status'])) {
+				$this->db->statement(
+					'UPDATE ' . $this->db->table('campaigns') . ' SET status = ?, status_raw = ?, updated_at = ? WHERE project_id = ? AND external_id = ?',
+					[Enums::status($state['status']), $state['status'], $this->db->now(), (int) $set['project_id'], (string) $state['id']]
+				);
+			}
 		}
 
 		if ($verified + $mismatch > 0) {

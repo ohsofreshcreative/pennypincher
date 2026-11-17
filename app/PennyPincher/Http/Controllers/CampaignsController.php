@@ -2,6 +2,7 @@
 
 namespace App\PennyPincher\Http\Controllers;
 
+use App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus;
 use App\PennyPincher\Domain\Support\NotFound;
 use App\PennyPincher\Repositories\AnalysisRepository;
 use App\PennyPincher\Repositories\CampaignPlanRepository;
@@ -25,6 +26,7 @@ class CampaignsController extends Controller
 		private RecommendationRepository $recommendations,
 		private CampaignPlanRepository $plans,
 		private GoogleAdsConnectionRepository $connections,
+		private \App\PennyPincher\Infrastructure\Database\Db $db,
 	) {
 		parent::__construct($access);
 	}
@@ -45,7 +47,26 @@ class CampaignsController extends Controller
 
 		$campaigns = $this->metrics->campaigns($project->id, $resolved, $filters, $sort, $direction, max(1, (int) $request->query('page', 1)), 25);
 
+		// Zestawy Change Center w toku dla kampanii z listy (stan na liście pochodzi z synchronizacji, więc zmiana
+		// w toku jest pokazywana osobno – do czasu wdrożenia i następnej synchronizacji).
+		$pending = [];
+		$ids = array_map(fn ($row) => (int) $row['id'], $campaigns->items);
+		if ($ids !== []) {
+			$active = [ChangeStatus::REVIEW, ChangeStatus::APPROVED, ChangeStatus::VALIDATING, ChangeStatus::READY, ChangeStatus::DEPLOYING, ChangeStatus::RECONCILE, ChangeStatus::FAILED];
+			$rows = $this->db->select(
+				'SELECT c.id AS campaign_id, s.id AS set_id, s.status FROM ' . $this->db->table('change_operations') . ' o'
+				. ' JOIN ' . $this->db->table('change_sets') . ' s ON s.id = o.change_set_id AND s.project_id = o.project_id'
+				. ' JOIN ' . $this->db->table('campaigns') . ' c ON c.project_id = o.project_id AND c.external_id IS NOT NULL AND o.resource_name = CONCAT(?, s.customer_id, ?, c.external_id)'
+				. ' WHERE o.project_id = ? AND o.resource_type = ? AND s.status IN (' . implode(',', array_fill(0, count($active), '?')) . ') AND c.id IN (' . implode(',', array_fill(0, count($ids), '?')) . ') ORDER BY s.id DESC',
+				['customers/', '/campaigns/', $project->id, 'campaign', ...$active, ...$ids]
+			);
+			foreach ($rows as $r) {
+				$pending[(int) $r['campaign_id']] ??= ['set' => (int) $r['set_id'], 'status' => (string) $r['status']];
+			}
+		}
+
 		return $this->render('app.pages.campaigns.index', [
+			'pendingChanges' => $pending,
 			'project' => $project,
 			'range' => $range,
 			'resolved' => $resolved,

@@ -65,7 +65,14 @@
                 <td class="pp-col-sticky max-w-[300px]">
                   <a href="{{ AppUrl::project($project->id, 'campaigns/' . $row['id']) }}" class="block truncate font-medium text-ink hover:text-mint" title="{{ $row['name'] }}">{{ $row['name'] }}</a>
                 </td>
-                <td><x-pp.status-badge :status="$row['status'] ?? 'unknown'" :label="$row['status'] ? null : 'Brak danych'" title="{{ $row['status_raw'] }}" /></td>
+                <td>
+                  <x-pp.status-badge :status="$row['status'] ?? 'unknown'" :label="$row['status'] ? null : 'Brak danych'" title="{{ $row['status_raw'] }}" />
+                  @if ($change = $pendingChanges[(int) $row['id']] ?? null)
+                    <a href="{{ AppUrl::project($project->id, 'changes/' . $change['set']) }}" class="mt-1 flex w-fit items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-2xs font-semibold {{ match ($change['status']) { 'deploying' => 'bg-info-soft text-info', 'failed', 'needs_reconciliation' => 'bg-danger-soft text-danger', default => 'bg-warn-soft text-warn' } }} hover:underline" title="Zestaw zmian #{{ $change['set'] }} w Change Center">
+                      <x-pp.icon name="changes" :size="12" />{{ \App\PennyPincher\Domain\GoogleAds\Changes\ChangeStatus::LABELS[$change['status']] ?? $change['status'] }} · #{{ $change['set'] }}
+                    </a>
+                  @endif
+                </td>
                 <td class="whitespace-nowrap text-ink-soft">{{ $row['channel_type'] ?: Format::EMPTY }}</td>
                 <td class="pp-col-num text-ink-soft">
                   {{ Format::money($row['budget_micros'] !== null ? (int) $row['budget_micros'] : null, $currency) }}
