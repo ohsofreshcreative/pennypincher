@@ -47,7 +47,7 @@
   @if (! $resource)
     <x-pp.alert type="warning">Ta kampania pochodzi z importu i nie ma identyfikatora Google Ads – zmiany można przygotować dopiero po synchronizacji konta przez API.</x-pp.alert>
   @elseif (! $search)
-    <x-pp.alert type="info">Typ kampanii „{{ $campaign['channel_type'] }}” jest dostępny tylko do odczytu. Penny Pincher obsługuje edycję kampanii w sieci wyszukiwania.</x-pp.alert>
+    <x-pp.alert type="info">Typ kampanii „{{ $campaign['channel_type'] }}”: z Penny Pinchera zmienisz tylko status (włącz/wstrzymaj). Pełna edycja jest dostępna dla kampanii w sieci wyszukiwania.</x-pp.alert>
   @endif
 
   <div class="grid gap-6 xl:grid-cols-2">
@@ -98,6 +98,26 @@
       @endif
     </section>
   </div>
+
+  @if (! $search && $canPrepare && $resource !== null && $campaign['status'] !== 'removed')
+    {{-- Kampanie spoza sieci wyszukiwania: Change Center obsługuje tylko status (OperationCatalog: nazwa i status). --}}
+    <section class="pp-card p-5" aria-labelledby="prepare-status">
+      <h3 id="prepare-status" class="pp-card-title">Status kampanii</h3>
+      <p class="mt-1 text-meta text-ink-soft">Zmiana trafia jako szkic do Change Center – wdrożenie po zatwierdzeniu i kliknięciu „Wdróż”.</p>
+      <form method="post" action="{{ $action }}" class="mt-4 space-y-3">
+        <x-pp.nonce />
+        <div class="flex flex-wrap items-center gap-2">
+          @if ($campaign['status'] === 'enabled')
+            <x-pp.button variant="secondary" size="sm" name="action" value="pause">Wstrzymaj kampanię</x-pp.button>
+          @else
+            <x-pp.button variant="secondary" size="sm" name="action" value="enable">Przygotuj włączenie kampanii</x-pp.button>
+            @unless ($servingAllowed ?? false)<span class="text-caption text-ink-mute" title="Zmianę można przygotować i zatwierdzić; wdrożenie czeka na zdjęcie blokady emisji.">wdrożenie zablokowane (blokada emisji)</span>@endunless
+          @endif
+        </div>
+        @include('app.partials.changes.draft-select', ['id' => 'f-set-status-other'])
+      </form>
+    </section>
+  @endif
 
   @if ($editable)
     <section class="pp-card p-5" aria-labelledby="prepare">
